@@ -13,15 +13,12 @@ import {
   InternalServerErrorException,
   ValidationPipe,
   HttpException,
-  Inject,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@soopa/auth';
 import { PieceRegistryService } from '@soopa/piece-registry';
 import { AppCredentialError } from '@soopa/credentials';
-import { dataSources } from '@soopa/database';
-import { eq, and } from 'drizzle-orm';
-import { DATABASE_CONNECTION, type DrizzleDb } from '@soopa/database';
+import { ConnectionRepository } from '../repositories/connection.repository.js';
 
 import { OAuthOrchestrationService } from '../services/oauth-orchestration.service.js';
 import { CredentialLinkingService } from '../services/credential-linking.service.js';
@@ -191,7 +188,7 @@ export class OAuthController {
   private readonly logger = new Logger(OAuthController.name);
 
   constructor(
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    private readonly connectionRepository: ConnectionRepository,
     private readonly pieceRegistry: PieceRegistryService,
     private readonly oauthOrchestration: OAuthOrchestrationService,
     private readonly credentialLinking: CredentialLinkingService,
@@ -430,19 +427,12 @@ export class OAuthController {
     let externalId = toKebabSlug(body.providerName, trimmedDisplayName);
     if (body.dataSourceId) {
       try {
-        const [existing] = await this.db
-          .select({ externalId: dataSources.externalId })
-          .from(dataSources)
-          .where(
-            and(
-              eq(dataSources.id, body.dataSourceId),
-              eq(dataSources.tenantId, tenantId),
-              eq(dataSources.appName, body.providerName),
-            ),
-          )
-          .limit(1);
+        const existing = await this.connectionRepository.findByIdAndTenant(
+          body.dataSourceId,
+          tenantId,
+        );
 
-        if (!existing) {
+        if (!existing || existing.appName !== body.providerName) {
           throw new BadRequestException(
             `Connection ${body.dataSourceId} not found or does not belong to your organization`,
           );

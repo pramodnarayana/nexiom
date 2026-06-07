@@ -15,7 +15,8 @@
 	"scripts": {
 		"build": "tsc -p tsconfig.lib.json",
 		"dev": "tsc -p tsconfig.lib.json --watch --preserveWatchOutput",
-		"clean": "rm -rf dist"
+		"clean": "rm -rf dist",
+		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
 		"@soopa/domain-tms": "workspace:*",

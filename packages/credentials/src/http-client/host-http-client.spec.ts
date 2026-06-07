@@ -17,11 +17,14 @@ import { Redis } from 'ioredis';
 describe('Activepieces Framework Native Shim', () => {
     beforeAll(() => {
         // Initialize the singleton to prevent the "accessed before platform initialization" throw
-        initializeHttpClient(new HostHttpClient(
+        const client = new HostHttpClient(
             {} as TokenManagerService,
             { execute: vi.fn().mockResolvedValue([]) } as unknown as DrizzleDb,
             { eval: vi.fn().mockResolvedValue(1) } as unknown as Redis
-        ));
+        );
+        client.onModuleInit();
+        // Calling it twice to trigger the branch coverage for idempotency
+        client.onModuleInit();
     });
 
     afterEach(() => {
@@ -257,6 +260,172 @@ describe('Activepieces Framework Native Shim', () => {
 
             const result = await client.sendRequest({ method: HttpMethod.GET, url: 'https://example.com', responseType: 'stream' });
             expect(result.body).toBe(stream);
+        });
+
+        it('should return plain text if default JSON parsing fails', async () => {
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: new Headers(),
+                text: async () => '{"invalid": json',
+            } as any);
+
+            const result = await client.sendRequest({ method: HttpMethod.GET, url: 'https://example.com' });
+            expect(result.body).toBe('{"invalid": json');
+        });
+
+        it('should throw BadRequestException for invalid URLs', async () => {
+            await expect(client.sendRequest({ method: HttpMethod.GET, url: 'invalid-url' }))
+                .rejects.toThrow('Invalid or non-absolute URL');
+        });
+        
+        it('should retry on transient errors (429) and throw InternalServerErrorException after max attempts', async () => {
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: false,
+                status: 429,
+                headers: new Headers(),
+            } as any);
+
+            // Temporarily replace setTimeout to avoid real delays
+            const originalSetTimeout = globalThis.setTimeout;
+            globalThis.setTimeout = ((fn: any) => fn()) as any;
+
+            try {
+                await expect(client.sendRequest({ method: HttpMethod.GET, url: 'https://example.com' }))
+                    .rejects.toThrow('Failed to execute outgoing AP request after 3 attempt(s)');
+                expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+            } finally {
+                globalThis.setTimeout = originalSetTimeout;
+            }
+        });
+
+        it('bindExecutionCtx and unbindExecutionCtx manages trace IDs', () => {
+            const traceId = 'trace-123';
+            HostHttpClient.bindExecutionCtx(traceId, 'conn-1', 'ws-1');
+            const ctx = HostHttpClient.getExecutionCtx(traceId);
+            expect(ctx?.connectionId).toBe('conn-1');
+            expect(ctx?.workspaceId).toBe('ws-1');
+            
+            HostHttpClient.unbindExecutionCtx(traceId);
+            expect(HostHttpClient.getExecutionCtx(traceId)).toBeUndefined();
+        });
+
+        it('archives to gateway if traceId header is present', async () => {
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: new Headers({ 'Content-Type': 'application/json' }),
+                text: async () => '{"success":true}',
+                url: 'https://example.com',
+            } as any);
+            
+            const traceId = 'trace-arch';
+            HostHttpClient.bindExecutionCtx(traceId, 'conn-1', 'ws-1');
+
+            const result = await client.sendRequest({ 
+                method: HttpMethod.POST, 
+                url: 'https://example.com', 
+                headers: { 'X-Trace-Id': traceId, 'Authorization': 'Bearer secret' },
+                body: { password: 'my-password', data: 'hello' }
+            });
+            
+            expect(result.body).toEqual({ success: true });
+            // Cleanup
+            HostHttpClient.unbindExecutionCtx(traceId);
+        });
+
+        it('should format token in Authorization header', async () => {
+            const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: new Headers({ 'Content-Type': 'application/json' }),
+                text: async () => '{"ok":true}',
+            } as any);
+
+            await client.sendRequest({ 
+                method: HttpMethod.GET, 
+                url: 'https://example.com', 
+                authentication: { type: 'BEARER_TOKEN', token: 'my-token' }
+            });
+
+            expect(fetchSpy).toHaveBeenCalledWith(
+                'https://example.com/',
+                expect.objectContaining({
+                    headers: { Authorization: 'Bearer my-token' }
+                })
+            );
+        });
+
+        it('archives to gateway with sanitized URL and Body', async () => {
+            const mockDb = { execute: vi.fn().mockResolvedValue([]) } as unknown as DrizzleDb;
+            client = new HostHttpClient(
+                {} as TokenManagerService,
+                mockDb,
+                { eval: vi.fn().mockResolvedValue(1) } as unknown as Redis
+            );
+
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: new Headers({ 'Content-Type': 'application/json' }),
+                text: async () => '{"success":true}',
+                url: 'https://example.com/?api_key=secret_value',
+            } as any);
+            
+            const traceId = 'trace-sanitization';
+            HostHttpClient.bindExecutionCtx(traceId, 'conn-1', 'ws-1');
+
+            await client.sendRequest({ 
+                method: HttpMethod.POST, 
+                url: 'https://example.com/?api_key=secret_value', 
+                headers: { 'X-Trace-Id': traceId },
+                body: { password: 'my-password', valid: true },
+                queryParams: { refresh_token: 'refresh-me' }
+            });
+            
+            expect(mockDb.execute).toHaveBeenCalled();
+            // Cleanup
+            HostHttpClient.unbindExecutionCtx(traceId);
+        });
+
+        it('archives to gateway handles stringified body parsing errors and non-cloneable bodies gracefully', async () => {
+            const mockDb = { execute: vi.fn().mockResolvedValue([]) } as unknown as DrizzleDb;
+            client = new HostHttpClient(
+                {} as TokenManagerService,
+                mockDb,
+                { eval: vi.fn().mockResolvedValue(1) } as unknown as Redis
+            );
+
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: new Headers({ 'Content-Type': 'application/json' }),
+                text: async () => '{"success":true}',
+                url: 'https://example.com/',
+            } as any);
+            
+            const traceId = 'trace-sanitize-err';
+            HostHttpClient.bindExecutionCtx(traceId, 'conn-1', 'ws-1');
+
+            // Pass unparseable string
+            await client.sendRequest({ 
+                method: HttpMethod.POST, 
+                url: 'https://example.com/', 
+                headers: { 'X-Trace-Id': traceId },
+                body: '{"invalid": json' as any
+            });
+
+            // Pass object with function reference (structuredClone will throw, but JSON.stringify will work)
+            const fnObj: any = { method: () => {} };
+            await client.sendRequest({ 
+                method: HttpMethod.POST, 
+                url: 'https://example.com/', 
+                headers: { 'X-Trace-Id': traceId },
+                body: fnObj
+            });
+            
+            expect(mockDb.execute).toHaveBeenCalledTimes(2);
+            HostHttpClient.unbindExecutionCtx(traceId);
         });
     });
 });

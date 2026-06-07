@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   InternalServerErrorException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
@@ -495,31 +496,55 @@ describe('MetadataDiscoveryService', () => {
       expect(redis.set).not.toHaveBeenCalled();
     });
 
-    it('returns empty array when piece has no describeRelatedObjects', async () => {
+    it('bypasses cache and deletes key when forceRefresh is true', async () => {
       mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
-      redis.get.mockResolvedValueOnce(null);
-      mockPieceRegistry.getPiece.mockReturnValue({});
+      
+      const mockRelations = [
+        {
+          objectName: 'Invoice',
+          relationshipType: 'CHILD',
+          relationField: 'accountId',
+        },
+      ];
+      const describeRelatedMock = vi.fn().mockResolvedValue(mockRelations);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        describeRelatedObjects: describeRelatedMock,
+      });
+
+      // describeObjects called during hydrateObjectLabels
+      vi.spyOn(service, 'describeObjects').mockResolvedValueOnce([]);
 
       const result = await service.describeRelatedObjects(
         ORG_ID,
         CONN_ID,
         'Account',
+        true // forceRefresh = true
       );
-      expect(result).toEqual([]);
+      
+      expect(result).toEqual(mockRelations);
+      expect(redis.del).toHaveBeenCalledWith(`meta:related:${CONN_ID}:Account`);
+      expect(redis.get).not.toHaveBeenCalledWith(`meta:related:${CONN_ID}:Account`);
     });
 
-    it('returns empty array when no piece is registered for the connector', async () => {
+    it('throws NotFoundException when piece has no describeRelatedObjects capability', async () => {
+      mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
+      redis.get.mockResolvedValueOnce(null);
+      mockPieceRegistry.getPiece.mockReturnValue({}); // registered piece, but no describeRelatedObjects method
+
+      await expect(
+        service.describeRelatedObjects(ORG_ID, CONN_ID, 'Account'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when no piece is registered for the connector', async () => {
       const unknownConn = { ...MOCK_CONNECTION, appName: 'unknown-app' };
       mocks.selectRows.mockResolvedValueOnce([unknownConn]);
       redis.get.mockResolvedValueOnce(null);
       mockPieceRegistry.getPiece.mockReturnValue(undefined);
 
-      const result = await service.describeRelatedObjects(
-        ORG_ID,
-        CONN_ID,
-        'Account',
-      );
-      expect(result).toEqual([]);
+      await expect(
+        service.describeRelatedObjects(ORG_ID, CONN_ID, 'Account'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('calls piece.describeRelatedObjects with credentials from TokenManagerService', async () => {
@@ -561,6 +586,68 @@ describe('MetadataDiscoveryService', () => {
         300,
       );
     });
+
+    it('hydrates missing object labels from describeObjects', async () => {
+      mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
+      redis.get.mockResolvedValueOnce(null);
+      
+      const mockRelations = [
+        {
+          objectName: 'Invoice', // missing objectLabel
+          relationshipType: 'CHILD',
+          relationField: 'accountId',
+        },
+        {
+          objectName: 'Opportunity',
+          objectLabel: 'Existing Label', // already has label
+          relationshipType: 'CHILD',
+          relationField: 'accountId',
+        }
+      ];
+      const describeRelatedMock = vi.fn().mockResolvedValue(mockRelations);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        describeRelatedObjects: describeRelatedMock,
+      });
+
+      // describeObjects will return Invoice with a label, but no Opportunity
+      vi.spyOn(service, 'describeObjects').mockResolvedValueOnce([
+        { name: 'Invoice', label: 'Hydrated Invoice Label', queryable: true }
+      ]);
+
+      const result = await service.describeRelatedObjects(
+        ORG_ID,
+        CONN_ID,
+        'Account',
+      );
+      
+      expect(result).toEqual([
+        {
+          objectName: 'Invoice',
+          objectLabel: 'Hydrated Invoice Label',
+          relationshipType: 'CHILD',
+          relationField: 'accountId',
+        },
+        {
+          objectName: 'Opportunity',
+          objectLabel: 'Existing Label', // preserves existing label
+          relationshipType: 'CHILD',
+          relationField: 'accountId',
+        }
+      ]);
+    });
+    it('throws ServiceUnavailableException when piece.describeRelatedObjects throws', async () => {
+      mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
+      redis.get.mockResolvedValueOnce(null);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        describeRelatedObjects: vi
+          .fn()
+          .mockRejectedValue(new Error('API connection dropped')),
+      });
+
+      await expect(
+        service.describeRelatedObjects(ORG_ID, CONN_ID, 'Account'),
+      ).rejects.toThrow(ServiceUnavailableException);
+    });
   });
 
   // ── describeConfig ──────────────────────────────────────────────────────────
@@ -598,7 +685,7 @@ describe('MetadataDiscoveryService', () => {
       );
     });
 
-    it('returns empty array cleanly when describeConfig throws internally', async () => {
+    it('throws ServiceUnavailableException when piece.describeConfig throws', async () => {
       mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
       redis.get.mockResolvedValueOnce(null);
       mockPieceRegistry.getPiece.mockReturnValue({
@@ -607,9 +694,9 @@ describe('MetadataDiscoveryService', () => {
           .mockRejectedValue(new Error('Connection dropped')),
       });
 
-      const result = await service.describeConfig(ORG_ID, CONN_ID);
-      expect(result).toEqual([]);
-      expect(redis.set).not.toHaveBeenCalled();
+      await expect(service.describeConfig(ORG_ID, CONN_ID)).rejects.toThrow(
+        ServiceUnavailableException,
+      );
     });
 
     it('calls piece.describeConfig with correctly mapped credentials and stores results to Redis', async () => {
@@ -637,6 +724,50 @@ describe('MetadataDiscoveryService', () => {
         'EX',
         300,
       );
+    });
+    it('logs warning if redis set fails for config', async () => {
+      mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
+      redis.get.mockResolvedValueOnce(null);
+      const mockConfig = [{ key: 'sandbox', type: 'boolean' }];
+      mockPieceRegistry.getPiece.mockReturnValue({
+        describeConfig: vi.fn().mockResolvedValue(mockConfig),
+      });
+      redis.set.mockRejectedValueOnce(new Error('redis error'));
+
+      const result = await service.describeConfig(ORG_ID, CONN_ID);
+      expect(result).toEqual(mockConfig);
+    });
+  });
+
+  // ── countRecords ────────────────────────────────────────────────────────────
+
+  describe('countRecords', () => {
+    it('returns count when piece supports it', async () => {
+      mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        countRecords: vi.fn().mockResolvedValue(42),
+      });
+
+      const result = await service.countRecords(ORG_ID, CONN_ID, 'Account');
+      expect(result).toEqual(42);
+    });
+
+    it('returns null when piece has no countRecords', async () => {
+      mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
+      mockPieceRegistry.getPiece.mockReturnValue({});
+
+      const result = await service.countRecords(ORG_ID, CONN_ID, 'Account');
+      expect(result).toBeNull();
+    });
+
+    it('returns null when countRecords throws', async () => {
+      mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        countRecords: vi.fn().mockRejectedValue(new Error('count error')),
+      });
+
+      const result = await service.countRecords(ORG_ID, CONN_ID, 'Account');
+      expect(result).toBeNull();
     });
   });
 });

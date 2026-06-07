@@ -94,6 +94,7 @@ describe("DeliveryRetryService", () => {
               response: { success: true },
               statusCode: 200,
               destVendorId: "vendor1",
+              attempts: 2,
             },
           ]),
         };
@@ -130,6 +131,7 @@ describe("DeliveryRetryService", () => {
         "ws_dest",
         "ws_src",
         "gw_id",
+        2,
         "ds_id",
         "trace_id",
         "route_id",
@@ -147,6 +149,7 @@ describe("DeliveryRetryService", () => {
         "testApp",
         "tenant1",
         "obj",
+        "tenant1",
         db,
       );
     });
@@ -182,6 +185,76 @@ describe("DeliveryRetryService", () => {
           db,
         ),
       ).rejects.toThrow("Outbound gateway result not found for retry");
+    });
+
+    it("should handle nullish or missing fields gracefully", async () => {
+      db.transaction.mockImplementationOnce(async (cb: any) => {
+        const tx = {
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([
+            {
+              response: null,
+              statusCode: null,
+              destVendorId: null,
+              attempts: 3,
+            },
+          ]),
+        };
+        return cb(tx);
+      });
+
+      // connRows mock: empty array
+      db.limit.mockResolvedValueOnce([]);
+      // stitchDocs mock: empty array
+      db.limit.mockResolvedValueOnce([]);
+
+      const result = await service.retrySourceFinalization(
+        "ws_dest",
+        "ws_src",
+        "gw_id",
+        "trace_id",
+        "route_id",
+        "ds_id",
+        "tgt_conn_id",
+        "SUCCESS",
+        500, // default status code
+        "RAW",
+        "srcApp",
+        "srcTenant",
+        "srcVendor",
+        Date.now(),
+        db,
+      );
+
+      expect(result).toBe(true);
+      expect(deliveryService.writeL6Result).toHaveBeenCalledWith(
+        "ws_dest",
+        "ws_src",
+        "gw_id",
+        3,
+        "ds_id",
+        "trace_id",
+        "route_id",
+        null, // resPayload
+        null, // sentPayload
+        500, // statusCode coalesced to default
+        "SUCCESS",
+        expect.any(Number),
+        undefined, // destVendorId coalesced
+        "RAW",
+        "srcApp",
+        "srcTenant",
+        "srcVendor",
+        "tgt_conn_id",
+        undefined, // targetAppName
+        undefined, // targetTenantId
+        "", // targetObject coalesced
+        undefined, // targetTenantId (again)
+        db,
+      );
     });
   });
 });

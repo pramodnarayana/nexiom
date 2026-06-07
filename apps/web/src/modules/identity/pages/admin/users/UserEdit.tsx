@@ -69,8 +69,7 @@ export const UserEdit = () => {
                 email: record.email || "",
             });
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [record]);
+    }, [record, form]);
 
     const onSubmit = (values: UserEditFormValues) => {
         update(

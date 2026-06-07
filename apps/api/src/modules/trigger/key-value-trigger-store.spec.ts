@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { KeyValueTriggerStore } from './key-value-trigger-store.js';
 import type { IKeyValueStore } from '@soopa/cache';

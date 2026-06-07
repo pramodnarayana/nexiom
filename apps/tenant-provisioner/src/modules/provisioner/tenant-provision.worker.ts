@@ -28,7 +28,23 @@ import { fileURLToPath } from "node:url";
 export class TenantProvisionWorker implements OnModuleInit {
   private readonly logger = new Logger(TenantProvisionWorker.name);
 
-  constructor(private readonly queueService: QueueService) {}
+  /**
+   * Resolved once at construction time. If DATABASE_URL is absent the process
+   * fails immediately at startup with a clear diagnostic rather than at
+   * provisioning time with a cryptic `TypeError: Invalid URL`.
+   */
+  private readonly adminConnectionString: string;
+
+  constructor(private readonly queueService: QueueService) {
+    const url = process.env.DATABASE_URL;
+    if (!url) {
+      throw new Error(
+        "TenantProvisionWorker requires DATABASE_URL to be set. " +
+          "Provide the admin PostgreSQL connection string before starting the service.",
+      );
+    }
+    this.adminConnectionString = url;
+  }
 
   onModuleInit() {
     this.queueService.consume(
@@ -39,7 +55,7 @@ export class TenantProvisionWorker implements OnModuleInit {
         );
         try {
           await this.provision(event);
-        } catch (err) {
+        } catch (err: unknown) {
           this.logger.error(
             `Failed to provision database for poolSlotId=${event.poolSlotId}: ${err instanceof Error ? err.message : String(err)}`,
             err instanceof Error ? err.stack : undefined,
@@ -81,7 +97,7 @@ export class TenantProvisionWorker implements OnModuleInit {
     }
 
     const adminClient = new PgClient({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: this.adminConnectionString,
     });
     await adminClient.connect();
 
@@ -102,9 +118,9 @@ export class TenantProvisionWorker implements OnModuleInit {
   }
 
   private async runMigrations(dbName: string, hostUrl: string): Promise<void> {
-    // Recompose full connection string by reading credentials from DATABASE_URL
-    const dbUrl = process.env.DATABASE_URL ?? "";
-    const parsedEnv = new URL(dbUrl);
+    // Recompose full connection string using credentials from the validated
+    // adminConnectionString — resolved once at construction, never from process.env.
+    const parsedEnv = new URL(this.adminConnectionString);
     const auth = parsedEnv.username
       ? `${parsedEnv.username}${parsedEnv.password ? ":" + parsedEnv.password : ""}@`
       : "";
@@ -132,17 +148,15 @@ export class TenantProvisionWorker implements OnModuleInit {
 
   private async registerWarmSlot(poolSlotId: string): Promise<void> {
     const adminClient = new PgClient({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: this.adminConnectionString,
     });
     await adminClient.connect();
 
     try {
-      // Derive the credential-LESS host URL from DATABASE_URL.
-      // Credentials are NEVER persisted in the registry — they are injected
-      // at connection time by the TenantDatabaseManager's CredentialResolver.
-      // This follows the enterprise principle: topology in the database,
-      // auth from a secrets source (env vars, AWS Secrets Manager, Vault, etc.).
-      const dbUrl = new URL(process.env.DATABASE_URL ?? "");
+      // Derive the credential-LESS host URL from the validated adminConnectionString.
+      // Credentials are NEVER persisted in the registry — they are injected at
+      // connection time by TenantDatabaseManager's CredentialResolver.
+      const dbUrl = new URL(this.adminConnectionString);
       const hostUrl = `${dbUrl.protocol}//${dbUrl.host}`;
 
       const result = await adminClient.query(

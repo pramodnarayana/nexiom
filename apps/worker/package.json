@@ -44,6 +44,7 @@
 		"@soopa/credentials": "workspace:*",
 		"@soopa/database": "workspace:*",
 		"@soopa/dbmanager": "workspace:*",
+		"@soopa/domain-core": "workspace:*",
 		"@soopa/engine": "workspace:*",
 		"@soopa/identity": "workspace:*",
 		"@soopa/piece-framework": "workspace:*",

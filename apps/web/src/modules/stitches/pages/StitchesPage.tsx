@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { AppRoutes } from '@/shared/lib/auth/constants';
 import { ArrowLeft, GitMerge, Loader2, Pencil, Plus, Trash2, Activity } from 'lucide-react';
@@ -12,14 +12,8 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/shared/components/ui/dialog';
-import { getWorkspace } from '@/modules/workspaces/api/workspaces.api';
-import type { WorkspaceResponse } from '@/modules/workspaces/api/workspaces.api';
-import {
-  listStitches,
-  archiveStitch,
-  type StitchResponse,
-  type StitchStatus,
-} from '../api/stitches.api';
+import { useStitchesPage } from '../hooks/useStitchesPage';
+import type { StitchResponse, StitchStatus } from '../api/stitches.api';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -45,82 +39,16 @@ export function StitchesPage() {
   const { id: workspaceId } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [workspace, setWorkspace] = useState<WorkspaceResponse | null>(null);
-  const [stitches, setStitches] = useState<StitchResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [archiving, setArchiving] = useState<string | null>(null);
-  const [archiveTarget, setArchiveTarget] = useState<StitchResponse | null>(null);
-
-  // Incremented on every new load; stale responses check their captured token
-  // against the ref and discard state updates when superseded.
-  const loadIdRef = useRef(0);
-
-  const load = useCallback(async () => {
-    if (!workspaceId) return;
-    const myId = ++loadIdRef.current;
-    // Reset state synchronously so we never show stale data during loading.
-    setLoading(true);
-    setWorkspace(null);
-    setStitches([]);
-    setError(null);
-    setArchiving(null);
-    try {
-      const [ws, stitchList] = await Promise.all([
-        getWorkspace(workspaceId),
-        listStitches(workspaceId),
-      ]);
-      if (myId !== loadIdRef.current) return; // superseded by a newer load
-      setWorkspace(ws);
-      setStitches(stitchList);
-    } catch (e: unknown) {
-      if (myId !== loadIdRef.current) return; // superseded — discard
-      setWorkspace(null);
-      setStitches([]);
-      setError(e instanceof Error ? e.message : 'Failed to load.');
-    } finally {
-      if (myId === loadIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [workspaceId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  // Clear modal targets when the workspace changes so a stale confirmation
-  // dialog from workspace A cannot act on a stitch that belongs to workspace B.
-  useEffect(() => {
-    setArchiveTarget(null);
-  }, [workspaceId]);
-
-  const handleArchiveConfirm = async () => {
-    if (!archiveTarget) return;
-    const stitchId = archiveTarget.id;
-    setArchiveTarget(null);
-    await handleArchive(stitchId);
-  };
-
-  const handleArchive = async (stitchId: string) => {
-    if (archiving) return;
-    // Capture the load token so a workspace navigation that fires a new load
-    // while the archive request is in-flight doesn't mutate the next page's state.
-    const token = loadIdRef.current;
-    setArchiving(stitchId);
-    try {
-      await archiveStitch(stitchId);
-      if (token !== loadIdRef.current) return;
-      setStitches((prev) => prev.filter((s) => s.id !== stitchId));
-    } catch (e: unknown) {
-      if (token !== loadIdRef.current) return;
-      setError(e instanceof Error ? e.message : 'Failed to archive stitch.');
-    } finally {
-      if (token === loadIdRef.current) {
-        setArchiving(null);
-      }
-    }
-  };
+  const {
+    workspace,
+    stitches,
+    loading,
+    error,
+    archiving,
+    archiveTarget,
+    setArchiveTarget,
+    handleArchiveConfirm,
+  } = useStitchesPage(workspaceId);
 
   if (!workspaceId) {
     return (

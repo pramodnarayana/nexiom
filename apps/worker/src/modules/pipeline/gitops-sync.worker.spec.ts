@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/await-thenable */
 import { Test, TestingModule } from "@nestjs/testing";
 import { GitopsSyncWorker } from "./gitops-sync.worker.js";
 import { ApplicationLoaderService } from "@soopa/engine";
 import { QueueService } from "@soopa/queue";
 import * as fs from "node:fs/promises";
+import * as fsSync from "node:fs";
 import type { Dirent, Stats } from "node:fs";
 import { execFile } from "node:child_process";
 import { vi } from "vitest";
@@ -16,6 +18,10 @@ vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn(),
   readdir: vi.fn(),
   stat: vi.fn(),
+}));
+
+vi.mock("node:fs", () => ({
+  watch: vi.fn().mockReturnValue({ on: vi.fn().mockReturnThis() }),
 }));
 
 vi.mock("node:child_process", () => ({
@@ -184,5 +190,130 @@ describe("GitopsSyncWorker", () => {
     );
 
     await expect(service.syncShardRepositories()).resolves.not.toThrow();
+  });
+
+  it("should setup local file watcher if NODE_ENV is development", async () => {
+    const origEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = "development";
+      service.onModuleInit();
+      // It should call fs.mkdir in setupLocalFileWatcher
+      // Wait for async setup to run
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(fs.mkdir).toHaveBeenCalled();
+    } finally {
+      process.env.NODE_ENV = origEnv;
+    }
+  });
+
+  it("should process queue messages successfully", async () => {
+    service.onModuleInit();
+    const handler = queueConsumeSpy.mock.calls[0][1];
+    vi.mocked(fs.readdir).mockResolvedValueOnce([]); // Mock sync success
+    await expect(handler()).resolves.not.toThrow();
+  });
+
+  it("should skip queue sync if sync is already running", async () => {
+    service.onModuleInit();
+    const handler = queueConsumeSpy.mock.calls[0][1];
+    (service as any).isSyncRunning = true;
+    await expect(handler()).rejects.toThrow("GitOps sync already in progress");
+    (service as any).isSyncRunning = false;
+  });
+
+  it("should skip cron sync if sync is already running", async () => {
+    (service as any).isSyncRunning = true;
+    await service.syncShardRepositories();
+    // Readdir shouldn't be called if it exited early
+    expect(fs.readdir).not.toHaveBeenCalled();
+    (service as any).isSyncRunning = false;
+  });
+
+  it("should catch and log errors in queue consumer", async () => {
+    const error = new Error("Sync failed");
+    vi.spyOn(service as any, "syncShardRepositories").mockRejectedValueOnce(
+      error,
+    );
+    const loggerErrorSpy = vi.spyOn((service as any).logger, "error");
+
+    service.onModuleInit();
+    const handler = queueConsumeSpy.mock.calls[0][1];
+
+    await expect(handler({})).rejects.toThrow("Sync failed");
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      "GitOps sync failed via queue message",
+      error,
+    );
+  });
+
+  it("should trigger invalidateCache when file watcher fires", async () => {
+    const originalEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = "development";
+      await service.onModuleInit();
+      const watcherCallback = (fsSync.watch as any).mock.calls[0][2];
+
+      // simulate file change
+      watcherCallback("change", "test-shard/index.ts");
+
+      expect(invalidateCacheSpy).toHaveBeenCalledWith("test-shard");
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+    }
+  });
+
+  it("should not trigger invalidateCache for hidden files", async () => {
+    const originalEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = "development";
+      await service.onModuleInit();
+      const watcherCallback = (fsSync.watch as any).mock.calls[0][2];
+
+      invalidateCacheSpy.mockClear();
+      watcherCallback("change", ".env");
+
+      expect(invalidateCacheSpy).not.toHaveBeenCalled();
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+    }
+  });
+
+  it("should handle file watcher errors", async () => {
+    const originalEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = "development";
+      const loggerErrorSpy = vi.spyOn((service as any).logger, "error");
+      await service.onModuleInit();
+
+      const watcherOptions = (fsSync.watch as any).mock.results[0].value;
+      const errorCallback = watcherOptions.on.mock.calls.find(
+        (c: any) => c[0] === "error",
+      )[1];
+
+      errorCallback(new Error("Watcher failed"));
+      expect(loggerErrorSpy).toHaveBeenCalledWith(
+        "Local file watcher error",
+        expect.any(Error),
+      );
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+    }
+  });
+
+  it("should handle setupLocalFileWatcher catch block", async () => {
+    const loggerErrorSpy = vi.spyOn((service as any).logger, "error");
+    vi.mocked(fs.mkdir).mockRejectedValueOnce(new Error("MKDIR failed"));
+
+    await (service as any).setupLocalFileWatcher();
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      "Failed to setup local file watcher",
+      expect.any(Error),
+    );
+  });
+
+  it("should reject path traversal in syncShard", async () => {
+    await expect(service.syncShard("../outside-shard")).rejects.toThrow(
+      "escapes trusted boundary",
+    );
   });
 });

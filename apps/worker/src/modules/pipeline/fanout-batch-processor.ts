@@ -1,6 +1,7 @@
 import { Injectable, Logger, Inject } from "@nestjs/common";
 import { eq, sql } from "drizzle-orm";
 import { QueueService, QueueName } from "@soopa/queue";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 import {
   assertValidSchemaName,
   integrationStitches,
@@ -12,7 +13,6 @@ import {
 import type { DrizzleDb } from "@soopa/database";
 import {
   StorageResolverService,
-  ApplicationLoaderService,
   PipelineHookBrokerService,
   evaluateConditions,
   type Condition,
@@ -36,9 +36,9 @@ export class FanoutBatchProcessor {
     private readonly storageResolver: StorageResolverService,
     private readonly targetBuilder: TargetBuilderService,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
-    applicationLoader: ApplicationLoaderService,
+    private readonly eventEmitter: EventEmitter2,
   ) {
-    this.broker = new PipelineHookBrokerService(applicationLoader);
+    this.broker = new PipelineHookBrokerService(this.eventEmitter);
   }
 
   async processSingleStitch(

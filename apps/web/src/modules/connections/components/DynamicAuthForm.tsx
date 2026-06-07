@@ -256,8 +256,7 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
     useEffect(() => {
         if (!isUpdate) return;
         form.reset(initialValues);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [initialValues, isUpdate]);
+    }, [initialValues, isUpdate, form]);
 
     const [copied, setCopied] = useState(false);
     const handleCopy = async () => {

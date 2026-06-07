@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   ConflictException,
@@ -9,9 +7,8 @@ import {
 import { Test } from '@nestjs/testing';
 import { AuthGuard, PermissionsGuard } from '@soopa/auth';
 import { WorkspaceConnectionsController } from './workspace-connections.controller.js';
-import { WorkspacesService } from './workspaces.service.js';
-import { DATABASE_CONNECTION } from '@soopa/database';
 import { SyncRunner } from '../scheduler/sync-runner.js';
+import { WorkspaceRepository } from './repositories/workspace.repository.js';
 import { ORG_ID, WS_ID, CONN_ID, makeAuth } from './workspace-test-fixtures.js';
 
 const WORKSPACE = {
@@ -23,54 +20,45 @@ const WORKSPACE = {
   updatedAt: new Date(),
 };
 
-function buildMockDb() {
-  // Supports .select({}).from().where().limit() — returns an array
-  const selectRows = vi.fn<() => Promise<unknown[]>>();
-  const limit = vi.fn().mockImplementation(() => selectRows());
-  const selectWhere = vi.fn().mockReturnValue({ limit });
-  const selectFrom = vi.fn().mockReturnValue({ where: selectWhere });
-  const select = vi.fn().mockReturnValue({ from: selectFrom });
-
-  const insert = vi.fn();
-  const del = vi.fn();
-  const returning = vi.fn();
-  const deleteWhere = vi.fn();
-
-  insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning }) });
-  del.mockReturnValue({ where: deleteWhere });
-
-  return {
-    selectRows,
-    returning,
-    deleteWhere,
-    db: {
-      select,
-      insert,
-      delete: del,
-    },
-  };
-}
+const CONN = { id: CONN_ID, envType: 'PRODUCTION' as const };
+const ASSIGNMENT = {
+  workspaceId: WS_ID,
+  dataSourceId: CONN_ID,
+  assignedAt: new Date(),
+};
 
 describe('WorkspaceConnectionsController', () => {
   let controller: WorkspaceConnectionsController;
-  let mocks: ReturnType<typeof buildMockDb>;
+  let repo: {
+    findByIdAndOrg: ReturnType<typeof vi.fn>;
+    listConnections: ReturnType<typeof vi.fn>;
+    listAvailableConnections: ReturnType<typeof vi.fn>;
+    findConnectionForAssignment: ReturnType<typeof vi.fn>;
+    findConnectionForSync: ReturnType<typeof vi.fn>;
+    assignConnection: ReturnType<typeof vi.fn>;
+    unassignConnection: ReturnType<typeof vi.fn>;
+  };
+  let syncRunner: { run: ReturnType<typeof vi.fn> };
   let module: import('@nestjs/testing').TestingModule;
 
-  const mockService = {
-    findOne: vi.fn(),
-    listConnections: vi.fn(),
-    listAvailableConnections: vi.fn(),
-  };
-
   beforeEach(async () => {
-    mocks = buildMockDb();
+    repo = {
+      findByIdAndOrg: vi.fn().mockResolvedValue(WORKSPACE),
+      listConnections: vi.fn().mockResolvedValue([]),
+      listAvailableConnections: vi.fn().mockResolvedValue([]),
+      findConnectionForAssignment: vi.fn().mockResolvedValue(CONN),
+      findConnectionForSync: vi.fn().mockResolvedValue(CONN),
+      assignConnection: vi.fn().mockResolvedValue(ASSIGNMENT),
+      unassignConnection: vi.fn().mockResolvedValue(undefined),
+    };
+
+    syncRunner = { run: vi.fn() };
 
     module = await Test.createTestingModule({
       controllers: [WorkspaceConnectionsController],
       providers: [
-        { provide: WorkspacesService, useValue: mockService },
-        { provide: DATABASE_CONNECTION, useValue: mocks.db },
-        { provide: SyncRunner, useValue: { run: vi.fn() } },
+        { provide: WorkspaceRepository, useValue: repo },
+        { provide: SyncRunner, useValue: syncRunner },
       ],
     })
       .overrideGuard(AuthGuard)
@@ -80,147 +68,121 @@ describe('WorkspaceConnectionsController', () => {
       .compile();
 
     controller = module.get(WorkspaceConnectionsController);
-    vi.clearAllMocks();
   });
 
-  afterEach(async () => {
-    if (module) {
-      await module.close();
-    }
-  });
+  afterEach(() => module.close());
 
   // ── listConnections ───────────────────────────────────────────────────────
 
-  it('listConnections — delegates to service', async () => {
+  it('listConnections — returns connections for the workspace', async () => {
     const rows = [{ id: CONN_ID, appName: 'salesforce' }];
-    mockService.listConnections.mockResolvedValue(rows);
+    repo.listConnections.mockResolvedValue(rows);
 
     const result = await controller.listConnections(makeAuth(), WS_ID);
+
     expect(result).toBe(rows);
-    expect(mockService.listConnections).toHaveBeenCalledWith(ORG_ID, WS_ID);
+    expect(repo.findByIdAndOrg).toHaveBeenCalledWith(WS_ID, ORG_ID);
+    expect(repo.listConnections).toHaveBeenCalledWith(
+      ORG_ID,
+      WORKSPACE.envType,
+      WS_ID,
+    );
   });
 
-  // ── assign ────────────────────────────────────────────────────────────────
-
-  it('assign — inserts and returns the assignment', async () => {
-    const assignment = {
-      workspaceId: WS_ID,
-      dataSourceId: CONN_ID,
-      assignedAt: new Date(),
-    };
-    mockService.findOne.mockResolvedValue(WORKSPACE);
-    mocks.selectRows.mockResolvedValue([
-      {
-        id: CONN_ID,
-        tenantId: ORG_ID,
-        envType: 'PRODUCTION',
-      },
-    ]);
-    mocks.returning.mockResolvedValue([assignment]);
-
-    const result = await controller.assign(makeAuth(), WS_ID, CONN_ID);
-    expect(result).toBe(assignment);
-  });
-
-  it('assign — throws NotFoundException when connection is not ACTIVE (inactive/revoked)', async () => {
-    mockService.findOne.mockResolvedValue(WORKSPACE);
-    // DB returns empty because status filter excludes non-ACTIVE connections
-    mocks.selectRows.mockResolvedValue([]);
-
-    await expect(controller.assign(makeAuth(), WS_ID, CONN_ID)).rejects.toThrow(
+  it('listConnections — throws NotFoundException when workspace not found', async () => {
+    repo.findByIdAndOrg.mockResolvedValueOnce(null);
+    await expect(controller.listConnections(makeAuth(), WS_ID)).rejects.toThrow(
       NotFoundException,
-    );
-  });
-
-  it('assign — throws NotFoundException when connection does not belong to org', async () => {
-    mockService.findOne.mockResolvedValue(WORKSPACE);
-    mocks.selectRows.mockResolvedValue([]);
-
-    await expect(controller.assign(makeAuth(), WS_ID, CONN_ID)).rejects.toThrow(
-      NotFoundException,
-    );
-  });
-
-  it('assign — throws ConflictException when connection env_type does not match workspace env_type', async () => {
-    mockService.findOne.mockResolvedValue(WORKSPACE); // envType: 'PRODUCTION'
-    mocks.selectRows.mockResolvedValue([
-      {
-        id: CONN_ID,
-        tenantId: ORG_ID,
-        envType: 'SANDBOX',
-      },
-    ]);
-
-    await expect(controller.assign(makeAuth(), WS_ID, CONN_ID)).rejects.toThrow(
-      ConflictException,
-    );
-  });
-
-  it('assign — throws ConflictException on PG unique violation', async () => {
-    mockService.findOne.mockResolvedValue(WORKSPACE);
-    mocks.selectRows.mockResolvedValue([
-      {
-        id: CONN_ID,
-        tenantId: ORG_ID,
-        envType: 'PRODUCTION',
-      },
-    ]);
-    mocks.returning.mockRejectedValue(
-      Object.assign(new Error('unique'), { code: '23505' }),
-    );
-
-    await expect(controller.assign(makeAuth(), WS_ID, CONN_ID)).rejects.toThrow(
-      ConflictException,
-    );
-  });
-
-  it('assign — re-throws unexpected errors', async () => {
-    mockService.findOne.mockResolvedValue(WORKSPACE);
-    mocks.selectRows.mockResolvedValue([
-      {
-        id: CONN_ID,
-        tenantId: ORG_ID,
-        envType: 'PRODUCTION',
-      },
-    ]);
-    mocks.returning.mockRejectedValue(new Error('db down'));
-
-    await expect(controller.assign(makeAuth(), WS_ID, CONN_ID)).rejects.toThrow(
-      'db down',
     );
   });
 
   // ── listAvailable ─────────────────────────────────────────────────────────
 
-  it('listAvailable — delegates to service', async () => {
+  it('listAvailable — returns available connections', async () => {
     const rows = [
       { id: CONN_ID, appName: 'salesforce', envType: 'PRODUCTION' },
     ];
-    mockService.listAvailableConnections.mockResolvedValue(rows);
+    repo.listAvailableConnections.mockResolvedValue(rows);
 
     const result = await controller.listAvailable(makeAuth(), WS_ID);
+
     expect(result).toBe(rows);
-    expect(mockService.listAvailableConnections).toHaveBeenCalledWith(
+    expect(repo.listAvailableConnections).toHaveBeenCalledWith(
       ORG_ID,
+      WORKSPACE.envType,
       WS_ID,
+    );
+  });
+
+  it('listAvailable — throws NotFoundException when workspace not found', async () => {
+    repo.findByIdAndOrg.mockResolvedValueOnce(null);
+    await expect(controller.listAvailable(makeAuth(), WS_ID)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  // ── assign ────────────────────────────────────────────────────────────────
+
+  it('assign — inserts and returns the assignment', async () => {
+    const result = await controller.assign(makeAuth(), WS_ID, CONN_ID);
+
+    expect(result).toBe(ASSIGNMENT);
+    expect(repo.findConnectionForAssignment).toHaveBeenCalledWith(
+      CONN_ID,
+      ORG_ID,
+    );
+    expect(repo.assignConnection).toHaveBeenCalledWith(WS_ID, CONN_ID);
+  });
+
+  it('assign — throws NotFoundException when workspace not found', async () => {
+    repo.findByIdAndOrg.mockResolvedValueOnce(null);
+    await expect(controller.assign(makeAuth(), WS_ID, CONN_ID)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('assign — throws NotFoundException when connection not found', async () => {
+    repo.findConnectionForAssignment.mockResolvedValueOnce(null);
+    await expect(controller.assign(makeAuth(), WS_ID, CONN_ID)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('assign — throws ConflictException when env_type does not match', async () => {
+    repo.findConnectionForAssignment.mockResolvedValueOnce({
+      id: CONN_ID,
+      envType: 'SANDBOX',
+    });
+    await expect(controller.assign(makeAuth(), WS_ID, CONN_ID)).rejects.toThrow(
+      ConflictException,
+    );
+  });
+
+  it('assign — throws ConflictException when connection already assigned (repo returns null)', async () => {
+    repo.assignConnection.mockResolvedValueOnce(null);
+    await expect(controller.assign(makeAuth(), WS_ID, CONN_ID)).rejects.toThrow(
+      ConflictException,
+    );
+  });
+
+  it('assign — re-throws unexpected repository errors', async () => {
+    repo.assignConnection.mockRejectedValueOnce(new Error('db down'));
+    await expect(controller.assign(makeAuth(), WS_ID, CONN_ID)).rejects.toThrow(
+      'db down',
     );
   });
 
   // ── unassign ──────────────────────────────────────────────────────────────
 
   it('unassign — removes the assignment', async () => {
-    mockService.findOne.mockResolvedValue(WORKSPACE);
-    mocks.deleteWhere.mockResolvedValue(undefined);
-
     await expect(
       controller.unassign(makeAuth(), WS_ID, CONN_ID),
     ).resolves.toBeUndefined();
-    expect(mocks.deleteWhere).toHaveBeenCalled();
+    expect(repo.unassignConnection).toHaveBeenCalledWith(WS_ID, CONN_ID);
   });
 
   it('unassign — throws NotFoundException when workspace not found', async () => {
-    mockService.findOne.mockRejectedValue(new NotFoundException());
-
+    repo.findByIdAndOrg.mockResolvedValueOnce(null);
     await expect(
       controller.unassign(makeAuth(), WS_ID, CONN_ID),
     ).rejects.toThrow(NotFoundException);
@@ -229,30 +191,29 @@ describe('WorkspaceConnectionsController', () => {
   // ── sync ──────────────────────────────────────────────────────────────────
 
   describe('sync', () => {
-    it('sync — validates objectType and throws BadRequestException if invalid', async () => {
-      mockService.findOne.mockResolvedValue(WORKSPACE);
-
+    it('throws BadRequestException for invalid objectType', async () => {
       await expect(
         controller.sync(makeAuth(), WS_ID, CONN_ID, 'invalid/object!'),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('sync — throws NotFoundException when connection not found', async () => {
-      mockService.findOne.mockResolvedValue(WORKSPACE);
-      mocks.selectRows.mockResolvedValue([]);
-
+    it('throws NotFoundException when workspace not found', async () => {
+      repo.findByIdAndOrg.mockResolvedValueOnce(null);
       await expect(
         controller.sync(makeAuth(), WS_ID, CONN_ID, 'ValidObject_1'),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('sync — executes sync via syncRunner and returns result', async () => {
-      mockService.findOne.mockResolvedValue(WORKSPACE);
-      mocks.selectRows.mockResolvedValue([{ id: CONN_ID }]);
+    it('throws NotFoundException when connection not found', async () => {
+      repo.findConnectionForSync.mockResolvedValueOnce(null);
+      await expect(
+        controller.sync(makeAuth(), WS_ID, CONN_ID, 'ValidObject_1'),
+      ).rejects.toThrow(NotFoundException);
+    });
 
+    it('executes sync via syncRunner and returns result', async () => {
       const syncResult = { status: 'success' };
-      const syncRunner = module.get(SyncRunner);
-      vi.mocked(syncRunner.run).mockResolvedValue(syncResult as any);
+      syncRunner.run.mockResolvedValue(syncResult);
 
       const result = await controller.sync(
         makeAuth(),
@@ -262,6 +223,11 @@ describe('WorkspaceConnectionsController', () => {
       );
 
       expect(result).toBe(syncResult);
+      expect(repo.findConnectionForSync).toHaveBeenCalledWith(
+        CONN_ID,
+        ORG_ID,
+        WORKSPACE.envType,
+      );
       expect(syncRunner.run).toHaveBeenCalledWith(CONN_ID, 'ValidObject_1');
     });
   });

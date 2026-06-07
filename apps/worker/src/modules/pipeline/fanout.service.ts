@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import { eq, and } from "drizzle-orm";
 import { QueueService, QueueName } from "@soopa/queue";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 import {
   DATABASE_CONNECTION,
   buildTenantSchema,
@@ -20,7 +21,6 @@ import {
 import type { DrizzleDb } from "@soopa/database";
 import {
   StorageResolverService,
-  ApplicationLoaderService,
   PipelineHookBrokerService,
   evaluateConditions,
   Condition,
@@ -47,9 +47,9 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     private readonly storageResolver: StorageResolverService,
     private readonly targetBuilder: TargetBuilderService,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
-    private readonly applicationLoader: ApplicationLoaderService,
+    private readonly eventEmitter: EventEmitter2,
   ) {
-    this.broker = new PipelineHookBrokerService(this.applicationLoader);
+    this.broker = new PipelineHookBrokerService(this.eventEmitter);
   }
 
   private readonly broker: PipelineHookBrokerService;

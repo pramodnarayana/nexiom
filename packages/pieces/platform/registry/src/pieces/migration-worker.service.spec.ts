@@ -3,12 +3,24 @@ import type { Mocked } from 'vitest';
 import { MigrationWorkerService } from './migration-worker.service.js';
 import type { DrizzleDb } from '@soopa/database';
 import { QueueName } from '@soopa/queue';
-import type { IQueueService } from '@soopa/queue';
+import type { IQueueService, PluginMigrationEvent } from '@soopa/queue';
 import * as migrator from 'drizzle-orm/node-postgres/migrator';
 import type { DatabaseManager } from '@soopa/dbmanager';
 
+/**
+ * Typed accessor for MigrationWorkerService private methods.
+ * vi.spyOn requires the second argument to be a keyof T where T[K] is a function.
+ * Casting to Record<string, unknown> resolves K to `never` (unknown ≠ function),
+ * so we use a concrete interface that mirrors the private method signatures.
+ */
+type MigrationWorkerPrivate = {
+  getActiveTenants(): Promise<Array<{ id: string }>>;
+  getTenantDbConnection(tenantId: string): Promise<DrizzleDb>;
+  isPluginMigrationEvent(event: unknown): event is PluginMigrationEvent;
+};
+
 vi.mock('drizzle-orm/node-postgres/migrator', () => ({
-  migrate: vi.fn().mockResolvedValue(undefined)
+  migrate: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('MigrationWorkerService', () => {
@@ -20,7 +32,6 @@ describe('MigrationWorkerService', () => {
   beforeEach(() => {
     globalDb = {} as unknown as Mocked<DrizzleDb>;
     dbManager = { getTenantDb: vi.fn() } as unknown as Mocked<DatabaseManager>;
-    
     queueService = {
       send: vi.fn(),
       consume: vi.fn(),
@@ -33,95 +44,195 @@ describe('MigrationWorkerService', () => {
     vi.clearAllMocks();
   });
 
-  describe('runBackgroundMigrations', () => {
-    let originalEnablePluginMigrations: string | undefined;
+  // ── onModuleInit: consumer registration ──────────────────────────────────
 
-    beforeEach(() => {
-      originalEnablePluginMigrations = process.env.ENABLE_PLUGIN_MIGRATIONS;
-      // Enable migrations for tests that need tenant handlers
-      process.env.ENABLE_PLUGIN_MIGRATIONS = 'true';
+  describe('onModuleInit', () => {
+    it('should register a consumer on the TenantProvisionQueue', () => {
+      service.onModuleInit();
+      expect(queueService.consume).toHaveBeenCalledWith(
+        QueueName.TenantProvisionQueue,
+        expect.any(Function),
+      );
     });
 
-    afterEach(() => {
-      if (originalEnablePluginMigrations === undefined) {
-        delete process.env.ENABLE_PLUGIN_MIGRATIONS;
-      } else {
-        process.env.ENABLE_PLUGIN_MIGRATIONS = originalEnablePluginMigrations;
-      }
+    it('should throw for a non-plugin-migration message so SQS can requeue it', async () => {
+      service.onModuleInit();
+      const consumer = queueService.consume.mock.calls[0][1] as (
+        msg: unknown,
+      ) => Promise<void>;
+
+      await expect(consumer({ invalid: 'event' })).rejects.toThrow(
+        'Not a plugin migration event',
+      );
     });
 
-    it('should abort gracefully if tenant handlers are not available', async () => {
-      delete process.env.ENABLE_PLUGIN_MIGRATIONS;
+    it('should process a valid PluginMigrationEvent in the consumer', async () => {
+      vi.spyOn(service, 'runBackgroundMigrations').mockResolvedValueOnce(
+        undefined,
+      );
+      service.onModuleInit();
+      const consumer = queueService.consume.mock.calls[0][1] as (
+        msg: unknown,
+      ) => Promise<void>;
 
-      await service.runBackgroundMigrations({
+      await consumer({
         pluginLocation: '/tmp/plugin',
-        pieceName: '@soopa/piece-migrate'
+        pieceName: '@soopa/piece-slack',
       });
-      
-      expect(queueService.send).not.toHaveBeenCalled();
+
+      expect(service.runBackgroundMigrations).toHaveBeenCalled();
+    });
+  });
+
+  // ── isPluginMigrationEvent: type guard with `unknown` input ─────────────
+
+  describe('isPluginMigrationEvent (type guard)', () => {
+    const guard = (e: unknown) =>
+      (service as unknown as Record<string, (e: unknown) => boolean>)[
+        'isPluginMigrationEvent'
+      ](e);
+
+    it('should accept a valid PluginMigrationEvent', () => {
+      expect(
+        guard({ pluginLocation: '/a', pieceName: '@soopa/piece-x' }),
+      ).toBe(true);
     });
 
-    it('should Fan-out to multiple queue messages if tenantId is missing', async () => {
-      // Mock the internal getActiveTenants helper
-      const getActiveTenantsSpy = vi.spyOn(service as any, 'getActiveTenants').mockResolvedValue([
+    it('should reject null', () => {
+      expect(guard(null)).toBe(false);
+    });
+
+    it('should reject a string (primitive)', () => {
+      expect(guard('some string')).toBe(false);
+    });
+
+    it('should reject an object missing pieceName', () => {
+      expect(guard({ pluginLocation: '/a' })).toBe(false);
+    });
+
+    it('should reject an object with numeric fields (type mismatch)', () => {
+      expect(guard({ pluginLocation: 1, pieceName: 2 })).toBe(false);
+    });
+  });
+
+  // ── runBackgroundMigrations: fan-out mode ─────────────────────────────────
+
+  describe('runBackgroundMigrations — fan-out mode (no tenantId)', () => {
+    it('should dispatch one SQS message per active tenant', async () => {
+      vi.spyOn(service as unknown as MigrationWorkerPrivate, 'getActiveTenants').mockResolvedValue([
         { id: 't1' },
-        { id: 't2' }
+        { id: 't2' },
       ]);
-      vi.spyOn(service as any, 'getTenantDbConnection').mockResolvedValue({} as any);
+      vi.spyOn(service as unknown as MigrationWorkerPrivate, 'getTenantDbConnection').mockResolvedValue({} as DrizzleDb);
 
       await service.runBackgroundMigrations({
         pluginLocation: '/tmp/plugin',
-        pieceName: '@soopa/piece-migrate'
+        pieceName: '@soopa/piece-migrate',
       });
 
-      expect(getActiveTenantsSpy).toHaveBeenCalled();
-
-      // It should have fanned out into 2 explicit queue messages
       expect(queueService.send).toHaveBeenCalledTimes(2);
-      expect(queueService.send).toHaveBeenNthCalledWith(1, QueueName.TenantProvisionQueue, {
-        pluginLocation: '/tmp/plugin',
-        pieceName: '@soopa/piece-migrate',
-        tenantId: 't1'
-      });
-      expect(queueService.send).toHaveBeenNthCalledWith(2, QueueName.TenantProvisionQueue, {
-        pluginLocation: '/tmp/plugin',
-        pieceName: '@soopa/piece-migrate',
-        tenantId: 't2'
-      });
-
-      // Should not run migrations itself in Fan-Out mode
+      expect(queueService.send).toHaveBeenNthCalledWith(
+        1,
+        QueueName.TenantProvisionQueue,
+        {
+          pluginLocation: '/tmp/plugin',
+          pieceName: '@soopa/piece-migrate',
+          tenantId: 't1',
+        },
+      );
+      expect(queueService.send).toHaveBeenNthCalledWith(
+        2,
+        QueueName.TenantProvisionQueue,
+        {
+          pluginLocation: '/tmp/plugin',
+          pieceName: '@soopa/piece-migrate',
+          tenantId: 't2',
+        },
+      );
+      // Fan-out mode must NOT run the migrator itself
       expect(migrator.migrate).not.toHaveBeenCalled();
     });
+  });
 
-    it('should execute single-tenant migration if tenantId is provided', async () => {
-      const getActiveTenantsSpy = vi.spyOn(service as any, 'getActiveTenants').mockResolvedValue([]);
-      const getTenantDbSpy = vi.spyOn(service as any, 'getTenantDbConnection').mockResolvedValue({} as any);
+  // ── runBackgroundMigrations: worker mode ──────────────────────────────────
+
+  describe('runBackgroundMigrations — worker mode (with tenantId)', () => {
+    it('should run Drizzle migrate for the specified tenant', async () => {
+      const getActiveTenantsSpy = vi.spyOn(
+        service as unknown as MigrationWorkerPrivate,
+        'getActiveTenants',
+      ).mockResolvedValue([]);
+      const getTenantDbSpy = vi.spyOn(
+        service as unknown as MigrationWorkerPrivate,
+        'getTenantDbConnection',
+      ).mockResolvedValue({} as DrizzleDb);
 
       await service.runBackgroundMigrations({
         pluginLocation: '/tmp/plugin',
         pieceName: '@soopa/piece-migrate',
-        tenantId: 'tenant-555'
+        tenantId: 'tenant-555',
       });
 
-      // Should bypass fan-out
+      // Must NOT fan-out in worker mode
       expect(getActiveTenantsSpy).not.toHaveBeenCalled();
       expect(queueService.send).not.toHaveBeenCalled();
 
-      // Should resolve the specific tenant DB and run migration
       expect(getTenantDbSpy).toHaveBeenCalledWith('tenant-555');
-      expect(migrator.migrate).toHaveBeenCalledWith(expect.any(Object), { migrationsFolder: '/tmp/plugin/drizzle/migrations' });
+      expect(migrator.migrate).toHaveBeenCalledWith(expect.any(Object), {
+        migrationsFolder: '/tmp/plugin/drizzle/migrations',
+      });
     });
 
-    it('should throw an error if single-tenant migration fails to trigger Dead-Letter Queue', async () => {
-      vi.spyOn(service as any, 'getActiveTenants').mockResolvedValue([]);
-      vi.spyOn(service as any, 'getTenantDbConnection').mockResolvedValue({} as any);
-      (migrator.migrate as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('DB Timeout'));
+    it('should re-throw migration errors so SQS routes to DLQ', async () => {
+      vi.spyOn(service as unknown as MigrationWorkerPrivate, 'getActiveTenants').mockResolvedValue([]);
+      vi.spyOn(service as unknown as MigrationWorkerPrivate, 'getTenantDbConnection').mockResolvedValue({} as DrizzleDb);
+      (
+        migrator.migrate as unknown as ReturnType<typeof vi.fn>
+      ).mockRejectedValueOnce(new Error('DB Timeout'));
 
-      await expect(service.runBackgroundMigrations({
-        pluginLocation: '/tmp/plugin',
-        pieceName: '@soopa/piece-migrate',
-        tenantId: 'tenant-999'
-      })).rejects.toThrow('DB Timeout');
+      await expect(
+        service.runBackgroundMigrations({
+          pluginLocation: '/tmp/plugin',
+          pieceName: '@soopa/piece-migrate',
+          tenantId: 'tenant-999',
+        }),
+      ).rejects.toThrow('DB Timeout');
+    });
+  });
+
+  // ── Private helpers ───────────────────────────────────────────────────────
+
+  describe('Private helpers', () => {
+    it('getActiveTenants should query the global DB', async () => {
+      const mockSelect = {
+        from: vi.fn().mockResolvedValue([{ id: 'tenant-1' }]),
+      };
+      (globalDb as unknown as Record<string, unknown>).select = vi
+        .fn()
+        .mockReturnValue(mockSelect);
+
+      const res = await (
+        service as unknown as Record<
+          string,
+          () => Promise<Array<{ id: string }>>
+        >
+      )['getActiveTenants']();
+
+      expect(res).toEqual([{ id: 'tenant-1' }]);
+    });
+
+    it('getTenantDbConnection should delegate to dbManager.getTenantDb', async () => {
+      const fakeDb = { dummy: true };
+      dbManager.getTenantDb.mockResolvedValue(fakeDb as unknown as DrizzleDb);
+
+      const res = await (
+        service as unknown as Record<
+          string,
+          (id: string) => Promise<DrizzleDb>
+        >
+      )['getTenantDbConnection']('tenant-1');
+
+      expect(res).toBe(fakeDb);
     });
   });
 });

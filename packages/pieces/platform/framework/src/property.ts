@@ -71,6 +71,45 @@ export type StaticDropdownProperty<T> = BasePropertySchema & {
     defaultValue?: T;
 };
 
+export type FileProperty = BasePropertySchema & {
+    type: PropertyType.FILE;
+};
+
+export type ArrayProperty = BasePropertySchema & {
+    type: PropertyType.ARRAY;
+};
+
+export type ObjectProperty = BasePropertySchema & {
+    type: PropertyType.OBJECT;
+};
+
+export type DynamicProperties = BasePropertySchema & {
+    type: PropertyType.DYNAMIC;
+};
+
+export type MultiSelectDropdownProperty<T> = BasePropertySchema & {
+    type: PropertyType.MULTI_SELECT_DROPDOWN;
+    refreshers: string[];
+    refreshOnSearch?: boolean;
+    options: (...args: any[]) => Promise<any>;
+    defaultValue?: T[];
+};
+
+export type StaticMultiSelectDropdownProperty<T> = BasePropertySchema & {
+    type: PropertyType.STATIC_MULTI_SELECT_DROPDOWN;
+    options: {
+        disabled?: boolean;
+        placeholder?: string;
+        options: { label: string; value: T }[];
+    };
+    defaultValue?: T[];
+};
+
+export type CustomAuthProperty = BasePropertySchema & {
+    type: PropertyType.CUSTOM_AUTH;
+    props: Record<string, AnyProperty>;
+};
+
 export type AnyProperty =
     | ShortTextProperty
     | LongTextProperty
@@ -79,7 +118,14 @@ export type AnyProperty =
     | NumberProperty
     | JsonProperty
     | DropdownProperty<unknown>
-    | StaticDropdownProperty<unknown>;
+    | StaticDropdownProperty<unknown>
+    | FileProperty
+    | ArrayProperty
+    | ObjectProperty
+    | DynamicProperties
+    | MultiSelectDropdownProperty<unknown>
+    | StaticMultiSelectDropdownProperty<unknown>
+    | CustomAuthProperty;
 
 
 export const AuthenticationType = { BEARER_TOKEN: 'BEARER_TOKEN', BASIC: 'BASIC', CUSTOM: 'CUSTOM', OAUTH2: 'OAUTH2' };
@@ -89,22 +135,22 @@ export const AuthenticationType = { BEARER_TOKEN: 'BEARER_TOKEN', BASIC: 'BASIC'
  * Used strictly for typing the input config schema of an Action.
  */
 export const Property = {
-    File<T = any>(request: any): any {
+    File<T = any>(request: Omit<FileProperty, 'type'>): FileProperty {
         return { ...request, type: PropertyType.FILE };
     },
-    Array<T = any>(request: any): any {
+    Array<T = any>(request: Omit<ArrayProperty, 'type'>): ArrayProperty {
         return { ...request, type: PropertyType.ARRAY };
     },
-    Object<T = any>(request: any): any {
+    Object<T = any>(request: Omit<ObjectProperty, 'type'>): ObjectProperty {
         return { ...request, type: PropertyType.OBJECT };
     },
-    DateTime<T = any>(request: any): any {
+    DateTime<T = any>(request: Omit<ShortTextProperty, 'type'>): ShortTextProperty {
         return { ...request, type: PropertyType.SHORT_TEXT };
     },
-    DynamicProperties<T = any>(request: any): any {
+    DynamicProperties<T = any>(request: Omit<DynamicProperties, 'type'>): DynamicProperties {
         return { ...request, type: PropertyType.DYNAMIC };
     },
-    MarkDown<T = any>(request: any): any {
+    MarkDown<T = any>(request: Omit<ShortTextProperty, 'type'>): ShortTextProperty {
         return { ...request, type: PropertyType.SHORT_TEXT };
     },
     ShortText(request: Omit<ShortTextProperty, 'type'>): ShortTextProperty {
@@ -134,5 +180,18 @@ export const Property = {
         request: Omit<StaticDropdownProperty<T>, 'type'>,
     ): StaticDropdownProperty<T> {
         return { ...request, type: PropertyType.STATIC_DROPDOWN };
+    },
+    MultiSelectDropdown<T = any, R extends boolean = boolean, AuthT = any>(
+        request: Omit<MultiSelectDropdownProperty<T>, 'type'>,
+    ): MultiSelectDropdownProperty<T> {
+        return { ...request, type: PropertyType.MULTI_SELECT_DROPDOWN };
+    },
+    StaticMultiSelectDropdown<T = any>(
+        request: Omit<StaticMultiSelectDropdownProperty<T>, 'type'>,
+    ): StaticMultiSelectDropdownProperty<T> {
+        return { ...request, type: PropertyType.STATIC_MULTI_SELECT_DROPDOWN };
+    },
+    CustomAuth(request: Omit<CustomAuthProperty, 'type'>): CustomAuthProperty {
+        return { ...request, type: PropertyType.CUSTOM_AUTH };
     },
 };

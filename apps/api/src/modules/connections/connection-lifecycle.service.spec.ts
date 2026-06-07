@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
-
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { ConnectionLifecycleService } from './connection-lifecycle.service.js';
 import { EventEmitter2 } from '@nestjs/event-emitter';

@@ -41,7 +41,7 @@ export default defineConfig({
             ],
             reporter: ['text', 'json', 'html'],
       thresholds: {
-        statements: 70, // TODO: Increase to 80% after refactor
+        statements: 70,
         branches: 60,
         functions: 70,
         lines: 70,

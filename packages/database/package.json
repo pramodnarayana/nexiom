@@ -34,7 +34,8 @@
 		"db:generate:tenant": "pnpm build && drizzle-kit generate --config drizzle.config.tenant.ts",
 		"db:migrate:tenant": "pnpm build && drizzle-kit migrate --config drizzle.config.tenant.ts",
 		"db:studio": "pnpm build && drizzle-kit studio --config drizzle.config.ts",
-		"db:studio:tenant": "pnpm build && drizzle-kit studio --config drizzle.config.tenant.ts"
+		"db:studio:tenant": "pnpm build && drizzle-kit studio --config drizzle.config.tenant.ts",
+		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
 		"@nestjs/common": "^11.1.11",

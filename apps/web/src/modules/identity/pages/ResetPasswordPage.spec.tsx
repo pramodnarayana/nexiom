@@ -66,7 +66,6 @@ describe('ResetPasswordPage', () => {
     });
 
     it('submits successfully', async () => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (authClient.resetPassword as any).mockResolvedValue({ data: { status: true }, error: null });
 
         renderComponent();

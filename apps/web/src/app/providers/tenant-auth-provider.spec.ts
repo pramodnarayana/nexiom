@@ -161,7 +161,6 @@ describe('tenantAuthProvider', () => {
                 error: null,
             });
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const identity = await tenantAuthProvider.getIdentity?.({}) as any;
 
             expect(identity?.roles).toEqual(['member']);
@@ -180,7 +179,6 @@ describe('tenantAuthProvider', () => {
                 error: null,
             });
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const identity = await tenantAuthProvider.getIdentity?.({}) as any;
 
             expect(identity?.roles).toEqual([]);

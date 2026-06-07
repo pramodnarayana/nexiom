@@ -6,12 +6,7 @@ import {
   Logger,
 } from "@nestjs/common";
 import { QueueService, QueueName } from "@soopa/queue";
-import {
-  DATABASE_CONNECTION,
-  buildTenantSchema,
-  assertValidSchemaName,
-  dataSources,
-} from "@soopa/database";
+import { DATABASE_CONNECTION, dataSources } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
 import {
   StorageResolverService,
@@ -19,8 +14,9 @@ import {
 } from "@soopa/engine";
 import { DependenciesMissingError } from "@soopa/piece-framework";
 import { DB_MANAGER, type TenantDatabaseManager } from "@soopa/dbmanager";
-import { sql, eq, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { sanitizeErrorObject } from "../../shared/pipeline.utils.js";
+import type { IReplicaStatePort } from "@soopa/domain-core";
 
 @Injectable()
 export class ReplicaService implements OnModuleInit, OnModuleDestroy {
@@ -30,6 +26,8 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
     private readonly queueService: QueueService,
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
     @Inject(DB_MANAGER) private readonly dbManager: TenantDatabaseManager,
+    @Inject("IReplicaStatePort")
+    private readonly replicaStatePort: IReplicaStatePort,
     private readonly storageResolver: StorageResolverService,
     private readonly hookBroker: PipelineHookBrokerService,
   ) {}
@@ -55,14 +53,16 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       "L2 replication started",
     );
 
+    let effectiveSchemaName: string | undefined;
+    let effectiveTenantId: string | undefined;
+
     try {
       const passedSchemaName = msg.schemaName as string | undefined;
-      if (passedSchemaName) {
-        assertValidSchemaName(passedSchemaName);
-      }
       const { schemaName: resolvedSchemaName, tenantId } =
         await this.storageResolver.resolveStorageProfile(dataSourceId);
       const schemaName = passedSchemaName ?? resolvedSchemaName;
+      effectiveSchemaName = schemaName;
+      effectiveTenantId = tenantId;
       if (passedSchemaName && passedSchemaName !== resolvedSchemaName) {
         this.logger.error(
           {
@@ -78,14 +78,6 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           `Schema mismatch: msg.schemaName=${passedSchemaName} but resolved=${resolvedSchemaName}`,
         );
       }
-      const {
-        inboundGateway,
-        replicaEntity,
-        replicaOutbox,
-        syncLog,
-        activeSyncLocks,
-      } = buildTenantSchema(schemaName);
-
       const tenantDb = await this.dbManager.getTenantDb(tenantId);
 
       // Fetch application metadata
@@ -120,164 +112,68 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           { entityType: "appProfile", sourceId: dataSourceId },
         ]);
       }
-      await tenantDb.transaction(async (tx) => {
-        assertValidSchemaName(schemaName);
-        await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+      const inbound = await this.replicaStatePort.fetchInboundRecord(
+        tenantId,
+        schemaName,
+        traceId,
+      );
+
+      if (!inbound) {
+        throw new Error(`Inbound record for traceId ${traceId} not found`);
+      }
+
+      if (
+        inbound.status !== "RECEIVED" &&
+        inbound.status !== "PENDING" &&
+        inbound.status !== "FAIL"
+      ) {
+        this.logger.debug(
+          { traceId, status: inbound.status },
+          "L2 already processed this trace (idempotent redelivery). Skipping.",
         );
+        return;
+      }
 
-        // Read inbound_gateway payload
-        const inboundRows = await tx
-          .select()
-          .from(inboundGateway)
-          .where(sql`${inboundGateway.traceId} = ${traceId}`)
-          .limit(1);
-        const inbound = inboundRows[0];
+      // Extraction happens safely OUTSIDE the transaction
+      const extracted = await this.hookBroker.extractReplica(
+        appName,
+        appProfile,
+        inbound.request,
+      );
 
-        if (!inbound) {
-          throw new Error(`Inbound record for traceId ${traceId} not found`);
-        }
-
-        if (
-          inbound.status !== "RECEIVED" &&
-          inbound.status !== "PENDING" &&
-          inbound.status !== "FAIL"
-        ) {
-          this.logger.debug(
-            { traceId, status: inbound.status },
-            "L2 already processed this trace (idempotent redelivery). Skipping.",
-          );
-          return;
-        }
-
-        const extracted = await this.hookBroker.extractReplica(
-          appName,
-          appProfile,
-          inbound.request,
+      if (!extracted) {
+        throw new Error(
+          `Replica extraction failed for traceId ${traceId}: shard returned null. ` +
+            `Likely the payload is missing the required entity ID (e.g. sf:id).`,
         );
+      }
 
-        if (!extracted) {
-          throw new Error(
-            `Replica extraction failed for traceId ${traceId}: shard returned null. ` +
-              `Likely the payload is missing the required entity ID (e.g. sf:id).`,
-          );
-        }
+      // Every entity written to replica_entity must carry a stable business ID.
+      // A UUID traceId is NOT a valid entityId — it changes with every delivery.
+      const resolvedEntityId = extracted.entityId;
+      if (!resolvedEntityId) {
+        throw new Error(
+          `Cannot determine entityId for traceId ${traceId} (appName="${appName}", appProfile="${appProfile}"). ` +
+            `Extractor returned null/undefined entityId. Ensure the payload contains a stable business identifier.`,
+        );
+      }
 
-        // Every entity written to replica_entity must carry a stable business ID.
-        // A UUID traceId is NOT a valid entityId — it changes with every delivery.
-        const resolvedEntityId = extracted.entityId;
-        if (!resolvedEntityId) {
-          throw new Error(
-            `Cannot determine entityId for traceId ${traceId} (appName="${appName}", appProfile="${appProfile}"). ` +
-              `Extractor returned null/undefined entityId. Ensure the payload contains a stable business identifier.`,
-          );
-        }
+      const durationMs = Date.now() - start;
 
-        const resolvedEntityType = extracted.entityType;
-        const resolvedData = extracted.data;
-
-        // ── ACQUIRE ENTITY LOCK ───────────────────────────────────────────────
-        // Prevents an UPDATE event from starting while a CREATE event is still
-        // in-flight (L2 -> L6), ensuring the UPDATE has access to the GEM mapping.
-        try {
-          // Self-healing: clear any stale locks that have expired (e.g. from permanently crashed workers)
-          await tx
-            .delete(activeSyncLocks)
-            .where(
-              and(
-                eq(activeSyncLocks.dataSourceId, dataSourceId),
-                eq(activeSyncLocks.entityId, resolvedEntityId),
-                sql`${activeSyncLocks.expiresAt} < NOW()`,
-              ),
-            );
-
-          await tx.insert(activeSyncLocks).values({
-            dataSourceId,
-            entityId: resolvedEntityId,
-            lockedByTraceId: traceId,
-            expiresAt: sql`NOW() + INTERVAL '10 minutes'`,
-          });
-        } catch (err: unknown) {
-          if (
-            err instanceof Error &&
-            (err.message.includes("unique constraint") ||
-              err.message.includes("duplicate key"))
-          ) {
-            // Lock contention — treat as a deferral (retry later), NOT a terminal FAIL
-            const lockContentionError = new Error(
-              `Entity ${resolvedEntityId} is currently locked by an in-flight sync. ` +
-                `Delaying processing to maintain FIFO order.`,
-            );
-            Object.assign(lockContentionError, { isLockContention: true });
-            throw lockContentionError;
-          }
-          throw err;
-        }
-
-        // Upsert into replica_entity keyed on (dataSourceId, entityType, extEntityId).
-        // extEntityId is the vendor's stable business ID (e.g. Salesforce Account ID).
-        // Multiple webhook deliveries for the same entity converge into one row via ON CONFLICT.
-        await tx
-          .insert(replicaEntity)
-          .values({
-            traceId,
-            dataSourceId,
-            entityType: resolvedEntityType,
-            entityId: resolvedEntityId,
-            data: resolvedData,
-            version: 1,
-          })
-          .onConflictDoUpdate({
-            target: [
-              replicaEntity.dataSourceId,
-              replicaEntity.entityType,
-              replicaEntity.entityId,
-            ],
-            set: {
-              data: resolvedData,
-              traceId,
-              version: sql`${replicaEntity.version} + 1`,
-              updatedAt: sql`NOW()`,
-            },
-          })
-          .returning({ id: replicaEntity.id });
-
-        // Update inbound_gateway status
-        await tx
-          .update(inboundGateway)
-          .set({ status: "REPLICATED" })
-          .where(sql`${inboundGateway.id} = ${inbound.id}`);
-
-        // Insert sync_log
-        const durationMs = Date.now() - start;
-        await tx
-          .insert(syncLog)
-          .values({
-            traceId,
-            layer: "L2",
-            status: "SUCCESS",
-            durationMs,
-          })
-          .onConflictDoNothing();
-
-        // Atomically write the outbox entry — Debezium CDC watches this table
-        // and triggers the relay to ReplicaQueue (via CdcRelayController locally
-        // or API Gateway in production). traceId is the consumer deduplication
-        // key; if a duplicate is delivered the L3 ON CONFLICT DO NOTHING on
-        // replicaId makes it idempotent. onConflictDoNothing guards against
-        // InboundQueue message redelivery producing a second outbox row for
-        // the same (traceId, dataSourceId).
-        await tx
-          .insert(replicaOutbox)
-          .values({
-            traceId,
-            dataSourceId,
-            status: "PENDING",
-          })
-          .onConflictDoNothing({
-            target: [replicaOutbox.traceId, replicaOutbox.dataSourceId],
-          });
-      });
+      // ── PERSIST REPLICA ───────────────────────────────────────────────
+      await this.replicaStatePort.persistReplicaExtraction(
+        tenantId,
+        schemaName,
+        dataSourceId,
+        traceId,
+        inbound.id,
+        {
+          entityId: resolvedEntityId,
+          entityType: extracted.entityType,
+          data: extracted.data,
+        },
+        durationMs,
+      );
 
       this.logger.log(
         { event: "l2.completed", traceId, durationMs: Date.now() - start },
@@ -315,46 +211,22 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       );
 
       try {
-        const { schemaName, tenantId } =
-          await this.storageResolver.resolveStorageProfile(dataSourceId);
-        const { syncLog, inboundGateway } = buildTenantSchema(schemaName);
-        const tenantDb = await this.dbManager.getTenantDb(tenantId);
-        await tenantDb.transaction(async (tx) => {
-          assertValidSchemaName(schemaName);
-          await tx.execute(
-            sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-          );
-
+        if (effectiveSchemaName && effectiveTenantId) {
           const errorMessage = err instanceof Error ? err.message : String(err);
-          await tx
-            .insert(syncLog)
-            .values({
-              traceId,
-              layer: "L2",
-              status: "FAIL",
-              durationMs: Date.now() - start,
-              errorMessage,
-            })
-            .onConflictDoUpdate({
-              target: [syncLog.traceId, syncLog.layer, syncLog.status],
-              set: {
-                errorMessage,
-                durationMs: Date.now() - start,
-              },
-              where: sql`${syncLog.routeId} IS NULL`,
-            });
-
-          await tx
-            .update(inboundGateway)
-            .set({
-              status: "FAIL",
-              errorMessage:
-                err instanceof Error
-                  ? `${errorMessage}\n${err.stack}`
-                  : errorMessage,
-            })
-            .where(sql`${inboundGateway.traceId} = ${traceId}`);
-        });
+          await this.replicaStatePort.markInboundFail(
+            effectiveTenantId,
+            effectiveSchemaName,
+            traceId,
+            err instanceof Error
+              ? `${errorMessage}\n${err.stack}`
+              : errorMessage,
+            Date.now() - start,
+          );
+        } else {
+          this.logger.error(
+            "Cannot mark inbound as FAIL: schema/tenant not yet resolved",
+          );
+        }
       } catch (error_) {
         this.logger.error(
           "Failed to write L2 error state",

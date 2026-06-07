@@ -44,8 +44,7 @@ export function ActiveConnectionsPage() {
             didFetchRef.current = true;
             void refresh();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [refresh]);
 
     const handleRefreshAll = () => {
         refreshProviders();

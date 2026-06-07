@@ -11,7 +11,8 @@
 		}
 	},
 	"scripts": {
-		"build": "tsc"
+		"build": "tsc",
+		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {
 		"@types/node": "^20.14.9",

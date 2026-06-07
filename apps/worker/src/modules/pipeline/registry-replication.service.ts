@@ -1,57 +1,12 @@
 import { Injectable, Inject, OnModuleInit, Logger } from "@nestjs/common";
-import { eq, inArray } from "drizzle-orm";
 import { QueueService, QueueName } from "@soopa/queue";
-import { DATABASE_CONNECTION, globalRegistryOutbox } from "@soopa/database";
-import type { DrizzleDb } from "@soopa/database";
 import {
   DB_MANAGER,
   SchemaPlan,
   getWorkspaceSchemaName,
 } from "@soopa/dbmanager";
 import type { DatabaseManager } from "@soopa/dbmanager";
-import * as schema from "../../db/schema.js";
-
-// ISO 8601 pattern — matches timestamps stored as strings in JSONB
-const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
-
-/**
- * Drizzle's PgTimestamp.mapToDriverValue calls value.toISOString().
- * After a JSONB round-trip every Date becomes a plain string, so we
- * must rehydrate them before passing the payload to Drizzle.
- *
- * Payloads stored in global_registry_outbox are always written by Drizzle
- * (which returns camelCase keys), so no key-casing conversion is needed.
- */
-function rehydrateDates(obj: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (typeof v === "string" && ISO_TIMESTAMP_RE.test(v)) {
-      out[k] = new Date(v);
-    } else {
-      out[k] = v;
-    }
-  }
-  return out;
-}
-
-/**
- * Global-Control-Plane-only columns that exist in the global DB's app_connection
- * but are NOT present in the tenant shard's replica table. Strip them before upsert.
- * Keys are camelCase (matching the Drizzle-serialized payload).
- */
-const APP_CONNECTION_GLOBAL_ONLY_KEYS = new Set(["schemaName", "schemaPlan"]);
-
-function prepareAppConnectionPayload(
-  payload: Record<string, unknown>,
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(payload)) {
-    if (!APP_CONNECTION_GLOBAL_ONLY_KEYS.has(k)) {
-      out[k] = v;
-    }
-  }
-  return out;
-}
+import type { IRegistryReplicationPort } from "@soopa/domain-core";
 
 @Injectable()
 export class RegistryReplicationService implements OnModuleInit {
@@ -59,7 +14,8 @@ export class RegistryReplicationService implements OnModuleInit {
 
   constructor(
     private readonly queueService: QueueService,
-    @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
+    @Inject("IRegistryReplicationPort")
+    private readonly registryPort: IRegistryReplicationPort,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {}
 
@@ -80,22 +36,13 @@ export class RegistryReplicationService implements OnModuleInit {
   }
 
   private async processMessage(outboxId: string): Promise<void> {
-    const rows = await this.globalDb
-      .select()
-      .from(globalRegistryOutbox)
-      .where(eq(globalRegistryOutbox.id, outboxId))
-      .limit(1);
-
-    if (rows.length === 0) {
-      this.logger.warn(`Outbox record ${outboxId} not found. Skipping.`);
-      return;
-    }
-
-    const row = rows[0];
-
     try {
-      const tenantDb = await this.dbManager.getTenantDb(row.tenantId);
+      const row = await this.registryPort.fetchGlobalOutboxRecord(outboxId);
 
+      if (!row) {
+        this.logger.warn(`Outbox record ${outboxId} not found. Skipping.`);
+        return;
+      }
       let operationPerformed = false;
       let attempts = 0;
       // FIELD_MAPPING has a FK dependency on INTEGRATION_STITCH. When both are
@@ -107,75 +54,16 @@ export class RegistryReplicationService implements OnModuleInit {
 
       while (attempts < maxAttempts) {
         try {
-          await tenantDb.transaction(async (tx) => {
-            if (row.action === "UPSERT") {
-              const data = rehydrateDates(
-                row.payload as Record<string, unknown>,
-              );
-              if (row.entityType === "APP_CONNECTION") {
-                const connData = prepareAppConnectionPayload(data);
-                await tx
-                  .insert(schema.dataSources)
-                  .values(connData as typeof schema.dataSources.$inferInsert)
-                  .onConflictDoUpdate({
-                    target: [schema.dataSources.id],
-                    set: connData as typeof schema.dataSources.$inferInsert,
-                  });
-                operationPerformed = true;
-              } else if (row.entityType === "UI_WORKSPACE") {
-                await tx
-                  .insert(schema.uiWorkspaces)
-                  .values(data as typeof schema.uiWorkspaces.$inferInsert)
-                  .onConflictDoUpdate({
-                    target: [schema.uiWorkspaces.id],
-                    set: data as typeof schema.uiWorkspaces.$inferInsert,
-                  });
-                operationPerformed = true;
-              } else if (row.entityType === "INTEGRATION_STITCH") {
-                await tx
-                  .insert(schema.integrationStitches)
-                  .values(
-                    data as typeof schema.integrationStitches.$inferInsert,
-                  )
-                  .onConflictDoUpdate({
-                    target: [schema.integrationStitches.id],
-                    set: data as typeof schema.integrationStitches.$inferInsert,
-                  });
-                operationPerformed = true;
-              } else if (row.entityType === "FIELD_MAPPING") {
-                await tx
-                  .insert(schema.fieldMappings)
-                  .values(data as typeof schema.fieldMappings.$inferInsert)
-                  .onConflictDoUpdate({
-                    target: [schema.fieldMappings.id],
-                    set: data as typeof schema.fieldMappings.$inferInsert,
-                  });
-                operationPerformed = true;
-              }
-            } else if (row.action === "DELETE") {
-              if (row.entityType === "APP_CONNECTION") {
-                await tx
-                  .delete(schema.dataSources)
-                  .where(eq(schema.dataSources.id, row.entityId));
-                operationPerformed = true;
-              } else if (row.entityType === "UI_WORKSPACE") {
-                await tx
-                  .delete(schema.uiWorkspaces)
-                  .where(eq(schema.uiWorkspaces.id, row.entityId));
-                operationPerformed = true;
-              } else if (row.entityType === "INTEGRATION_STITCH") {
-                await tx
-                  .delete(schema.integrationStitches)
-                  .where(eq(schema.integrationStitches.id, row.entityId));
-                operationPerformed = true;
-              } else if (row.entityType === "FIELD_MAPPING") {
-                await tx
-                  .delete(schema.fieldMappings)
-                  .where(eq(schema.fieldMappings.id, row.entityId));
-                operationPerformed = true;
-              }
-            }
-          });
+          if (row.action === "UPSERT" || row.action === "DELETE") {
+            await this.registryPort.replicateEntity(
+              row.tenantId,
+              row.action,
+              row.entityType,
+              row.entityId,
+              row.payload,
+            );
+            operationPerformed = true;
+          }
           break; // Transaction succeeded, break retry loop!
         } catch (err) {
           attempts++;
@@ -212,19 +100,11 @@ export class RegistryReplicationService implements OnModuleInit {
         };
 
         // Get appNames and metadata for the connections from the local replica to compute schema names
-        const dataSources = await tenantDb
-          .select({
-            id: schema.dataSources.id,
-            appName: schema.dataSources.appName,
-            metadata: schema.dataSources.metadata,
-          })
-          .from(schema.dataSources)
-          .where(
-            inArray(schema.dataSources.id, [
-              stitch.srcDataSourceId,
-              stitch.destDataSourceId,
-            ]),
-          );
+        const dataSources = await this.registryPort.getStitchDataSources(
+          row.tenantId,
+          stitch.srcDataSourceId,
+          stitch.destDataSourceId,
+        );
 
         // Ensure both stitch data sources are present before provisioning
         const dataSourceIds = new Set(dataSources.map((ds) => ds.id));
@@ -268,10 +148,7 @@ export class RegistryReplicationService implements OnModuleInit {
       }
 
       // Mark outbox as success ONLY after everything (including provisioning) succeeds
-      await this.globalDb
-        .update(globalRegistryOutbox)
-        .set({ status: "SUCCESS" })
-        .where(eq(globalRegistryOutbox.id, outboxId));
+      await this.registryPort.markGlobalOutboxSuccess(outboxId);
 
       this.logger.debug(
         `Successfully replicated ${row.entityType} ${row.entityId} to tenant ${row.tenantId}`,
@@ -279,7 +156,7 @@ export class RegistryReplicationService implements OnModuleInit {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       this.logger.error(
-        `Failed to replicate ${row.entityType} ${row.entityId} to tenant ${row.tenantId}: ${errorMessage}`,
+        `Failed to process registry replication for outboxId ${outboxId}: ${errorMessage}`,
       );
 
       // We don't mark the outbox as FAILED here because the BullMQ retry mechanism will re-queue it,

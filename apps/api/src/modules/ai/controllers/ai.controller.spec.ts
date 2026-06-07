@@ -80,7 +80,6 @@ describe('AiController - Enterprise Hardened', () => {
     expect(queueServiceMock.send).toHaveBeenCalledWith(
       QueueName.AiCopilotQueue,
       expect.objectContaining({
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         jobId: expect.any(String),
         traceId: 'trace-456',
         tenantId: 'org-123',

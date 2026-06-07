@@ -3,7 +3,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { RegistryOutboxPoller } from "./registry-outbox.poller.js";
 import { QueueService, QueueName } from "@soopa/queue";
 import { DATABASE_CONNECTION } from "@soopa/database";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 describe("RegistryOutboxPoller", () => {
   let worker: RegistryOutboxPoller;
@@ -88,56 +88,34 @@ describe("RegistryOutboxPoller", () => {
     );
   });
 
-  it("should handle queue send error and update status to PENDING with delay", async () => {
-    queueService.send.mockRejectedValueOnce(new Error("Queue error"));
-    const setMock = vi.fn().mockReturnThis();
-    globalDb.update.mockReturnValue({ set: setMock });
-    setMock.mockReturnValue({ where: vi.fn() });
-
-    await worker.processOutbox();
-
-    expect(setMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "PENDING",
-        errorMessage: "Queue error",
-        nextRetryAt: expect.any(Date),
-      }),
-    );
-  });
-
-  it("should mark as FAILED when attempts exceed MAX_ATTEMPTS", async () => {
-    globalDb.transaction.mockImplementationOnce(
-      async (cb: (tx: any) => Promise<unknown>) => {
-        return await cb({
-          update: vi.fn().mockReturnThis(),
-          set: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          returning: vi.fn().mockResolvedValue([
-            { id: "o1", attempts: 6 }, // MAX_ATTEMPTS = 6
-          ]),
-        });
-      },
-    );
-    queueService.send.mockRejectedValueOnce(new Error("Permanent failure"));
-
-    const setMock = vi.fn().mockReturnThis();
-    globalDb.update.mockReturnValue({ set: setMock });
-    setMock.mockReturnValue({ where: vi.fn() });
-
-    await worker.processOutbox();
-
-    expect(setMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "FAILED",
-        errorMessage: "Permanent failure",
-      }),
-    );
-  });
-
   it("should catch and log global transaction errors", async () => {
     globalDb.transaction.mockRejectedValueOnce(
       new Error("DB Connection Error"),
     );
     await expect(worker.processOutbox()).resolves.toBeUndefined();
+  });
+
+  it("should return early if isProcessing is true", async () => {
+    (worker as any).isProcessing = true;
+    const loggerDebugSpy = vi.spyOn((worker as any).logger, "debug");
+    await worker.processOutbox();
+    expect(loggerDebugSpy).toHaveBeenCalledWith(
+      expect.stringContaining("already running"),
+    );
+  });
+
+  it("should log unexpected failures when deliverRow rejects", async () => {
+    const loggerErrorSpy = vi.spyOn((worker as any).logger, "error");
+    vi.spyOn(worker as any, "deliverRow").mockRejectedValueOnce(
+      new Error("Delivery rejected"),
+    );
+    await worker.processOutbox();
+    expect(loggerErrorSpy).toHaveBeenCalled();
+    expect(
+      loggerErrorSpy.mock.calls.some(
+        (call: any[]) =>
+          typeof call[0] === "string" && call[0].includes("critically failed"),
+      ),
+    ).toBe(true);
   });
 });

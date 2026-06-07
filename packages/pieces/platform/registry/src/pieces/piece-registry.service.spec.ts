@@ -67,4 +67,19 @@ describe('PieceRegistryService', () => {
       /Duplicate piece name/,
     );
   });
+
+  it('should throw on duplicate alias names', () => {
+    const p1 = { ...mockPiece, name: 'p1', aliases: [{ name: 'dup', id: 'a1' }] };
+    const p2 = { ...mockPiece, name: 'p2', aliases: [{ name: 'dup', id: 'a2' }] };
+    expect(() => new PieceRegistryService([p1 as unknown as Piece, p2 as unknown as Piece])).toThrow(
+      /Duplicate alias name/,
+    );
+  });
+
+  it('resolves base piece name correctly when using an alias', () => {
+    const p = { ...mockPiece, name: 'base', aliases: [{ name: 'my-alias', id: 'a1' }] };
+    const s = new PieceRegistryService([p as unknown as Piece]);
+    expect(s.resolveBasePieceName('my-alias')).toBe('base');
+    expect(s.getPiece('my-alias')?.name).toBe('base');
+  });
 });

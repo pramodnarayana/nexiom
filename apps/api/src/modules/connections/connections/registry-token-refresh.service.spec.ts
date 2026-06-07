@@ -194,7 +194,6 @@ describe('RegistryOAuthRefreshClient', () => {
     await expect(
       client.refresh('testTenant', 'mock-oauth2', 'test-ext', 'bad_refresh'),
     ).rejects.toMatchObject({
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       message: expect.stringContaining('OAuth Refresh failed: 401'),
       status: 401,
     } satisfies Partial<OAuthRefreshError>);

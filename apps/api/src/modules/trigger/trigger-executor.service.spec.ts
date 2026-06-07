@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
+/* eslint-disable @typescript-eslint/require-await */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TriggerExecutorService } from './trigger-executor.service.js';
 import { TriggerRetryPolicyService } from './trigger-retry-policy.service.js';

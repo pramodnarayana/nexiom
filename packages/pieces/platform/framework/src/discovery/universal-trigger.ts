@@ -112,17 +112,9 @@ export class UniversalTrigger {
 
         let apiLimits: ApiRateLimit | null = null;
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(new TimeoutError('TIMEOUT')), 5000);
-
-            try {
-                apiLimits = await checkApiLimits(auth, store, controller.signal);
-            } finally {
-                clearTimeout(timeoutId);
-            }
+            apiLimits = await checkApiLimits(auth, store, AbortSignal.timeout(5000));
         } catch (e: any) {
-            const isTimeout = e instanceof TimeoutError || e?.name === 'AbortError' || e?.name === 'TimeoutError';
-            log.debug(`Failed to verify API limits during preflight cache check${isTimeout ? ' (Timeout)' : ''}`, { error: String(e) });
+            log.debug(`Failed to verify API limits during preflight cache check`, { error: String(e) });
             return true; // Fail open
         }
 
@@ -148,9 +140,10 @@ export class UniversalTrigger {
     }
 
     private static parseLimitThreshold(envValue?: string | number): number {
-        if (envValue === undefined || envValue === null) return 0.2;
-        const parsed = typeof envValue === 'number' ? envValue : Number.parseFloat(envValue);
-        if (!Number.isFinite(parsed) || Number.isNaN(parsed)) return 0.2;
+        if (envValue == null) return 0.2;
+        if (typeof envValue === 'string' && envValue.trim() === '') return 0.2;
+        const parsed = Number(envValue);
+        if (Number.isNaN(parsed)) return 0.2;
         return Math.max(0, Math.min(1, parsed));
     }
 

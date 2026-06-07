@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { DATABASE_CONNECTION } from '@soopa/database';
@@ -378,7 +377,6 @@ describe('WebhooksController', () => {
     );
 
     expect(queueServiceMock.send).toHaveBeenCalledWith(QueueName.InboundQueue, {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       traceId: expect.any(String),
       dataSourceId: '00000000-0000-0000-0000-000000000001',
     });

@@ -14,7 +14,8 @@
 	},
 	"scripts": {
 		"build": "tsc -p tsconfig.lib.json",
-		"clean": "rm -rf dist"
+		"clean": "rm -rf dist",
+		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
 		"@nestjs/common": "^11.1.11",

@@ -1,16 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { useParams, Navigate } from 'react-router-dom';
-import { AlertCircle, Activity, ChevronRight, FileJson, AlertTriangle } from 'lucide-react';
+import { Activity, ChevronRight, FileJson, AlertTriangle, AlertCircle } from 'lucide-react';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
-import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
+import { Button } from '@/shared/components/ui/button';
 import { Skeleton } from '@/shared/components/ui/skeleton';
-import {
-  listTraces,
-  getTrace,
-  type TraceSummary,
-  type FullTrace
-} from '../api/trace.api';
+import { type TraceSummary } from '../api/trace.api';
+import { usePipelineTracePage } from '../hooks/usePipelineTracePage';
+import { useTraceRow } from '../hooks/useTraceRow';
 
 // Colors for status dots
 const getStatusColor = (status: string) => {
@@ -65,29 +62,8 @@ function JsonViewer({ title, data, className = '' }: Readonly<{ title: string; d
 }
 
 function TraceRow({ summary, stitchId, workspaceId }: Readonly<{ summary: TraceSummary; stitchId: string, workspaceId: string }>) {
-  const [expanded, setExpanded] = useState(false);
-  const [details, setDetails] = useState<FullTrace | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [errorObj, setErrorObj] = useState<unknown>(null);
+  const { expanded, details, loading, errorObj, handleToggle } = useTraceRow(workspaceId, stitchId, summary);
   const [rowParent] = useAutoAnimate<HTMLDivElement>();
-
-  const handleToggle = async () => {
-    if (loading) return;
-    setExpanded(prev => !prev);
-    if (!expanded && !details) {
-      setLoading(true);
-      setErrorObj(null);
-      try {
-        const full = await getTrace(workspaceId, stitchId, summary.traceId);
-        setDetails(full);
-      } catch (e) {
-        console.error(e);
-        setErrorObj(e);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
 
   let expandedContent = null;
   if (loading) {
@@ -221,36 +197,8 @@ function TraceRow({ summary, stitchId, workspaceId }: Readonly<{ summary: TraceS
 export function PipelineTracePage() {
   const { id: workspaceId, stitchId } = useParams<{ id: string; stitchId: string }>();
 
-  const [traces, setTraces] = useState<TraceSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { traces, loading, error, fetchTraces } = usePipelineTracePage(workspaceId, stitchId);
   const [listParent] = useAutoAnimate<HTMLDivElement>();
-
-  const fetchSeqRef = useRef(0);
-
-  const fetchTraces = useCallback(async () => {
-    if (!stitchId || !workspaceId) {
-      setLoading(false);
-      return;
-    }
-    const seq = ++fetchSeqRef.current;
-    try {
-      setLoading(true);
-      const res = await listTraces(workspaceId, stitchId, { limit: 50 });
-      if (seq !== fetchSeqRef.current) return;
-      setTraces(res.data);
-      setError(null);
-    } catch (e: unknown) {
-      if (seq !== fetchSeqRef.current) return;
-      setError(e instanceof Error ? e.message : 'Failed to load traces.');
-    } finally {
-      if (seq === fetchSeqRef.current) setLoading(false);
-    }
-  }, [workspaceId, stitchId]);
-
-  useEffect(() => {
-    void fetchTraces();
-  }, [fetchTraces]);
 
   let pageContent = null;
   if (!workspaceId || !stitchId) {

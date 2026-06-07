@@ -21,7 +21,8 @@
 		"dev": "tsc -p tsconfig.lib.json --watch --preserveWatchOutput",
 		"build": "tsc -p tsconfig.lib.json",
 		"clean": "rm -rf dist",
-		"test": "vitest run"
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {
 		"typescript": "^5.7.3",

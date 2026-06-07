@@ -1,105 +1,49 @@
-import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import type { Piece } from '@soopa/piece-framework';
 import { pieces, type DrizzleDb } from '@soopa/database';
-import { PluginManagerService } from './plugin-manager.service.js';
+import { PIECE_RESOLVER, type IPieceResolver } from './piece-resolver.port.js';
 
 /**
- * Injection token for the host application's `import.meta.url`.
- * When provided, the loader uses it as the anchor for resolving piece
- * packages — this ensures correct resolution regardless of CWD.
+ * Loads enabled Pieces from the database and resolves their module exports.
  *
- * Register in PiecesModule.forRoot({ anchorUrl: import.meta.url })
- */
-export const PIECE_LOADER_ANCHOR_URL = 'PIECE_LOADER_ANCHOR_URL';
-
-/**
- * Loads enabled Pieces from the database and dynamically imports their packages.
- *
- * This is the ONLY place that performs dynamic imports. The interface it returns
- * (Piece[]) is identical to the old static array — so PieceRegistryService and
- * all consumers above it are completely unaffected.
+ * This is the ONLY place that calls IPieceResolver.resolve(). The interface it
+ * returns (Piece[]) is identical regardless of resolver implementation, so
+ * PieceRegistryService and all consumers above it are completely unaffected
+ * by the production vs. development resolver choice.
  *
  * Path to Tier 4B (external npm registry):
- *   Replace the `await import(row.packageName)` line with an install-then-import
- *   step. Everything else in this file and above stays the same.
+ *   Replace ProductionPieceResolver with an install-then-resolve step.
+ *   Everything in this file and above stays the same.
  */
 @Injectable()
 export class PieceLoaderService {
   private readonly logger = new Logger(PieceLoaderService.name);
-  private readonly isDev: boolean;
 
   constructor(
-    @Optional() @Inject(PIECE_LOADER_ANCHOR_URL) private readonly anchorUrl: string | null,
-    private readonly pluginManager: PluginManagerService,
-  ) {
-    // Check if we're in development mode
-    this.isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
-  }
+    @Inject(PIECE_RESOLVER) private readonly resolver: IPieceResolver,
+  ) {}
 
   async loadEnabledPieces(db: DrizzleDb): Promise<Piece[]> {
-    const rows = await db.select({
-      name: pieces.name,
-      packageName: pieces.packageName,
-      enabled: pieces.enabled
-    }).from(pieces).where(eq(pieces.enabled, true));
+    const rows = await db
+      .select({
+        name: pieces.name,
+        packageName: pieces.packageName,
+        enabled: pieces.enabled,
+      })
+      .from(pieces)
+      .where(eq(pieces.enabled, true));
 
     this.logger.log(
-      `Found ${rows.length} enabled piece(s) in DB: ${rows.map(r => r.name).join(', ')}`,
+      `Found ${rows.length} enabled piece(s) in DB: ${rows.map((r) => r.name).join(', ')}`,
     );
 
     const loaded: Piece[] = [];
 
     for (const row of rows) {
-      try {
-        let mod: Record<string, unknown>;
-        
-        try {
-          // --- ENTERPRISE STARTUP SYNCHRONIZATION ---
-          // Ensure the plugin is downloaded locally to /opt/nexiom/plugins
-          await this.pluginManager.ensurePiece(row.packageName, 'latest');
-
-          // Dynamically load the piece from the plugin manager's disk cache
-          mod = this.pluginManager.requirePiece(row.packageName) as Record<string, unknown>;
-        } catch (downloadErr: any) {
-          // Only attempt local workspace resolution in development mode
-          if (this.isDev) {
-            this.logger.warn(`Startup Sync failed for ${row.packageName} (${downloadErr.message}). Falling back to local workspace resolution...`);
-
-            // --- LOCAL DEVELOPMENT FALLBACK ---
-            // Allows `pnpm dev` to load unpublished pieces directly from the monorepo node_modules
-            let resolvedPath = row.packageName;
-            try {
-              const { createRequire } = await import('node:module');
-              const { fileURLToPath, pathToFileURL } = await import('node:url');
-              const anchor = this.anchorUrl ?? import.meta.url;
-              const anchorFile = anchor.startsWith('file://') ? anchor : pathToFileURL(anchor).href;
-              const hostRequire = createRequire(fileURLToPath(anchorFile));
-              resolvedPath = pathToFileURL(hostRequire.resolve(row.packageName)).href;
-            } catch {
-              // Non-fatal: fall through to bare-specifier import below.
-            }
-
-            mod = (await import(resolvedPath)) as Record<string, unknown>;
-          } else {
-            // In production, re-throw the original error
-            this.logger.error(`Failed to load piece ${row.packageName} in production: ${downloadErr.message}`);
-            throw downloadErr;
-          }
-        }
-        const piece = this.extractPiece(mod, row.name);
-        if (piece) {
-          loaded.push(piece);
-        } else {
-          this.logger.warn(
-            `Package "${row.packageName}" has no valid Piece export — skipping.`,
-          );
-        }
-      } catch (err) {
-        this.logger.error(
-          `Failed to import piece package "${row.packageName}": ${(err as Error).message}`,
-        );
-        // Non-fatal: log and continue so one broken piece doesn't kill the app.
+      const piece = await this.loadSinglePiece(row.packageName, row.name);
+      if (piece) {
+        loaded.push(piece);
       }
     }
 
@@ -107,8 +51,36 @@ export class PieceLoaderService {
   }
 
   /**
-   * Finds the first value in a module's exports that looks like a Piece.
-   * Pieces have a `name`, `displayName`, and `triggers` property.
+   * Resolves, validates, and extracts a single Piece from its package.
+   * Returns null and logs on any failure so one broken piece never kills the boot sequence.
+   */
+  private async loadSinglePiece(
+    packageName: string,
+    expectedName: string,
+  ): Promise<Piece | null> {
+    try {
+      const mod = await this.resolver.resolve(packageName);
+      const piece = this.extractPiece(mod, expectedName);
+      if (!piece) {
+        this.logger.warn(
+          `Package "${packageName}" has no valid Piece export — skipping.`,
+        );
+      }
+      return piece;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `Failed to import piece package "${packageName}": ${msg}`,
+      );
+      // Non-fatal: log and continue so one broken piece doesn't kill the app.
+      return null;
+    }
+  }
+
+  /**
+   * Finds the first exported value that satisfies the Piece shape.
+   * Returns null if no valid export exists or if the exported name mismatches
+   * the DB-registered name (prevents registration under a wrong key).
    */
   private extractPiece(
     mod: Record<string, unknown>,
@@ -118,8 +90,8 @@ export class PieceLoaderService {
       if (this.isPiece(exported)) {
         if (exported.name !== expectedName) {
           this.logger.error(
-            `Piece name mismatch: package registered as "${expectedName}" but exports name "${exported.name}". ` +
-              `Skipping to prevent registration under wrong key.`,
+            `Piece name mismatch: package registered as "${expectedName}" but exports ` +
+              `name "${exported.name}". Skipping to prevent registration under wrong key.`,
           );
           return null;
         }
@@ -144,7 +116,7 @@ export class PieceLoaderService {
       typeof v['auth'] === 'object' &&
       v['auth'] !== null &&
       Array.isArray(v['categories']) &&
-      v['categories'].every(c => typeof c === 'string')
+      v['categories'].every((c) => typeof c === 'string')
     );
   }
 }

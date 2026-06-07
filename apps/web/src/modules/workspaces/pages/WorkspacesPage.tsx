@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Plus, Building2, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
@@ -12,12 +11,7 @@ import {
 } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
-import {
-  listWorkspaces,
-  createWorkspace,
-  deleteWorkspace,
-  type WorkspaceResponse,
-} from '../api/workspaces.api';
+import { useWorkspacesPage } from '../hooks/useWorkspacesPage';
 import { EnvBadge } from '../components/EnvBadge';
 import { Link } from 'react-router-dom';
 import { AppRoutes } from '@/shared/lib/auth/constants';
@@ -28,72 +22,23 @@ interface TenantOutletContext {
 
 export function WorkspacesPage() {
   const { refreshWorkspaces } = useOutletContext<TenantOutletContext>();
-  const [workspaces, setWorkspaces] = useState<WorkspaceResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newEnvType, setNewEnvType] = useState<'PRODUCTION' | 'SANDBOX'>('PRODUCTION');
-  const [deleteTarget, setDeleteTarget] = useState<WorkspaceResponse | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  const fetchSeqRef = useRef(0);
-
-  const fetchWorkspaces = useCallback(async () => {
-    const seq = ++fetchSeqRef.current;
-    setLoading(true);
-    try {
-      const data = await listWorkspaces();
-      if (seq !== fetchSeqRef.current) return;
-      setWorkspaces(data);
-      setError(null);
-    } catch (e: unknown) {
-      if (seq !== fetchSeqRef.current) return;
-      setError(e instanceof Error ? e.message : 'Failed to load workspaces.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchWorkspaces();
-  }, [fetchWorkspaces]);
-
-  const handleCreate = async () => {
-    if (creating || !newName.trim()) return;
-    setCreating(true);
-    try {
-      const created = await createWorkspace({ name: newName.trim(), envType: newEnvType });
-      setWorkspaces((prev) => [...prev, created]);
-      setDialogOpen(false);
-      setNewName('');
-      setNewEnvType('PRODUCTION');
-      void fetchWorkspaces();
-      refreshWorkspaces();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to create workspace.');
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (deleting || !deleteTarget) return;
-    setDeleting(true);
-    const targetId = deleteTarget.id;
-    try {
-      await deleteWorkspace(targetId);
-      setWorkspaces((prev) => prev.filter((ws) => ws.id !== targetId));
-      setDeleteTarget(null);
-      void fetchWorkspaces();
-      refreshWorkspaces();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to delete workspace.');
-    } finally {
-      setDeleting(false);
-    }
-  };
+  const {
+    workspaces,
+    loading,
+    error,
+    dialogOpen,
+    setDialogOpen,
+    creating,
+    newName,
+    setNewName,
+    newEnvType,
+    setNewEnvType,
+    deleteTarget,
+    setDeleteTarget,
+    deleting,
+    handleCreate,
+    handleDeleteConfirm,
+  } = useWorkspacesPage(refreshWorkspaces);
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">

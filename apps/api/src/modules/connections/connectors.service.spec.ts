@@ -356,9 +356,9 @@ describe('ConnectorsService', () => {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
           body: expect.any(String),
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
           signal: expect.any(AbortSignal),
         },
       );
@@ -562,17 +562,15 @@ describe('ConnectorsService', () => {
 
       expect(mockDbInsert).toHaveBeenCalledTimes(3);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const dsCall = vi.mocked(mockDbInsert).mock.results[0]?.value;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
       const dsValues = dsCall.values.mock.calls[0]?.[0] as Record<
         string,
         unknown
       >;
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const credsCall = vi.mocked(mockDbInsert).mock.results[1]?.value;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
       const credsValues = credsCall.values.mock.calls[0]?.[0] as Record<
         string,
         unknown

@@ -281,4 +281,57 @@ describe('UniversalTrigger', () => {
         // Assert standard fetch behavior continued downstream
         expect(records.length).toBe(2);
     });
+
+    it('should parse state for number type cursors properly', async () => {
+        (mockStore.get).mockResolvedValue('10||tb');
+        mockSchema.fields[0] = { name: 'Age', type: 'number', filterable: true, sortable: true, nillable: false } as any;
+        vi.mocked(SmartCursorSelector.pick).mockReturnValue('Age');
+        const config = createConfig({
+            executeCountQuery: undefined
+        });
+        mockExecuteStandardQuery.mockResolvedValueOnce([{ id: '1', Age: 12 }]);
+
+        await UniversalTrigger.execute(config);
+        
+        expect(mockStore.put).toHaveBeenCalledWith(
+            'igt_TestObject_Age',
+            '12||1'
+        );
+    });
+    
+    it('should handle NaN parsing gracefully for number type cursors', async () => {
+        (mockStore.get).mockResolvedValue('0');
+        mockSchema.fields[0] = { name: 'Age', type: 'number', filterable: true, sortable: true, nillable: false } as any;
+        vi.mocked(SmartCursorSelector.pick).mockReturnValue('Age');
+        const config = createConfig({
+            executeCountQuery: undefined
+        });
+        mockExecuteStandardQuery.mockResolvedValueOnce([{ id: '1', Age: 'not-a-number' }]);
+
+        await UniversalTrigger.execute(config);
+        
+        expect(mockStore.put).toHaveBeenCalledWith(
+            'igt_TestObject_Age',
+            'not-a-number||1'
+        );
+    });
+
+    it('should handle apiLimitThreshold as a valid number and string field types', async () => {
+        // Fallback for stateStr == null and string field type
+        (mockStore.get).mockResolvedValue(null);
+        mockSchema.fields[0] = { name: 'Name', type: 'string', filterable: true, sortable: true, nillable: false } as any;
+        vi.mocked(SmartCursorSelector.pick).mockReturnValue('Name');
+        const config = createConfig({
+            executeCountQuery: undefined,
+            apiLimitThreshold: '0.5' // test branch 154
+        });
+        mockExecuteStandardQuery.mockResolvedValueOnce([{ id: '1', Name: 'Alice' }]);
+
+        await UniversalTrigger.execute(config);
+
+        expect(mockStore.put).toHaveBeenCalledWith(
+            'igt_TestObject_Name',
+            'Alice||1'
+        );
+    });
 });

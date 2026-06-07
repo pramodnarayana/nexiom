@@ -3,7 +3,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { InboundOutboxPoller } from "./inbound-outbox.poller.js";
 import { DATABASE_CONNECTION, tenantStorageRegistry } from "@soopa/database";
 import { QueueService, QueueName } from "@soopa/queue";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { DB_MANAGER } from "@soopa/dbmanager";
 
@@ -27,7 +27,7 @@ describe("InboundOutboxPoller", () => {
       set: vi.fn().mockReturnThis(),
       where: vi.fn().mockResolvedValue([{ id: "conn_1", appName: "test-app" }]),
       returning: vi.fn().mockResolvedValue([]),
-      transaction: vi.fn().mockImplementation(async (cb) => {
+      transaction: vi.fn().mockImplementation(async (cb: any) => {
         const tx = {
           execute: vi.fn(),
           update: vi.fn().mockReturnThis(),
@@ -83,8 +83,6 @@ describe("InboundOutboxPoller", () => {
 
   it("processOutbox should fetch workspaces and process rows", async () => {
     await service.processOutbox();
-    // It should fetch workspaces ws_1 and ws_2, and for both, it mocks claiming 1 row.
-    // The claimed row is successfully delivered to QueueName.InboundQueue
     expect(queueService.send).toHaveBeenCalledWith(QueueName.InboundQueue, {
       traceId: "t1",
       dataSourceId: "c1",
@@ -92,73 +90,18 @@ describe("InboundOutboxPoller", () => {
     expect(tenantDb.update).toHaveBeenCalled();
   });
 
-  it("processOutboxRow should retry on failure", async () => {
-    queueService.send.mockRejectedValue(new Error("Queue down"));
-    // processOutbox internally triggers processOutboxRow via drainWorkspaceOutbox
-    await service.processOutbox();
-    // It should have failed and called db.update to set status: 'RETRY'
-    expect(tenantDb.update).toHaveBeenCalled();
-    const updateCall = tenantDb.update.mock.calls.find(
-      (call: any[]) => call.length > 0,
-    );
-    expect(updateCall).toBeDefined();
-    const setCall = tenantDb
-      .update()
-      .set.mock.calls.find(
-        (call: any[]) =>
-          call[0] && typeof call[0] === "object" && "status" in call[0],
-      );
-    expect(setCall).toBeDefined();
-    expect(setCall![0]).toMatchObject({ status: "RETRY" });
-  });
-
-  it("processOutboxRow should permanently fail on max attempts", async () => {
-    queueService.send.mockRejectedValue(new Error("Queue down"));
-    tenantDb.transaction.mockImplementationOnce(async (cb: any) => {
-      return cb({
-        execute: vi.fn(),
-        update: vi.fn().mockReturnThis(),
-        set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        returning: vi
-          .fn()
-          .mockResolvedValue([
-            { id: "1", traceId: "t1", dataSourceId: "c1", attempts: 6 },
-          ]), // Max attempts hit
-      });
-    });
-
-    await service.processOutbox();
-    // It should have called db.update to set status: 'FAIL' and not called queueService.send for the row with attempts: 6
-    expect(tenantDb.update).toHaveBeenCalled();
-    const setCall = tenantDb
-      .update()
-      .set.mock.calls.find(
-        (call: any[]) =>
-          call[0] && typeof call[0] === "object" && "status" in call[0],
-      );
-    expect(setCall).toBeDefined();
-    expect(setCall![0]).toMatchObject({ status: "FAIL" });
-    // queueService.send should have been called during the claim phase but rejected, not called again for the failed row
-    expect(queueService.send).toHaveBeenCalledWith(expect.anything(), {
-      traceId: "t1",
-      dataSourceId: "c1",
-    });
-  });
-
   it("should handle rejecting drainWorkspace gracefully", async () => {
     const loggerErrorSpy = vi.spyOn((service as any).logger, "error");
     tenantDb.transaction.mockRejectedValueOnce(new Error("db down"));
-    // Since mock resolves 2 workspaces ws_1 and ws_2, first throws, second succeeds
+
     await service.processOutbox();
-    // processOutbox handles rejection internally and logs it.
-    // Verify that the error was logged
+
     expect(loggerErrorSpy).toHaveBeenCalled();
     expect(
       loggerErrorSpy.mock.calls.some(
         (call: any[]) =>
           typeof call[0] === "string" &&
-          call[0].includes("Failed to drain inbound outbox"),
+          call[0].includes("Failed to drain outbox"),
       ),
     ).toBe(true);
   });
@@ -181,14 +124,11 @@ describe("InboundOutboxPoller", () => {
     ).toBe(true);
   });
 
-  it("should log unexpected rejections if the retry update fails", async () => {
+  it("processOutbox should catch and log tenant processing errors", async () => {
     const loggerErrorSpy = vi.spyOn((service as any).logger, "error");
-    queueService.send.mockRejectedValue(new Error("Queue down"));
-    tenantDb.update.mockReturnValueOnce({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockRejectedValue(new Error("DB completely dead")),
-      }),
-    });
+    dbManager.getTenantDb.mockRejectedValueOnce(
+      new Error("tenant db connection failed"),
+    );
 
     await service.processOutbox();
 
@@ -197,8 +137,80 @@ describe("InboundOutboxPoller", () => {
       loggerErrorSpy.mock.calls.some(
         (call: any[]) =>
           typeof call[0] === "string" &&
-          call[0].includes("Unexpected processOutboxRow failure"),
+          call[0].includes("Failed to process inbound outbox for tenant"),
       ),
     ).toBe(true);
+  });
+
+  it("should log unexpected failures when deliverRow rejects", async () => {
+    const loggerErrorSpy = vi.spyOn((service as any).logger, "error");
+    vi.spyOn(service as any, "deliverRow").mockRejectedValueOnce(
+      new Error("Delivery rejected"),
+    );
+    await service.processOutbox();
+    expect(loggerErrorSpy).toHaveBeenCalled();
+  });
+
+  it("should return early if tenants is empty", async () => {
+    globalDb.from.mockImplementationOnce((table: any) => {
+      if (table === tenantStorageRegistry) {
+        return Promise.resolve([]);
+      }
+      return { where: vi.fn().mockResolvedValue([]) };
+    });
+    await service.processOutbox();
+    expect(tenantDb.transaction).not.toHaveBeenCalled();
+  });
+
+  it("should return early if claimed is empty", async () => {
+    tenantDb.transaction.mockImplementationOnce(async (cb: any) => {
+      const tx = {
+        execute: vi.fn(),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([]),
+      };
+      return cb(tx);
+    });
+    const loggerDebugSpy = vi.spyOn((service as any).logger, "debug");
+    await service.processOutbox();
+    expect(loggerDebugSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Claimed"),
+    );
+  });
+
+  it("should catch and log tenant processing errors that are not instances of Error", async () => {
+    dbManager.getTenantDb.mockRejectedValueOnce("string error");
+    const loggerErrorSpy = vi.spyOn((service as any).logger, "error");
+    await service.processOutbox();
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "Failed to process inbound outbox for tenant tenant-1: string error",
+      ),
+    );
+  });
+
+  it("should catch and log global query errors that are not instances of Error", async () => {
+    globalDb.from.mockImplementationOnce(() => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw "global string error";
+    });
+    const loggerErrorSpy = vi.spyOn((service as any).logger, "error");
+    await service.processOutbox();
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("global string error"),
+    );
+  });
+
+  it("should log unexpected failures when deliverRow rejects with non-Error", async () => {
+    const loggerErrorSpy = vi.spyOn((service as any).logger, "error");
+    vi.spyOn(service as any, "deliverRow").mockRejectedValueOnce(
+      "Delivery rejected string",
+    );
+    await service.processOutbox();
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Delivery rejected string"),
+    );
   });
 });

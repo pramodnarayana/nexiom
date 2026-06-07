@@ -14,7 +14,10 @@ import { ObservabilityModule } from "./modules/observability/observability.modul
       envFilePath: [".env.local", ".env", "../../.env"],
     }),
     ObservabilityModule,
-    PiecesModule.forRoot({ anchorUrl: import.meta.url }),
+    PiecesModule.forRoot(),
+    ...(process.env.ENABLE_PLUGIN_MIGRATIONS === "true"
+      ? [PiecesModule.withMigrations()]
+      : []),
     ScheduleModule.forRoot(),
     QueueModule.forRootAsync({
       imports: [ConfigModule],

@@ -157,7 +157,6 @@ describe('Admin User Components', () => {
                     isLoading: false,
                 },
                 showLoading: false,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any);
 
             render(

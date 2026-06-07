@@ -14,7 +14,8 @@
 		}
 	},
 	"scripts": {
-		"build": "tsc"
+		"build": "tsc",
+		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {
 		"typescript": "^5.7.3"

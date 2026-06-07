@@ -17,7 +17,8 @@
 		"build": "tsc",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"test:cov": "vitest run --coverage"
+		"test:cov": "vitest run --coverage",
+		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
 		"@soopa/engine": "workspace:*",

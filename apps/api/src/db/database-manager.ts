@@ -7,6 +7,8 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { eq, sql } from 'drizzle-orm';
 import * as schema from './schema.js';
 
+const PG_CACHE_KEY = Symbol.for('nexiom.pg.cache');
+
 /**
  * Enterprise-grade database management utility
  * Provides clean TypeScript interface for database operations
@@ -15,9 +17,6 @@ import * as schema from './schema.js';
  */
 export class DatabaseManager {
   private readonly ALLOWED_ENVS = ['development', 'test', 'local'];
-
-  // Cache pg module to avoid repeated dynamic imports
-  private static cachedPg: typeof import('pg') | null = null;
 
   // ... (truncating internal methods for brevity, assuming they are unchanged in this block selection) ...
 
@@ -56,9 +55,15 @@ export class DatabaseManager {
     PgClient: typeof import('pg').Client;
     dbUrl: string;
   }> {
-    // Use cached pg module or load it once
-    DatabaseManager.cachedPg ??= await import('pg');
-    const { Client: PgClient } = DatabaseManager.cachedPg;
+    const globalObj = globalThis as unknown as {
+      [PG_CACHE_KEY]: typeof import('pg') | undefined;
+    };
+    let pgModule = globalObj[PG_CACHE_KEY];
+    if (!pgModule) {
+      pgModule = await import('pg');
+      globalObj[PG_CACHE_KEY] = pgModule;
+    }
+    const { Client: PgClient } = pgModule;
 
     const dbUrl = process.env.DATABASE_URL;
     if (!dbUrl) {
@@ -605,7 +610,7 @@ export class DatabaseManager {
             });
             console.log('    ✓ System Owner membership created');
 
-            user = { id: userId } as any; // eslint-disable-line @typescript-eslint/no-unsafe-assignment
+            user = { id: userId } as unknown as typeof user;
           });
           console.log('    ✓ User and Account created');
         }

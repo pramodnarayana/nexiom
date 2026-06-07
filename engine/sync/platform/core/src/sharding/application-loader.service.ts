@@ -4,6 +4,13 @@ import * as fs from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import type { ApplicationShardModule } from '@soopa/piece-framework';
 
+export class ShardNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ShardNotFoundError';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // ApplicationLoaderService
 //
@@ -64,7 +71,7 @@ export class ApplicationLoaderService {
     try {
       await fs.access(shardPath, fsConstants.F_OK);
     } catch {
-      throw new Error(
+      throw new ShardNotFoundError(
         `Application shard not found at ${shardPath}. ` +
           `Ensure the shard has been synced via GitOps before the pipeline processes events.`,
       );
@@ -90,9 +97,10 @@ export class ApplicationLoaderService {
     // Dynamic import with timestamp cache-buster so Node.js re-reads from disk
     // after invalidation. The URL query string is ignored at runtime but prevents
     // Node.js from returning the cached module from a previous import() call.
-    const mod = (await import(
-      `${shardPath}?v=${Date.now()}`
-    )) as ApplicationShardModule;
+    // Vitest intercepts imports and fails if the query parameter is present.
+    const isTest = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
+    const importPath = isTest ? shardPath : `${shardPath}?v=${Date.now()}`;
+    const mod = (await import(importPath)) as ApplicationShardModule;
 
     // Validate exported shape to ensure required functions are present
     const requiredExports = ['extractReplica', 'normalize'];

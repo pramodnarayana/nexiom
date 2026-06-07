@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { validate } from 'class-validator';
 import { DebeziumUnwrappedEvent } from './debezium-event.js';
 import { v4 as uuidv4 } from 'uuid';
