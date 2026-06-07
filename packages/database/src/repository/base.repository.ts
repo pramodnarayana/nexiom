@@ -27,7 +27,7 @@ export abstract class BaseRepository<T extends PgTable> {
     ctx?: RepositoryContext,
   ): Promise<R> {
     if (ctx?.tx) {
-      const savepointName = `sp_${Date.now()}_${crypto.randomUUID().replace(/-/g, '')}`;
+      const savepointName = `sp_${crypto.randomUUID().replace(/-/g, '')}`;
       await this.savepointManager.createSavepoint(ctx.tx, savepointName);
       try {
         const result = await cb(ctx);

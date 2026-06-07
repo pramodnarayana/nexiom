@@ -134,7 +134,7 @@ export class WorkspaceRepository extends BaseRepository<typeof uiWorkspaces> {
         displayName: dataSources.displayName,
         authType: credentials.authType,
         status: credentials.status,
-        assignedAt: dataSources.createdAt,
+        assignedAt: uiWorkspaceDataSources.assignedAt,
       })
       .from(dataSources)
       .innerJoin(

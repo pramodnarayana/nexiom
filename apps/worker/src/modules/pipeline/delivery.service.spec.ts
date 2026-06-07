@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import { Test, TestingModule } from "@nestjs/testing";
-import { DeliveryService } from "./delivery.service.js";
+import { DeliveryService, MAX_DELIVERY_ATTEMPTS } from "./delivery.service.js";
 import { QueueService, QueueName } from "@soopa/queue";
 import { DATABASE_CONNECTION } from "@soopa/database";
 import { StorageResolverService } from "@soopa/engine";
@@ -396,7 +396,7 @@ describe("DeliveryService", () => {
         limit: vi
           .fn()
           .mockResolvedValue([
-            { id: "o", reqPayload: {}, attempts: 5, status: "PENDING" },
+            { id: "o", reqPayload: {}, attempts: MAX_DELIVERY_ATTEMPTS, status: "PENDING" },
           ]),
         update: vi.fn().mockReturnThis(),
         set: setMock,

@@ -34,7 +34,7 @@ import { DeliveryRetryService } from "./delivery-retry.service.js";
 import { GemHydrationService } from "./gem-hydration.service.js";
 
 /** Maximum number of executeAction attempts before permanently failing. */
-const MAX_DELIVERY_ATTEMPTS = 5;
+export const MAX_DELIVERY_ATTEMPTS = 5;
 
 @Injectable()
 export class DeliveryService implements OnModuleInit, OnModuleDestroy {

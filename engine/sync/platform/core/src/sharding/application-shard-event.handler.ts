@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { ApplicationLoaderService } from './application-loader.service.js';
+import { ApplicationLoaderService, ShardNotFoundError } from './application-loader.service.js';
 import type { ApplicationShardModule, AppsConnectorDb } from '@soopa/piece-framework';
 
 @Injectable()
@@ -97,8 +97,8 @@ export class ApplicationShardEventHandler {
     let shard: ApplicationShardModule;
     try {
       shard = await this.loader.load(this.shardName(payload.appName, payload.appProfile));
-    } catch (loadErr: any) {
-      if (loadErr?.name === 'ShardNotFoundError') {
+    } catch (loadErr: unknown) {
+      if (loadErr instanceof ShardNotFoundError) {
         return payload.data;
       }
       throw loadErr;
@@ -117,8 +117,8 @@ export class ApplicationShardEventHandler {
     let shard: ApplicationShardModule;
     try {
       shard = await this.loader.load(this.shardName(payload.appName, payload.appProfile));
-    } catch (loadErr: any) {
-      if (loadErr?.name === 'ShardNotFoundError') return null;
+    } catch (loadErr: unknown) {
+      if (loadErr instanceof ShardNotFoundError) return null;
       throw loadErr;
     }
     if (!shard.getWebhookResponse) return null;
