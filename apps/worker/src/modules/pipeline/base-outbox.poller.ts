@@ -51,7 +51,7 @@ export abstract class BaseOutboxPoller {
 
       const condition = row.claimToken
         ? sql`${table.id} = ${row.id} AND ${table.status} = 'PROCESSING' AND ${table.claimToken} = ${row.claimToken}`
-        : eq(table.id, row.id);
+        : sql`${table.id} = ${row.id} AND ${table.claimToken} IS NULL`;
 
       try {
         if (attempts >= MAX_ATTEMPTS) {
@@ -98,7 +98,7 @@ export abstract class BaseOutboxPoller {
       try {
         const condition = row.claimToken
           ? sql`${table.id} = ${row.id} AND ${table.status} = 'PROCESSING' AND ${table.claimToken} = ${row.claimToken}`
-          : eq(table.id, row.id);
+          : sql`${table.id} = ${row.id} AND ${table.claimToken} IS NULL`;
 
         await db
           .update(table)

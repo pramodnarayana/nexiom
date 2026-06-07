@@ -23,10 +23,8 @@ export function useDataExplorer() {
 
   useEffect(() => {
     if (!workspaceId) {
-      setTimeout(() => {
-        setIsLoadingStitches(false);
-        navigate('/dashboard', { replace: true });
-      }, 0);
+      setIsLoadingStitches(false);
+      navigate('/dashboard', { replace: true });
       return;
     }
 

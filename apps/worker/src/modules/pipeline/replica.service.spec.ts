@@ -201,4 +201,19 @@ describe("ReplicaService", () => {
     expect(hookBroker.extractReplica).not.toHaveBeenCalled();
     expect(replicaStatePort.persistReplicaExtraction).not.toHaveBeenCalled();
   });
+
+  it("should process inbound records with FAIL status (regression test)", async () => {
+    replicaStatePort.fetchInboundRecord.mockResolvedValueOnce({
+      id: "1",
+      traceId: "123",
+      status: "FAIL",
+      request: {},
+    });
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await handler({ traceId: "123", dataSourceId: "456" });
+
+    expect(hookBroker.extractReplica).toHaveBeenCalled();
+    expect(replicaStatePort.persistReplicaExtraction).toHaveBeenCalled();
+  });
 });

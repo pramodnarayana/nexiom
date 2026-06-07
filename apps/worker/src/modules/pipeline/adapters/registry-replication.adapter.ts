@@ -1,5 +1,5 @@
 import { Injectable, Inject } from "@nestjs/common";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and } from "drizzle-orm";
 import { DATABASE_CONNECTION, globalRegistryOutbox } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
 import { DB_MANAGER } from "@soopa/dbmanager";
@@ -86,7 +86,12 @@ export class RegistryReplicationAdapter implements IRegistryReplicationPort {
     const tenantDb = await this.dbManager.getTenantDb(tenantId);
 
     await tenantDb.transaction(async (tx) => {
-      if (action === "UPSERT" && payload) {
+      if (action === "UPSERT") {
+        if (!payload) {
+          throw new Error(
+            `UPSERT action requires a payload, but received null for entityType=${entityType}, entityId=${entityId}`,
+          );
+        }
         const data = rehydrateDates(payload);
 
         if (entityType === "APP_CONNECTION") {
@@ -159,7 +164,10 @@ export class RegistryReplicationAdapter implements IRegistryReplicationPort {
       })
       .from(schema.dataSources)
       .where(
-        inArray(schema.dataSources.id, [srcDataSourceId, destDataSourceId]),
+        and(
+          inArray(schema.dataSources.id, [srcDataSourceId, destDataSourceId]),
+          eq(schema.dataSources.tenantId, tenantId),
+        ),
       );
   }
 

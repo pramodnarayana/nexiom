@@ -133,7 +133,7 @@ export class OutboundGatewayAdapter implements IOutboundGatewayPort {
       const { outboundGateway, replicaEntity } =
         buildTenantSchema(destSchemaName);
 
-      await tx
+      const updateResult = await tx
         .update(outboundGateway)
         .set({
           response: response ?? {},
@@ -142,7 +142,14 @@ export class OutboundGatewayAdapter implements IOutboundGatewayPort {
           ...(sentPayload && { payload: sentPayload }),
           ...(destVendorId && { destVendorId }),
         })
-        .where(sql`${outboundGateway.id} = ${id}`);
+        .where(sql`${outboundGateway.id} = ${id}`)
+        .returning({ id: outboundGateway.id });
+
+      if (updateResult.length === 0) {
+        throw new Error(
+          `Outbound gateway update failed: no row affected for id=${id}`,
+        );
+      }
 
       if (status === "SUCCESS" && response && destVendorId && replicaUpdate) {
         await tx

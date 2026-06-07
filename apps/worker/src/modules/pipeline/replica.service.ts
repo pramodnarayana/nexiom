@@ -53,11 +53,16 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       "L2 replication started",
     );
 
+    let effectiveSchemaName: string | undefined;
+    let effectiveTenantId: string | undefined;
+
     try {
       const passedSchemaName = msg.schemaName as string | undefined;
       const { schemaName: resolvedSchemaName, tenantId } =
         await this.storageResolver.resolveStorageProfile(dataSourceId);
       const schemaName = passedSchemaName ?? resolvedSchemaName;
+      effectiveSchemaName = schemaName;
+      effectiveTenantId = tenantId;
       if (passedSchemaName && passedSchemaName !== resolvedSchemaName) {
         this.logger.error(
           {
@@ -206,16 +211,22 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       );
 
       try {
-        const { schemaName, tenantId } =
-          await this.storageResolver.resolveStorageProfile(dataSourceId);
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        await this.replicaStatePort.markInboundFail(
-          tenantId,
-          schemaName,
-          traceId,
-          err instanceof Error ? `${errorMessage}\n${err.stack}` : errorMessage,
-          Date.now() - start,
-        );
+        if (effectiveSchemaName && effectiveTenantId) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          await this.replicaStatePort.markInboundFail(
+            effectiveTenantId,
+            effectiveSchemaName,
+            traceId,
+            err instanceof Error
+              ? `${errorMessage}\n${err.stack}`
+              : errorMessage,
+            Date.now() - start,
+          );
+        } else {
+          this.logger.error(
+            "Cannot mark inbound as FAIL: schema/tenant not yet resolved",
+          );
+        }
       } catch (error_) {
         this.logger.error(
           "Failed to write L2 error state",

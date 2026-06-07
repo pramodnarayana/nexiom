@@ -19,7 +19,8 @@
 		"build": "tsc -p tsconfig.build.json",
 		"test": "vitest run",
 		"test:cov": "vitest run --coverage",
-		"lint": "eslint \"src/**/*.ts\" --fix"
+		"lint": "eslint \"src/**/*.ts\" --fix",
+		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
 		"@nestjs/event-emitter": "^3.1.0",

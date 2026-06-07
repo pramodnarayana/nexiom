@@ -16,7 +16,8 @@
 		"build": "tsc",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"test:cov": "vitest run --coverage"
+		"test:cov": "vitest run --coverage",
+		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
 		"@nestjs/event-emitter": "^3.1.0",

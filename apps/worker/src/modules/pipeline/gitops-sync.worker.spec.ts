@@ -248,47 +248,56 @@ describe("GitopsSyncWorker", () => {
 
   it("should trigger invalidateCache when file watcher fires", async () => {
     const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = "development";
-    await service.onModuleInit();
-    const watcherCallback = (fsSync.watch as any).mock.calls[0][2];
+    try {
+      process.env.NODE_ENV = "development";
+      await service.onModuleInit();
+      const watcherCallback = (fsSync.watch as any).mock.calls[0][2];
 
-    // simulate file change
-    watcherCallback("change", "test-shard/index.ts");
+      // simulate file change
+      watcherCallback("change", "test-shard/index.ts");
 
-    expect(invalidateCacheSpy).toHaveBeenCalledWith("test-shard");
-    process.env.NODE_ENV = originalEnv;
+      expect(invalidateCacheSpy).toHaveBeenCalledWith("test-shard");
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+    }
   });
 
   it("should not trigger invalidateCache for hidden files", async () => {
     const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = "development";
-    await service.onModuleInit();
-    const watcherCallback = (fsSync.watch as any).mock.calls[0][2];
+    try {
+      process.env.NODE_ENV = "development";
+      await service.onModuleInit();
+      const watcherCallback = (fsSync.watch as any).mock.calls[0][2];
 
-    invalidateCacheSpy.mockClear();
-    watcherCallback("change", ".env");
+      invalidateCacheSpy.mockClear();
+      watcherCallback("change", ".env");
 
-    expect(invalidateCacheSpy).not.toHaveBeenCalled();
-    process.env.NODE_ENV = originalEnv;
+      expect(invalidateCacheSpy).not.toHaveBeenCalled();
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+    }
   });
 
   it("should handle file watcher errors", async () => {
     const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = "development";
-    const loggerErrorSpy = vi.spyOn((service as any).logger, "error");
-    await service.onModuleInit();
+    try {
+      process.env.NODE_ENV = "development";
+      const loggerErrorSpy = vi.spyOn((service as any).logger, "error");
+      await service.onModuleInit();
 
-    const watcherOptions = (fsSync.watch as any).mock.results[0].value;
-    const errorCallback = watcherOptions.on.mock.calls.find(
-      (c: any) => c[0] === "error",
-    )[1];
+      const watcherOptions = (fsSync.watch as any).mock.results[0].value;
+      const errorCallback = watcherOptions.on.mock.calls.find(
+        (c: any) => c[0] === "error",
+      )[1];
 
-    errorCallback(new Error("Watcher failed"));
-    expect(loggerErrorSpy).toHaveBeenCalledWith(
-      "Local file watcher error",
-      expect.any(Error),
-    );
-    process.env.NODE_ENV = originalEnv;
+      errorCallback(new Error("Watcher failed"));
+      expect(loggerErrorSpy).toHaveBeenCalledWith(
+        "Local file watcher error",
+        expect.any(Error),
+      );
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+    }
   });
 
   it("should handle setupLocalFileWatcher catch block", async () => {

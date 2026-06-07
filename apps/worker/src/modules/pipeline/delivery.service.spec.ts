@@ -76,6 +76,7 @@ describe("DeliveryService", () => {
     };
     claimUseCase = {
       execute: vi.fn().mockResolvedValue({
+        status: "CLAIMED",
         claimed: true,
         executeAction: true,
         outboundGatewayId: "o",

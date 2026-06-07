@@ -36,14 +36,13 @@ export class RegistryReplicationService implements OnModuleInit {
   }
 
   private async processMessage(outboxId: string): Promise<void> {
-    const row = await this.registryPort.fetchGlobalOutboxRecord(outboxId);
-
-    if (!row) {
-      this.logger.warn(`Outbox record ${outboxId} not found. Skipping.`);
-      return;
-    }
-
     try {
+      const row = await this.registryPort.fetchGlobalOutboxRecord(outboxId);
+
+      if (!row) {
+        this.logger.warn(`Outbox record ${outboxId} not found. Skipping.`);
+        return;
+      }
       let operationPerformed = false;
       let attempts = 0;
       // FIELD_MAPPING has a FK dependency on INTEGRATION_STITCH. When both are
@@ -157,7 +156,7 @@ export class RegistryReplicationService implements OnModuleInit {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       this.logger.error(
-        `Failed to replicate ${row.entityType} ${row.entityId} to tenant ${row.tenantId}: ${errorMessage}`,
+        `Failed to process registry replication for outboxId ${outboxId}: ${errorMessage}`,
       );
 
       // We don't mark the outbox as FAILED here because the BullMQ retry mechanism will re-queue it,

@@ -6,7 +6,8 @@
 	"scripts": {
 		"dev:local": "tsx watch src/main.ts",
 		"build": "tsc",
-		"start": "node dist/main.js"
+		"start": "node dist/main.js",
+		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
 		"cors": "^2.8.5",

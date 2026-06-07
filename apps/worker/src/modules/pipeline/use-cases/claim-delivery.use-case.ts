@@ -140,7 +140,7 @@ export class ClaimDeliveryUseCase {
         },
         "Max delivery attempts exceeded — permanently failing",
       );
-      await writeL6ResultFn(
+      const writeSuccess = await writeL6ResultFn(
         destSchemaName,
         srcSchemaName,
         outboundGatewayId,
@@ -164,6 +164,21 @@ export class ClaimDeliveryUseCase {
         tenantId,
         tenantDb,
       );
+      if (!writeSuccess) {
+        this.logger.error(
+          {
+            event: "l6.write_failed",
+            outboundGatewayId,
+            traceId,
+            routeId,
+            layer: "L6",
+          },
+          "Failed to write L6 FAIL result after max attempts — deferring to SQS for retry",
+        );
+        throw new Error(
+          "Source-side finalization failed after max attempts. Deferring to SQS for retry.",
+        );
+      }
       return { status: "TERMINATED" };
     }
 

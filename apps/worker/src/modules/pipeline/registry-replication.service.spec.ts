@@ -135,6 +135,7 @@ describe("RegistryReplicationService", () => {
 
     await handler({ outboxId: "outbox_missing" });
     expect(registryPort.replicateEntity).not.toHaveBeenCalled();
+    expect(registryPort.markGlobalOutboxSuccess).not.toHaveBeenCalled();
   });
 
   it("should throw error if replication fails", async () => {
