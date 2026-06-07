@@ -98,8 +98,7 @@ export class ApplicationShardEventHandler {
     try {
       shard = await this.loader.load(this.shardName(payload.appName, payload.appProfile));
     } catch (loadErr: any) {
-      const errMsg = loadErr instanceof Error ? loadErr.message : String(loadErr);
-      if (errMsg.includes('not found') || errMsg.includes('ENOENT')) {
+      if (loadErr?.name === 'ShardNotFoundError') {
         return payload.data;
       }
       throw loadErr;
@@ -119,8 +118,7 @@ export class ApplicationShardEventHandler {
     try {
       shard = await this.loader.load(this.shardName(payload.appName, payload.appProfile));
     } catch (loadErr: any) {
-      const errMsg = loadErr instanceof Error ? loadErr.message : String(loadErr);
-      if (errMsg.includes('not found') || errMsg.includes('ENOENT')) return null;
+      if (loadErr?.name === 'ShardNotFoundError') return null;
       throw loadErr;
     }
     if (!shard.getWebhookResponse) return null;

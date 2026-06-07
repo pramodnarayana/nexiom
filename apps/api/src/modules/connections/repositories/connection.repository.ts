@@ -33,7 +33,13 @@ export class ConnectionRepository extends BaseRepository<typeof dataSources> {
     return exec
       .select()
       .from(dataSources)
-      .where(eq(dataSources.tenantId, tenantId))
+      .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
+      .where(
+        and(
+          eq(dataSources.tenantId, tenantId),
+          eq(credentials.status, AppConnectionStatus.ACTIVE),
+        ),
+      )
       .orderBy(desc(dataSources.createdAt))
       .limit(limit)
       .offset(offset);

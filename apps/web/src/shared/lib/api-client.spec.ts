@@ -8,7 +8,7 @@ describe('api-client', () => {
     });
 
     it('getApiUrl returns the Vite environment variable', () => {
-        expect(getApiUrl()).toBe('http://localhost:3000/api');
+        expect(getApiUrl()).toBe(import.meta.env.VITE_API_URL);
     });
 
     it('apiClient is configured with baseURL and withCredentials', () => {

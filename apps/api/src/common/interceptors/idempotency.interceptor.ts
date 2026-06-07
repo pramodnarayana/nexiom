@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Observable, of } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { tap, catchError } from 'rxjs/operators';
 import {
   IDEMPOTENT_KEY,
   IdempotencyOptions,
@@ -40,13 +40,25 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
     if (options.keyResolver) {
       keyStr = options.keyResolver(...args);
-    } else if (options.keyIndex !== undefined && args[options.keyIndex]) {
+    } else if (
+      options.keyIndex !== undefined &&
+      args.length > options.keyIndex &&
+      args[options.keyIndex] !== undefined &&
+      args[options.keyIndex] !== null
+    ) {
       keyStr = String(args[options.keyIndex]);
     } else {
       const request = context.switchToHttp().getRequest<{
         headers: Record<string, string | string[] | undefined>;
       }>();
-      keyStr = request.headers['x-idempotency-key'] as string;
+      const headerValue = request.headers['x-idempotency-key'];
+      if (Array.isArray(headerValue)) {
+        keyStr = headerValue[0] ? String(headerValue[0]).trim() : '';
+      } else if (headerValue) {
+        keyStr = String(headerValue).trim();
+      } else {
+        keyStr = '';
+      }
     }
 
     if (!keyStr) {
@@ -80,6 +92,10 @@ export class IdempotencyInterceptor implements NestInterceptor {
         const responseData =
           typeof response === 'string' ? response : JSON.stringify(response);
         void this.redis.set(cacheKey, responseData, 'EX', ttl);
+      }),
+      catchError((error: unknown) => {
+        void this.redis.del(cacheKey);
+        throw error;
       }),
     );
   }

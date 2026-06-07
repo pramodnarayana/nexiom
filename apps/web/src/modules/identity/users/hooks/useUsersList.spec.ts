@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useUsersList } from './useUsersList';
 import * as refineCore from '@refinedev/core';
 import * as authContext from '@/shared/lib/auth/context';
@@ -37,17 +37,21 @@ describe('useUsersList', () => {
 
         vi.spyOn(refineCore, 'useDelete').mockReturnValue({ mutate: mockDeleteUser } as any);
         vi.spyOn(refineCore, 'useCustomMutation').mockReturnValue({ mutate: mockSendInvite } as any);
-        
+
         vi.spyOn(useBasePathContext, 'useBasePath').mockReturnValue('/users');
         vi.spyOn(authUtils, 'normalizeResource').mockReturnValue('users');
         vi.spyOn(authUtils, 'hasPermission').mockReturnValue(true);
-        
+
         vi.spyOn(authContext, 'useAuth').mockReturnValue({
             user: { id: 'user-1', name: 'Test User', permissions: [] },
         } as any);
 
         globalThis.confirm = vi.fn().mockReturnValue(true);
-        import.meta.env.VITE_API_URL = 'http://test-api';
+        vi.stubEnv('VITE_API_URL', 'http://test-api');
+    });
+
+    afterEach(() => {
+        vi.unstubAllEnvs();
     });
 
     it('initializes with correct default state', () => {

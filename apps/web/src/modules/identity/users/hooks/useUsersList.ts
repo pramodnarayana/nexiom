@@ -30,9 +30,17 @@ export function useUsersList(resourceOverride?: string) {
     };
 
     const handleInvite = (id: string, name: string) => {
-        if (invitingIds.has(id)) return;
+        let wasAdded = false;
+        setInvitingIds(prev => {
+            if (prev.has(id)) return prev;
+            wasAdded = true;
+            const next = new Set(prev);
+            next.add(id);
+            return next;
+        });
 
-        setInvitingIds((prev) => new Set(prev).add(id));
+        if (!wasAdded) return;
+
         const API_URL = import.meta.env.VITE_API_URL || '/api';
         const resourcePath = (resourceOverride || basePath).replaceAll(/(^\/+)|(\/+$)/g, "");
         const inviteUrl = `${API_URL}/${resourcePath}/${id}/invite`;

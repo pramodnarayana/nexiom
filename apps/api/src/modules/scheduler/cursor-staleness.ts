@@ -28,7 +28,7 @@ export function computeCursorStaleness(
       : Number.POSITIVE_INFINITY;
 
   return rows.map((row) => {
-    const ageMs = nowMs - row.updatedAt.getTime();
+    const ageMs = Math.max(0, nowMs - row.updatedAt.getTime());
     // Paused connections are never stale — cursors are not expected to advance.
     const paused = !meta.scheduleEnabled;
     // Explicitly enumerate fields rather than spreading — stateDocument is

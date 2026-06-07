@@ -141,6 +141,7 @@ export class UniversalTrigger {
 
     private static parseLimitThreshold(envValue?: string | number): number {
         if (envValue == null) return 0.2;
+        if (typeof envValue === 'string' && envValue.trim() === '') return 0.2;
         const parsed = Number(envValue);
         if (Number.isNaN(parsed)) return 0.2;
         return Math.max(0, Math.min(1, parsed));

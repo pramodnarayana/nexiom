@@ -44,7 +44,11 @@ export class WorkspaceConnectionsController {
     );
     if (!workspace) throw new NotFoundException('Workspace not found');
 
-    return this.workspaceRepository.listConnections(orgId, workspace.envType);
+    return this.workspaceRepository.listConnections(
+      orgId,
+      workspace.envType,
+      workspaceId,
+    );
   }
 
   /** Active connections for this org that match the workspace env_type and are not yet assigned. */

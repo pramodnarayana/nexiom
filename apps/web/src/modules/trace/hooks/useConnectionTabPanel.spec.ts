@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useConnectionTabPanel } from './useConnectionTabPanel';
 import { listConnectionInbound, listConnectionOutbound, updateRecord, deleteRecord } from '../api/data-explorer.api';
 import { listObjects } from '@/modules/stitches/api/metadata.api';
@@ -24,6 +24,10 @@ vi.mock('@/shared/hooks/use-toast', () => ({
 describe('useConnectionTabPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
 

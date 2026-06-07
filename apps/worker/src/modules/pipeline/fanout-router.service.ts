@@ -116,10 +116,14 @@ export class FanoutRouterService implements OnModuleInit {
           .where(sql`${normalizedEntity.traceId} = ${traceId}`)
           .limit(1);
 
-        if (normRows.length > 0) {
-          normalizedData = normRows[0].data as Record<string, unknown>;
-          canonicalType = normRows[0].canonicalType ?? "RAW";
+        if (normRows.length === 0) {
+          throw new Error(
+            `Normalization row missing for trace ${traceId} after non-superseded evaluation`,
+          );
         }
+
+        normalizedData = normRows[0].data as Record<string, unknown>;
+        canonicalType = normRows[0].canonicalType ?? "RAW";
 
         const replicaRows = await tx
           .select({ entityId: replicaEntity.entityId })

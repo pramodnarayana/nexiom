@@ -56,13 +56,29 @@ export function useCreateStitchPage(workspaceId: string | undefined) {
   const destLoadTokenRef = useRef(0);
 
   useEffect(() => {
-    if (!workspaceId) return;
+    if (!workspaceId) {
+      setConnections([]);
+      setConnectionsError(null);
+      setConnectionsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setConnectionsLoading(true);
     listAvailableConnections(workspaceId)
-      .then(setConnections)
-      .catch((e: unknown) => {
-        setConnectionsError(e instanceof Error ? e.message : 'Failed to load connections.');
+      .then((data) => {
+        if (!cancelled) setConnections(data);
       })
-      .finally(() => { setConnectionsLoading(false); });
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setConnectionsError(e instanceof Error ? e.message : 'Failed to load connections.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setConnectionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [workspaceId]);
 
   const loadSrcObjects = useCallback((dataSourceId: string, refresh = false) => {

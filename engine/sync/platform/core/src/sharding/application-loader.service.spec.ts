@@ -50,12 +50,13 @@ describe('ApplicationLoaderService', () => {
             .mockResolvedValueOnce('/base/path/test-shard');
         vi.mocked(fs.access).mockResolvedValueOnce(undefined);
 
-        // We can't actually do a dynamic import easily without a real file,
-        // so we'll mock the import if we can, or just assert the error since
-        // the file doesn't exist for real.
-        // Wait, vitest doesn't mock dynamic import out-of-the-box inside a method like this.
-        // We'll just expect it to fail the dynamic import, but that gives us coverage up to that point.
-        await expect(service.load('test-shard')).rejects.toThrow();
+        // Mock dynamic import to succeed
+        const mockModule = { default: {} };
+        vi.doMock('/base/path/test-shard', () => mockModule);
+
+        await service.load('test-shard');
+
+        expect(service['cache'].has('test-shard')).toBe(true);
 
         service.invalidateCache('test-shard');
         expect(service['cache'].size).toBe(0);

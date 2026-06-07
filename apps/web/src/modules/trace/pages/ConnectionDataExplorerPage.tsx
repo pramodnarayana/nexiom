@@ -539,11 +539,11 @@ function TabPanel({
       )}
 
       {traceToView && (
-        <TraceViewerPanel 
-          stitchId={undefined as unknown as string}
-          traceId={traceToView} 
-          workspaceId={workspaceId} 
-          onClose={() => setTraceToView(null)} 
+        <TraceViewerPanel
+          connectionId={connectionId}
+          traceId={traceToView}
+          workspaceId={workspaceId}
+          onClose={() => setTraceToView(null)}
         />
       )}
     </div>

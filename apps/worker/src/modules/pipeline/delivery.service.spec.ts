@@ -386,7 +386,35 @@ describe("DeliveryService", () => {
   });
 
   it("should set FAIL and skip executeAction when MAX_ATTEMPTS exceeded", async () => {
+    const setMock = vi.fn().mockReturnThis();
+    db.transaction.mockImplementation(async (cb: any) =>
+      cb({
+        execute: vi.fn(),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi
+          .fn()
+          .mockResolvedValue([
+            { id: "o", reqPayload: {}, attempts: 5, status: "PENDING" },
+          ]),
+        update: vi.fn().mockReturnThis(),
+        set: setMock,
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        delete: vi.fn().mockReturnThis(),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(handler(validPayload)).resolves.toBeUndefined();
     expect(outboundDispatcher.dispatch).not.toHaveBeenCalled();
+    expect(setMock).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "FAIL" }),
+    );
   });
 
   it("should NOT rewrite outbound gateway if claimed is false during pre-claim exception", async () => {

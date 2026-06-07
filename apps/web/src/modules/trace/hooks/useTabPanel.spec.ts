@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useTabPanel } from './useTabPanel';
 import { listInbound, listOutbound, listObjectsByStitch, updateRecord, deleteRecord } from '../api/data-explorer.api';
 
@@ -21,6 +21,10 @@ vi.mock('@/shared/hooks/use-toast', () => ({
 describe('useTabPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   const stitch = {

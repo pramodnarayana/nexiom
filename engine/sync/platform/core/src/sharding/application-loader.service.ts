@@ -4,6 +4,13 @@ import * as fs from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import type { ApplicationShardModule } from '@soopa/piece-framework';
 
+export class ShardNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ShardNotFoundError';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // ApplicationLoaderService
 //
@@ -64,7 +71,7 @@ export class ApplicationLoaderService {
     try {
       await fs.access(shardPath, fsConstants.F_OK);
     } catch {
-      throw new Error(
+      throw new ShardNotFoundError(
         `Application shard not found at ${shardPath}. ` +
           `Ensure the shard has been synced via GitOps before the pipeline processes events.`,
       );

@@ -1,4 +1,4 @@
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useStitchesPage } from './useStitchesPage';
 import { getWorkspace } from '@/modules/workspaces/api/workspaces.api';
@@ -20,10 +20,11 @@ describe('useStitchesPage', () => {
 
   it('handles null workspaceId', async () => {
     const { result } = renderHook(() => useStitchesPage(undefined));
-    
+
     expect(result.current.loading).toBe(false);
     expect(result.current.workspace).toBeNull();
     expect(getWorkspace).not.toHaveBeenCalled();
+    expect(listStitches).not.toHaveBeenCalled();
   });
 
   it('loads workspace and stitches on mount', async () => {
@@ -35,7 +36,7 @@ describe('useStitchesPage', () => {
     expect(result.current.loading).toBe(true);
 
     // Wait for internal promises to settle
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
 
@@ -49,7 +50,7 @@ describe('useStitchesPage', () => {
 
     const { result } = renderHook(() => useStitchesPage('w1'));
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
 
@@ -64,7 +65,7 @@ describe('useStitchesPage', () => {
 
     const { result } = renderHook(() => useStitchesPage('w1'));
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
 
@@ -91,7 +92,7 @@ describe('useStitchesPage', () => {
 
     const { result } = renderHook(() => useStitchesPage('w1'));
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
 

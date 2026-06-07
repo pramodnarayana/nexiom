@@ -11,6 +11,8 @@ export function usePipelineTracePage(workspaceId: string | undefined, stitchId: 
   const fetchTraces = useCallback(async () => {
     if (!stitchId || !workspaceId) {
       setLoading(false);
+      setTraces([]);
+      setError(null);
       return;
     }
     const seq = ++fetchSeqRef.current;

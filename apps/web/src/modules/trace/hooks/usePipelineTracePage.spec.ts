@@ -13,10 +13,16 @@ describe('usePipelineTracePage', () => {
   });
 
   it('handles undefined workspaceId or stitchId', async () => {
-    const { result } = renderHook(() => usePipelineTracePage(undefined, 's1'));
-    
-    expect(result.current.loading).toBe(false);
-    expect(result.current.traces).toEqual([]);
+    const { result: result1 } = renderHook(() => usePipelineTracePage(undefined, 's1'));
+
+    expect(result1.current.loading).toBe(false);
+    expect(result1.current.traces).toEqual([]);
+    expect(listTraces).not.toHaveBeenCalled();
+
+    const { result: result2 } = renderHook(() => usePipelineTracePage('w1', undefined));
+
+    expect(result2.current.loading).toBe(false);
+    expect(result2.current.traces).toEqual([]);
     expect(listTraces).not.toHaveBeenCalled();
   });
 

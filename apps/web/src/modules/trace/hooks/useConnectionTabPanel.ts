@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '@/shared/hooks/use-toast';
 import {
   listConnectionInbound, listConnectionReplica, listConnectionNormalized, listConnectionOutbound,
@@ -44,20 +44,29 @@ export function useConnectionTabPanel({
   const [objectTypes] = useState<string[]>([]);
   const { toast } = useToast();
 
+  const requestSeqRef = useRef<number>(0);
+
   const getDataSourceId = useCallback(() => connectionId, [connectionId]);
 
   const load = useCallback(async (p: number, currentFilters?: FilterGroup, currentObjType?: string) => {
+    const token = ++requestSeqRef.current;
     setLoading(true);
     setError(null);
     try {
       const fetchFn = FETCHERS[tabId];
       const activeFilters = currentFilters?.rules.length ? currentFilters : undefined;
       const data = await fetchFn(connectionId, { page: p, limit: LIMIT, workspaceId, filters: activeFilters, objectType: currentObjType });
-      setResult(data);
+      if (token === requestSeqRef.current) {
+        setResult(data);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load data.');
+      if (token === requestSeqRef.current) {
+        setError(e instanceof Error ? e.message : 'Failed to load data.');
+      }
     } finally {
-      setLoading(false);
+      if (token === requestSeqRef.current) {
+        setLoading(false);
+      }
     }
   }, [tabId, connectionId, workspaceId]);
 
@@ -113,7 +122,7 @@ export function useConnectionTabPanel({
     if (!window.confirm('Are you sure you want to delete this record?')) return;
     try {
       await deleteRecord(workspaceId, getDataSourceId(), tabId, String(row.id));
-      void load(page, filters, objectType);
+      void load(page, appliedFilters, objectType);
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to delete');
     }

@@ -5,7 +5,7 @@ export function useTraceRow(workspaceId: string, stitchId: string, summary: Trac
   const [expanded, setExpanded] = useState(false);
   const [details, setDetails] = useState<FullTrace | null>(null);
   const [loading, setLoading] = useState(false);
-  const [errorObj, setErrorObj] = useState<unknown>(null);
+  const [errorObj, setErrorObj] = useState<string | null>(null);
 
   const handleToggle = async () => {
     if (loading) return;
@@ -17,8 +17,9 @@ export function useTraceRow(workspaceId: string, stitchId: string, summary: Trac
         const full = await getTrace(workspaceId, stitchId, summary.traceId);
         setDetails(full);
       } catch (e) {
-        console.error(e);
-        setErrorObj(e);
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        console.error(errorMessage);
+        setErrorObj(errorMessage);
       } finally {
         setLoading(false);
       }

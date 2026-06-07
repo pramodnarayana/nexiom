@@ -23,6 +23,7 @@ export function useDataExplorer() {
 
   useEffect(() => {
     if (!workspaceId) {
+      setIsLoadingStitches(false);
       navigate('/dashboard', { replace: true });
       return;
     }

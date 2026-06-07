@@ -88,13 +88,13 @@ describe('BaseOAuthRefreshClient', () => {
     await expect(client.refresh('t1', 'app', 'ext', 'ref-token')).rejects.toThrow(/400 Bad Request/);
   });
 
-  it('publishes CredentialInvalidatedEvent on 400 or 401', async () => {
+  it.each([400, 401])('publishes CredentialInvalidatedEvent on %i', async (status) => {
     dbMock.limit.mockResolvedValue([{ value: 'encrypted', credentialId: 'cred-1' }]);
-    
+
     vi.mocked(httpClientMock.fetch).mockResolvedValue({
       ok: false,
-      status: 401,
-      statusText: 'Unauthorized'
+      status,
+      statusText: status === 400 ? 'Bad Request' : 'Unauthorized'
     } as any);
 
     const eventPublisherMock = {
@@ -102,9 +102,9 @@ describe('BaseOAuthRefreshClient', () => {
       publishCredentialRefreshed: vi.fn(),
       publishCredentialDeleted: vi.fn(),
     };
-    
+
     const clientWithEvents = new MockRefreshClient(dbMock, cryptoMock, httpClientMock, eventPublisherMock);
-    
+
     await expect(clientWithEvents.refresh('t1', 'app', 'ext', 'ref-token')).rejects.toThrow(OAuthRefreshError);
     expect(eventPublisherMock.publishCredentialInvalidated).toHaveBeenCalled();
   });

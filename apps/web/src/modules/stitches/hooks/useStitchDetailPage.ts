@@ -82,9 +82,12 @@ export function useStitchDetailPage(id: string | undefined) {
   };
 
   const cancelEditingName = () => {
-    cancellingRef.current = false;
+    cancellingRef.current = true;
     setEditingName(false);
     setNameDraft(stitch?.name ?? '');
+    setTimeout(() => {
+      cancellingRef.current = false;
+    }, 0);
   };
 
   const handleNameSave = async () => {

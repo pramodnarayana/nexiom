@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '@/shared/hooks/use-toast';
 import {
   listInbound, listReplica, listNormalized, listOutbound, listEntityMap,
@@ -44,7 +44,9 @@ export function useTabPanel({
   const [objectTypes, setObjectTypes] = useState<string[]>([]);
   const [objectType, setObjectType] = useState<string>('');
   const [objectTypeInitialized, setObjectTypeInitialized] = useState(false);
-  
+
+  const requestIdRef = useRef<number>(0);
+
   const { toast } = useToast();
 
   const getDataSourceId = useCallback(() => tabId === 'outbound' ? stitch.destDataSourceId : stitch.srcDataSourceId, [tabId, stitch.destDataSourceId, stitch.srcDataSourceId]);
@@ -65,7 +67,14 @@ export function useTabPanel({
             setObjectTypeInitialized(true);
           }
         })
-        .catch(console.error);
+        .catch((err) => {
+          console.error(err);
+          if (mounted) {
+            setObjectTypes([]);
+            setObjectType('');
+            setObjectTypeInitialized(true);
+          }
+        });
     } else {
       setObjectTypes([]);
       setObjectType('');
@@ -75,17 +84,24 @@ export function useTabPanel({
   }, [tabId, workspaceId, stitch.id]);
 
   const load = useCallback(async (p: number, currentFilters?: FilterGroup, currentObjType?: string) => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
     try {
       const fetchFn = FETCHERS[tabId];
       const activeFilters = currentFilters?.rules.length ? currentFilters : undefined;
       const data = await fetchFn(stitch.id, { page: p, limit: LIMIT, workspaceId, filters: activeFilters, objectType: currentObjType });
-      setResult(data);
+      if (requestId === requestIdRef.current) {
+        setResult(data);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load data.');
+      if (requestId === requestIdRef.current) {
+        setError(e instanceof Error ? e.message : 'Failed to load data.');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [tabId, stitch.id, workspaceId]);
 
@@ -142,7 +158,7 @@ export function useTabPanel({
     if (!window.confirm('Are you sure you want to delete this record?')) return;
     try {
       await deleteRecord(workspaceId, getDataSourceId(), tabId, String(row.id));
-      void load(page, filters, objectType);
+      void load(page, appliedFilters, objectType);
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to delete');
     }

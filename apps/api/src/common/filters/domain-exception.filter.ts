@@ -25,36 +25,31 @@ export class DomainExceptionFilter implements ExceptionFilter {
     let message = 'Internal server error';
 
     if (exception instanceof Error) {
-      if (
-        exception.name === 'EntityNotFoundError' ||
-        exception.message.includes('not found')
-      ) {
+      // Log full exception for debugging
+      this.logger.error(
+        `Domain exception: ${exception.name}: ${exception.message}`,
+        exception.stack,
+      );
+
+      if (exception.name === 'EntityNotFoundError') {
         status = HttpStatus.NOT_FOUND;
-        message = exception.message;
-      } else if (
-        exception.name === 'UniqueConstraintViolation' ||
-        exception.message.includes('already exists')
-      ) {
+        message = 'Resource not found';
+      } else if (exception.name === 'UniqueConstraintViolation') {
         status = HttpStatus.CONFLICT;
-        message = exception.message;
+        message = 'Conflict';
       } else if (
         exception.name === 'ValidationError' ||
         exception.name === 'BadRequestException'
       ) {
         status = HttpStatus.BAD_REQUEST;
-        message = exception.message;
+        message = 'Invalid request';
       } else {
         // Known NestJS HttpExceptions are usually caught by default filters,
         // but if they hit here, we handle them.
         const ex = exception as Error & { getStatus?: () => number };
         if (typeof ex.getStatus === 'function') {
           status = ex.getStatus();
-          message = exception.message;
-        } else {
-          this.logger.error(
-            `Unhandled domain exception: ${exception.message}`,
-            exception.stack,
-          );
+          message = 'Request failed';
         }
       }
     } else {

@@ -122,6 +122,7 @@ export class WorkspaceRepository extends BaseRepository<typeof uiWorkspaces> {
   async listConnections(
     orgId: string,
     workspaceEnvType: 'PRODUCTION' | 'SANDBOX',
+    workspaceId: string,
     ctx?: RepositoryContext,
   ) {
     const exec = this.getExecutor(ctx);
@@ -136,6 +137,10 @@ export class WorkspaceRepository extends BaseRepository<typeof uiWorkspaces> {
         assignedAt: dataSources.createdAt,
       })
       .from(dataSources)
+      .innerJoin(
+        uiWorkspaceDataSources,
+        eq(uiWorkspaceDataSources.dataSourceId, dataSources.id),
+      )
       .leftJoin(
         credentials,
         and(
@@ -152,6 +157,7 @@ export class WorkspaceRepository extends BaseRepository<typeof uiWorkspaces> {
         and(
           eq(dataSources.tenantId, orgId),
           eq(dataSources.envType, workspaceEnvType),
+          eq(uiWorkspaceDataSources.workspaceId, workspaceId),
         ),
       )
       .orderBy(asc(dataSources.createdAt));
