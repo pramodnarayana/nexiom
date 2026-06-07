@@ -98,7 +98,7 @@ export abstract class BaseOutboxPoller {
       try {
         const condition = row.claimToken
           ? sql`${table.id} = ${row.id} AND ${table.status} = 'PROCESSING' AND ${table.claimToken} = ${row.claimToken}`
-          : sql`${table.id} = ${row.id} AND ${table.claimToken} IS NULL`;
+          : sql`${table.id} = ${row.id} AND ${table.status} = 'PROCESSING' AND ${table.claimToken} IS NULL`;
 
         await db
           .update(table)

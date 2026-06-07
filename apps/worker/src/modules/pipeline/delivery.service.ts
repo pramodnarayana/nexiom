@@ -314,7 +314,6 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     const replicaUpdate = targetObject
       ? {
           traceId,
-          dataSourceId: dataSourceId, // Oh wait, destSchemaName uses targetConnectionId as dataSourceId for replica records? Yes, replicaEntity.dataSourceId = targetConnectionId
           targetObject,
         }
       : undefined;

@@ -425,8 +425,6 @@ describe("DeliveryService", () => {
 
     // Verify it used the updated sentPayload in finalization
     const callArgs = vi.mocked(service as any).writeL6Result.mock.calls[0];
-    expect(callArgs).toContainEqual(
-      expect.objectContaining({ custom: "payload" }),
-    );
+    expect(callArgs[8]).toEqual(expect.objectContaining({ custom: "payload" }));
   });
 });

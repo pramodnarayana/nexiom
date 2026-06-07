@@ -131,7 +131,7 @@ describe("DeliveryRetryService", () => {
         "ws_dest",
         "ws_src",
         "gw_id",
-        expect.any(Number),
+        2,
         "ds_id",
         "trace_id",
         "route_id",
@@ -197,7 +197,7 @@ describe("DeliveryRetryService", () => {
           limit: vi.fn().mockResolvedValue([
             {
               response: null,
-              statusCode: 500,
+              statusCode: null,
               destVendorId: null,
               attempts: 3,
             },
@@ -234,7 +234,7 @@ describe("DeliveryRetryService", () => {
         "ws_dest",
         "ws_src",
         "gw_id",
-        expect.any(Number),
+        3,
         "ds_id",
         "trace_id",
         "route_id",

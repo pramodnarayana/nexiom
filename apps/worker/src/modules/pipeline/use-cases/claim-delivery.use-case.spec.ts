@@ -112,7 +112,7 @@ describe("ClaimDeliveryUseCase", () => {
       expect.anything(),
       expect.anything(),
       "gw1",
-      5,
+      MAX_DELIVERY_ATTEMPTS,
       "ds1",
       "t1",
       "r1",
