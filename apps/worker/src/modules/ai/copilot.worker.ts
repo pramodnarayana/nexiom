@@ -76,8 +76,7 @@ export class CopilotWorker implements OnModuleInit {
         // Fire and forget title generation in background
 
         generateText({
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          model: google("gemini-1.5-flash") as any,
+          model: google("gemini-1.5-flash"),
           system:
             "You are an expert copywriter. Summarize the user's intent into a 3-5 word clean title. Do not include quotes, periods, or extra text. Capitalize it like a Title.",
           prompt: firstMessage,
@@ -99,9 +98,11 @@ export class CopilotWorker implements OnModuleInit {
       }
 
       // We use the orchestrator to process the chat synchronously from the worker's perspective
+      // To satisfy UIMessage[] parameter requirements, we ensure it conforms
       const webResponse = await this.orchestrator.streamChat(
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-        data.messages as any,
+        data.messages as unknown as Parameters<
+          typeof this.orchestrator.streamChat
+        >[0],
         data.tenantId,
         data.traceId,
         data.model,
@@ -156,7 +157,7 @@ export class CopilotWorker implements OnModuleInit {
 
         // Reconstruct human-readable response and step metadata for persistent storage
         let humanResponse = "";
-        const stepMetadata: any[] = [];
+        const stepMetadata: Record<string, unknown>[] = [];
         const lines = finalResponseBuilder.split("\n");
         for (const line of lines) {
           if (line.trim().startsWith("0:")) {

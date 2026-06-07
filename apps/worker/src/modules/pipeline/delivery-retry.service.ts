@@ -152,6 +152,7 @@ export class DeliveryRetryService {
       targetAppName,
       targetTenantId,
       targetObject,
+      targetTenantId,
       tenantDb,
     );
   }

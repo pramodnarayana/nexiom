@@ -312,7 +312,7 @@ export class SystemSeederService {
             });
             console.log('    ✓ System Owner membership created');
 
-            user = { id: userId } as any; // eslint-disable-line @typescript-eslint/no-unsafe-assignment
+            user = { id: userId } as unknown as typeof user;
           });
           console.log('    ✓ User and Account created');
         }

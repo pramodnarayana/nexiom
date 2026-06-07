@@ -1,7 +1,7 @@
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import { Cron, CronExpression } from "@nestjs/schedule";
-import { sql, eq, and, inArray } from "drizzle-orm";
+import { sql, and, eq, inArray } from "drizzle-orm";
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -14,20 +14,22 @@ import { QueueService } from "@soopa/queue";
 import { getWorkspaceSchemaName } from "@soopa/dbmanager";
 import type { DatabaseManager } from "@soopa/dbmanager";
 import { DB_MANAGER } from "@soopa/dbmanager";
+import { BaseOutboxPoller, type OutboxTable } from "./base-outbox.poller.js";
 
 const BATCH_SIZE = 50;
-const MAX_ATTEMPTS = 6;
 const DEFAULT_TENANT_CONCURRENCY = 5;
 
 @Injectable()
-export class InboundOutboxPoller {
-  private readonly logger = new Logger(InboundOutboxPoller.name);
+export class InboundOutboxPoller extends BaseOutboxPoller {
+  protected readonly logger = new Logger(InboundOutboxPoller.name);
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
-    private readonly queueService: QueueService,
+    protected readonly queueService: QueueService,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
-  ) {}
+  ) {
+    super();
+  }
 
   @Cron(CronExpression.EVERY_5_SECONDS)
   async processOutbox(): Promise<void> {
@@ -35,7 +37,6 @@ export class InboundOutboxPoller {
       const tenants = await this.globalDb.select().from(tenantStorageRegistry);
       if (tenants.length === 0) return;
 
-      // Process tenants with bounded concurrency to prevent DB pool exhaustion
       const results: PromiseSettledResult<void>[] = [];
       for (let i = 0; i < tenants.length; i += DEFAULT_TENANT_CONCURRENCY) {
         const chunk = tenants.slice(i, i + DEFAULT_TENANT_CONCURRENCY);
@@ -60,13 +61,11 @@ export class InboundOutboxPoller {
                   connection.id,
                   connection.appName,
                 );
-                try {
-                  await this.drainWorkspaceOutbox(tenantDb, schemaName);
-                } catch (schemaErr) {
-                  this.logger.error(
-                    `[${tenant.tenantId}] Failed to drain inbound outbox for schema ${schemaName}: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`,
-                  );
-                }
+                await this.executeSafeSchemaOperation(
+                  tenant.tenantId,
+                  schemaName,
+                  () => this.drainWorkspaceOutbox(tenantDb, schemaName),
+                );
               }
             } catch (tenantErr) {
               this.logger.error(
@@ -89,19 +88,12 @@ export class InboundOutboxPoller {
     schemaName: string,
   ): Promise<void> {
     const { inboundOutbox } = buildTenantSchema(schemaName);
-
-    // Atomically claim rows by transitioning them to PROCESSING.
-    // Attempts are NOT incremented here — they are incremented only on actual
-    // delivery failure inside processOutboxRow. This ensures `attempts` reflects
-    // real delivery failures, not claim attempts (which could be spurious retries
-    // from PROCESSING rows that timed out without a real error).
     const claimToken = randomUUID();
 
     const claimed = await tenantDb.transaction(async (tx) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
-
       return tx
         .update(inboundOutbox)
         .set({
@@ -129,14 +121,22 @@ export class InboundOutboxPoller {
       `[${schemaName}] Claimed ${claimed.length} inbound outbox rows`,
     );
 
-    // Process claimed rows with concurrency limit to avoid overwhelming the queue
     const CONCURRENCY_LIMIT = 10;
     const processWithLimit = async (rows: typeof claimed) => {
       const results: PromiseSettledResult<void>[] = [];
       for (let i = 0; i < rows.length; i += CONCURRENCY_LIMIT) {
         const chunk = rows.slice(i, i + CONCURRENCY_LIMIT);
         const chunkResults = await Promise.allSettled(
-          chunk.map((row) => this.processOutboxRow(tenantDb, schemaName, row)),
+          chunk.map((row) =>
+            this.deliverRow(
+              tenantDb,
+              schemaName,
+              inboundOutbox as unknown as OutboxTable,
+              row,
+              QueueName.InboundQueue,
+              { traceId: row.traceId, dataSourceId: row.dataSourceId },
+            ),
+          ),
         );
         results.push(...chunkResults);
       }
@@ -145,7 +145,6 @@ export class InboundOutboxPoller {
 
     const results = await processWithLimit(claimed);
 
-    // Log and handle any rejections (unexpected failures not already caught in processOutboxRow)
     const rejections = results
       .map((r, idx) => ({ result: r, row: claimed[idx] }))
       .filter(({ result }) => result.status === "rejected");
@@ -162,77 +161,6 @@ export class InboundOutboxPoller {
           }`,
         );
       });
-    }
-  }
-
-  private async processOutboxRow(
-    tenantDb: DrizzleDb,
-    schemaName: string,
-    row: {
-      id: string;
-      traceId: string;
-      dataSourceId: string;
-      attempts: number;
-      claimToken: string | null;
-    },
-  ): Promise<void> {
-    const { inboundOutbox } = buildTenantSchema(schemaName);
-
-    try {
-      // Send to L2 Queue
-      await this.queueService.send(QueueName.InboundQueue, {
-        traceId: row.traceId,
-        dataSourceId: row.dataSourceId,
-      });
-
-      // Mark success - only if we still own this claim
-      await tenantDb
-        .update(inboundOutbox)
-        .set({ status: "SUCCESS", errorMessage: null })
-        .where(
-          sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.attempts} = ${row.attempts} AND ${inboundOutbox.claimToken} = ${row.claimToken}`,
-        );
-
-      this.logger.debug(
-        `[${schemaName}] Delivered L1->L2 trace=${row.traceId}`,
-      );
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      const incrementedAttempts = row.attempts + 1;
-
-      if (incrementedAttempts >= MAX_ATTEMPTS) {
-        await tenantDb
-          .update(inboundOutbox)
-          .set({
-            status: "FAIL",
-            errorMessage: errorMessage,
-            attempts: incrementedAttempts,
-          })
-          .where(
-            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.claimToken} = ${row.claimToken}`,
-          );
-        this.logger.error(
-          `[${schemaName}] InboundOutbox delivery permanently failed for traceId=${row.traceId}: ${errorMessage}`,
-        );
-      } else {
-        const delayMs = Math.pow(2, incrementedAttempts) * 1_000;
-        const nextRetryAt = new Date(Date.now() + delayMs);
-
-        await tenantDb
-          .update(inboundOutbox)
-          .set({
-            status: "RETRY",
-            nextRetryAt,
-            errorMessage: errorMessage,
-            attempts: incrementedAttempts,
-          })
-          .where(
-            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.claimToken} = ${row.claimToken}`,
-          );
-        this.logger.warn(
-          `[${schemaName}] InboundOutbox delivery delayed for traceId=${row.traceId} (attempt ${incrementedAttempts}): ${errorMessage}`,
-        );
-      }
     }
   }
 }

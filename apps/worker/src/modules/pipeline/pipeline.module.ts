@@ -38,6 +38,13 @@ import { ReplicaOutboxPoller } from "./replica-outbox.poller.js";
 import { NormalizedOutboxPoller } from "./normalized-outbox.poller.js";
 import { RegistryOutboxPoller } from "./registry-outbox.poller.js";
 
+// Adapters
+import { OutboundGatewayAdapter } from "./adapters/outbound-gateway.adapter.js";
+import { RegistryReplicationAdapter } from "./adapters/registry-replication.adapter.js";
+import { ReplicaStateAdapter } from "./adapters/replica-state.adapter.js";
+
+import { ClaimDeliveryUseCase } from "./use-cases/claim-delivery.use-case.js";
+
 @Module({
   imports: [
     QueueModule,
@@ -59,6 +66,19 @@ import { RegistryOutboxPoller } from "./registry-outbox.poller.js";
       provide: "IOutboundDispatcher",
       useClass: PieceOutboundDispatcher,
     },
+    {
+      provide: "IOutboundGatewayPort",
+      useClass: OutboundGatewayAdapter,
+    },
+    {
+      provide: "IRegistryReplicationPort",
+      useClass: RegistryReplicationAdapter,
+    },
+    {
+      provide: "IReplicaStatePort",
+      useClass: ReplicaStateAdapter,
+    },
+    ClaimDeliveryUseCase,
     DeliveryService,
     DeliveryRetryService,
     GemHydrationService,

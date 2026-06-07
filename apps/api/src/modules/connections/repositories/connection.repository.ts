@@ -50,7 +50,13 @@ export class ConnectionRepository extends BaseRepository<typeof dataSources> {
     const result = await exec
       .select({ count: count() })
       .from(dataSources)
-      .where(eq(dataSources.tenantId, tenantId));
+      .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
+      .where(
+        and(
+          eq(dataSources.tenantId, tenantId),
+          eq(credentials.status, AppConnectionStatus.ACTIVE),
+        ),
+      );
     return Number(result[0]?.count ?? 0);
   }
 

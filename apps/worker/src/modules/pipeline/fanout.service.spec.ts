@@ -857,4 +857,112 @@ describe("FanOutService", () => {
       expect.stringContaining("SyncToken=999"),
     );
   });
+
+  it("should handle DependenciesMissingError by deferring route and publishing to ActiveFetchQueue", async () => {
+    let txCount = 0;
+    db.transaction.mockImplementation(async (cb: any) => {
+      txCount++;
+      const isFirstTx = txCount === 1; // getReplicaAndStitches
+
+      const tx = Object.assign(Promise.resolve([]), {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockImplementation(() => {
+          if (isFirstTx) {
+            return Promise.resolve([
+              {
+                id: "outbound_1",
+                data: { name: "hi" },
+                canonicalType: "RAW",
+                reqPayload: {},
+                entityId: "src_vendor",
+              },
+            ]);
+          }
+          return Promise.resolve([]);
+        }),
+        insert: mockTxInsert,
+        execute: vi.fn().mockResolvedValue({
+          rowCount: 1,
+          rows: [{ status: "DEFERRED_DEPENDENCY", was_insert: true }],
+        }),
+      });
+      return cb(tx);
+    });
+
+    let sourceQueryCount = 0;
+    db.select.mockImplementation((_args: any) => {
+      let resultData: any[] = [];
+      const qb: any = {};
+      qb.from = vi.fn().mockImplementation((table) => {
+        const tableName = table ? table[Symbol.for("drizzle:Name")] : undefined;
+        if (
+          tableName === "field_mapping" ||
+          (table && "mappingRules" in table)
+        ) {
+          resultData = [{ mappingRules: [], sourceCanonical: "RAW" }];
+        } else if (
+          tableName === "data_source" ||
+          (table && "appName" in table)
+        ) {
+          sourceQueryCount++;
+          if (sourceQueryCount <= 2) {
+            resultData = [
+              {
+                appName: "testApp",
+                tenantId: "org_1",
+                metadata: { appProfile: "online" },
+              },
+            ];
+          } else {
+            resultData = [];
+          }
+        } else {
+          resultData = [
+            {
+              id: "stitch_1",
+              syncCondition: [],
+              mappingRules: [],
+              destDataSourceId: "dest_1",
+            },
+          ];
+        }
+        return qb;
+      });
+      qb.where = vi.fn().mockReturnValue(qb);
+      qb.innerJoin = vi.fn().mockReturnValue(qb);
+      qb.limit = vi.fn().mockReturnValue(qb);
+      qb.then = (res: any, rej: any) =>
+        Promise.resolve(resultData).then(res, rej);
+      return qb;
+    });
+
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+
+    vi.spyOn(service as any, "writeSyncLog").mockResolvedValue(undefined);
+    vi.spyOn(service as any, "releaseSyncLock").mockResolvedValue(undefined);
+
+    await handler({ traceId: "123", dataSourceId: "456" });
+
+    expect(queueService.send).toHaveBeenCalledWith(
+      QueueName.ActiveFetchQueue,
+      expect.objectContaining({
+        traceId: "123",
+        missingDependencies: expect.any(Array),
+      }),
+    );
+    expect((service as any).writeSyncLog).toHaveBeenCalledWith(
+      expect.anything(),
+      "123",
+      "stitch_1",
+      "L4",
+      "SKIPPED",
+      expect.any(Number),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
 });

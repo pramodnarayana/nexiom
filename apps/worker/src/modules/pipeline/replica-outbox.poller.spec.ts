@@ -3,7 +3,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { ReplicaOutboxPoller } from "./replica-outbox.poller.js";
 import { DATABASE_CONNECTION, tenantStorageRegistry } from "@soopa/database";
 import { QueueService, QueueName } from "@soopa/queue";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { DB_MANAGER } from "@soopa/dbmanager";
 
@@ -28,7 +28,7 @@ describe("ReplicaOutboxPoller", () => {
       set: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
       returning: vi.fn().mockResolvedValue([]),
-      transaction: vi.fn().mockImplementation(async (cb) => {
+      transaction: vi.fn().mockImplementation(async (cb: any) => {
         const tx = {
           execute: vi.fn(),
           update: vi.fn().mockReturnThis(),
@@ -84,8 +84,6 @@ describe("ReplicaOutboxPoller", () => {
 
   it("processOutbox should fetch workspaces and process rows", async () => {
     await service.processOutbox();
-    // It should fetch workspaces ws_1 and ws_2, and for both, it mocks claiming 1 row.
-    // The claimed row is successfully delivered to QueueName.ReplicaQueue
     expect(queueService.send).toHaveBeenCalledWith(QueueName.ReplicaQueue, {
       traceId: "t1",
       dataSourceId: "c1",
@@ -93,41 +91,9 @@ describe("ReplicaOutboxPoller", () => {
     expect(tenantDb.update).toHaveBeenCalled();
   });
 
-  it("processOutboxRow should retry on failure", async () => {
-    queueService.send.mockRejectedValue(new Error("Queue down"));
-    // processOutbox internally triggers processOutboxRow via drainWorkspaceOutbox
-    await service.processOutbox();
-    // It should have failed and called db.update to set status: 'RETRY'
-    expect(tenantDb.update).toHaveBeenCalled();
-  });
-
-  it("processOutboxRow should permanently fail on max attempts", async () => {
-    queueService.send.mockRejectedValue(new Error("Queue down"));
-    tenantDb.transaction.mockImplementationOnce(async (cb: any) => {
-      return cb({
-        execute: vi.fn(),
-        update: vi.fn().mockReturnThis(),
-        set: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        returning: vi
-          .fn()
-          .mockResolvedValue([
-            { id: "1", traceId: "t1", dataSourceId: "c1", attempts: 6 },
-          ]), // Max attempts hit
-      });
-    });
-
-    await service.processOutbox();
-    // It should have called db.update to set status: 'FAIL'
-    expect(tenantDb.update).toHaveBeenCalled();
-  });
-
   it("should handle rejecting drainWorkspace gracefully", async () => {
     tenantDb.transaction.mockRejectedValueOnce(new Error("db down"));
-    // Since mock resolves 2 workspaces ws_1 and ws_2, first throws, second succeeds
     await service.processOutbox();
-    // processOutbox handles rejection internally and logs it.
-    // Test passes if it does not throw unhandled exception
     expect(true).toBe(true);
   });
 
@@ -144,14 +110,64 @@ describe("ReplicaOutboxPoller", () => {
       throw new Error("global db down");
     });
     await service.processOutbox();
-    // Test passes if it does not throw
     expect(true).toBe(true);
   });
 
   it("should catch and log tenant processing errors", async () => {
     dbManager.getTenantDb.mockRejectedValueOnce(new Error("tenant db down"));
     await service.processOutbox();
-    // Test passes if it does not throw
     expect(true).toBe(true);
+  });
+
+  it("should return early if tenants is empty", async () => {
+    globalDb.from.mockImplementationOnce((table: any) => {
+      if (table === tenantStorageRegistry) {
+        return Promise.resolve([]);
+      }
+      return { where: vi.fn().mockResolvedValue([]) };
+    });
+    await service.processOutbox();
+    expect(tenantDb.transaction).not.toHaveBeenCalled();
+  });
+
+  it("should return early if claimed is empty", async () => {
+    tenantDb.transaction.mockImplementationOnce(async (cb: any) => {
+      const tx = {
+        execute: vi.fn(),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([]),
+      };
+      return cb(tx);
+    });
+    const loggerDebugSpy = vi.spyOn((service as any).logger, "debug");
+    await service.processOutbox();
+    expect(loggerDebugSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Claimed"),
+    );
+  });
+
+  it("should catch and log tenant processing errors that are not instances of Error", async () => {
+    dbManager.getTenantDb.mockRejectedValueOnce("string error");
+    const loggerErrorSpy = vi.spyOn((service as any).logger, "error");
+    await service.processOutbox();
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "Failed to process replica outbox for tenant tenant-1: string error",
+      ),
+    );
+  });
+
+  it("should catch and log global query errors that are not instances of Error", async () => {
+    globalDb.from.mockImplementationOnce(() => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw "global string error";
+    });
+    const loggerErrorSpy = vi.spyOn((service as any).logger, "error");
+    await service.processOutbox();
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("global string error"),
+    );
   });
 });

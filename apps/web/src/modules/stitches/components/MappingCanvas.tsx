@@ -161,8 +161,7 @@ export function MappingCanvas({
       fields: { src: [], dest: [], loading: true, error: null },
       canvas: { mappingRows, conditionRows },
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally empty — seed is applied only on first mount
+  }, [initialRules, initialConditions]); // computationally runs if refs change, but useReducer ignores it after mount
 
   const [state, dispatch] = useReducer(reducer, computedInitial);
   const { fields, canvas } = state;
@@ -191,9 +190,7 @@ export function MappingCanvas({
 
   useEffect(() => {
     return doFetch(refreshToken > 0);
-  // refreshToken being in deps means re-running with forceRefresh=true when user clicks refresh.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [srcDataSourceId, sourceObject, destDataSourceId, targetObject, refreshToken]);
+  }, [doFetch, refreshToken]);
 
   const handleRefresh = useCallback(() => {
     setRefreshToken((t) => t + 1);

@@ -51,8 +51,9 @@ describe('ApplicationLoaderService', () => {
         vi.mocked(fs.access).mockResolvedValueOnce(undefined);
 
         // Mock dynamic import to succeed
-        const mockModule = { default: {} };
-        vi.doMock('/base/path/test-shard', () => mockModule);
+        const mockModule = { default: {}, extractReplica: vi.fn(), normalize: vi.fn() };
+        const expectedShardPath = path.resolve(service['SHARD_BASE_PATH'], 'test-shard', 'index.js');
+        vi.doMock(expectedShardPath, () => mockModule);
 
         await service.load('test-shard');
 

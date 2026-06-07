@@ -3,6 +3,7 @@ import {
   Inject,
   InternalServerErrorException,
   NotFoundException,
+  ServiceUnavailableException,
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
@@ -367,7 +368,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
   ): Promise<RelatedObjectDescriptor[]> {
     const dataSource = await this.resolveDataSource(orgId, dataSourceId);
 
-    // ── 1. Redis cache ───────────────────────────────────────────────────────
+    // ── 1. Redis cache ────────────────────────────────────────────────────────────
     const redisKey = `meta:related:${dataSourceId}:${objectName}`;
     if (forceRefresh) {
       await this.redis.del(redisKey);
@@ -378,47 +379,56 @@ export class MetadataDiscoveryService implements OnModuleInit {
       }
     }
 
-    // ── 2. Live fetch (piece) ───────────────────────────────
+    // ── 2. Live fetch (piece) ──────────────────────────────────────────────────
     const piece = this.pieceRegistry.getPiece(dataSource.appName);
-    if (!piece?.describeRelatedObjects) {
-      return [];
+    if (!piece) {
+      throw new NotFoundException(
+        `Connector "${dataSource.appName}" not found.`,
+      );
+    }
+    if (!piece.describeRelatedObjects) {
+      throw new NotFoundException(
+        `Connector "${dataSource.appName}" does not support related object discovery.`,
+      );
     }
 
     const credentials = await this.resolveCredentials(dataSourceId);
 
-    let related: RelatedObjectDescriptor[] = [];
+    let related: RelatedObjectDescriptor[];
     try {
       related = await piece.describeRelatedObjects(credentials, objectName);
-
-      // Hydrate object labels using the cached describeObjects registry to avoid
-      // individual piece connectors having to perform N+1 queries.
-      try {
-        const objects = await this.describeObjects(orgId, dataSourceId);
-        const objectMap = new Map(objects.map(o => [o.name, o.label]));
-        for (const r of related) {
-          const rAny = r as any;
-          if (!rAny.objectLabel && objectMap.has(r.objectName)) {
-            rAny.objectLabel = objectMap.get(r.objectName);
-          }
-        }
-      } catch (labelErr) {
-        this.logger.warn(
-          `Failed to hydrate object labels for related objects of ${objectName}: ${String(labelErr)}`,
-        );
-      }
-
-      await this.redis.set(
-        redisKey,
-        JSON.stringify(related),
-        'EX',
-        TTL_SECONDS,
-      );
-    } catch (e) {
-      this.logger.warn(
-        `Connector ${dataSource.appName} failed to describe related objects: ${String(e)}`,
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new ServiceUnavailableException(
+        `Connector "${dataSource.appName}" failed to describe related objects: ${msg}`,
       );
     }
+
+    await this.hydrateObjectLabels(related, orgId, dataSourceId, objectName);
+    await this.redis.set(redisKey, JSON.stringify(related), 'EX', TTL_SECONDS);
     return related;
+  }
+
+  private async hydrateObjectLabels(
+    related: RelatedObjectDescriptor[],
+    orgId: string,
+    dataSourceId: string,
+    objectName: string,
+  ): Promise<void> {
+    try {
+      const objects = await this.describeObjects(orgId, dataSourceId);
+      const objectMap = new Map(objects.map((o) => [o.name, o.label]));
+      for (const r of related) {
+        if (!r.objectLabel && objectMap.has(r.objectName)) {
+          r.objectLabel = objectMap.get(r.objectName);
+        }
+      }
+    } catch (labelErr: unknown) {
+      const msg = labelErr instanceof Error ? labelErr.message : String(labelErr);
+      this.logger.warn(
+        `Failed to hydrate object labels for related objects of ${objectName}: ${msg}`,
+      );
+    }
   }
 
   async describeConfig(
@@ -427,14 +437,14 @@ export class MetadataDiscoveryService implements OnModuleInit {
   ): Promise<ConfigOption[]> {
     const dataSource = await this.resolveDataSource(orgId, dataSourceId);
 
-    // ── 1. Redis cache ───────────────────────────────────────────────────────
+    // ── 1. Redis cache ─────────────────────────────────────────────────────────
     const redisKey = `meta:config:${dataSourceId}`;
     const cached = await this.redis.get(redisKey);
     if (cached) {
       return JSON.parse(cached) as ConfigOption[];
     }
 
-    // ── 2. Live fetch ───────────────────────────────
+    // ── 2. Live fetch ──────────────────────────────────────────────────────────
     const piece = this.pieceRegistry.getPiece(dataSource.appName);
     if (!piece) {
       throw new NotFoundException(
@@ -442,30 +452,31 @@ export class MetadataDiscoveryService implements OnModuleInit {
       );
     }
 
+    // Config is an optional capability — return [] when piece doesn't implement it.
+    if (!piece.describeConfig) {
+      return [];
+    }
+
     const credentials = await this.resolveCredentials(dataSourceId);
 
-    let config: ConfigOption[] = [];
-    if (piece.describeConfig) {
-      try {
-        config = await piece.describeConfig(credentials);
-      } catch (e) {
-        this.logger.warn(
-          `Connector ${dataSource.appName} failed to describe config: ${String(e)}`,
-        );
-        return config; // Return empty on describe failure
-      }
-      try {
-        await this.redis.set(
-          redisKey,
-          JSON.stringify(config),
-          'EX',
-          TTL_SECONDS,
-        );
-      } catch (e) {
-        this.logger.warn(
-          `Failed to cache config for ${dataSource.appName}: ${String(e)}`,
-        );
-      }
+    let config: ConfigOption[];
+    try {
+      config = await piece.describeConfig(credentials);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new ServiceUnavailableException(
+        `Connector "${dataSource.appName}" failed to describe config: ${msg}`,
+      );
+    }
+
+    try {
+      await this.redis.set(redisKey, JSON.stringify(config), 'EX', TTL_SECONDS);
+    } catch (cacheErr: unknown) {
+      const msg = cacheErr instanceof Error ? cacheErr.message : String(cacheErr);
+      this.logger.warn(
+        `Failed to cache config for ${dataSource.appName}: ${msg}`,
+      );
+      // Cache failure is non-fatal — the caller still receives fresh data.
     }
 
     return config;
@@ -486,9 +497,10 @@ export class MetadataDiscoveryService implements OnModuleInit {
     const credentials = await this.resolveCredentials(dataSourceId);
     try {
       return await piece.countRecords(credentials, objectName);
-    } catch (e) {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
       this.logger.warn(
-        `Connector ${dataSource.appName} failed to count records for ${objectName}: ${String(e)}`,
+        `Connector ${dataSource.appName} failed to count records for ${objectName}: ${msg}`,
       );
       return null;
     }

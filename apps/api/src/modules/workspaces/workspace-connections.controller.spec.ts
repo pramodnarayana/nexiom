@@ -85,6 +85,7 @@ describe('WorkspaceConnectionsController', () => {
     expect(repo.listConnections).toHaveBeenCalledWith(
       ORG_ID,
       WORKSPACE.envType,
+      WS_ID,
     );
   });
 

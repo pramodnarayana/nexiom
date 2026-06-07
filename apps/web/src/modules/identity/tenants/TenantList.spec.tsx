@@ -45,7 +45,6 @@ describe('TenantList Component', () => {
     // Reset mocks before each test
     beforeEach(() => {
         vi.clearAllMocks();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         vi.mocked(useCan).mockReturnValue({ data: { can: true } } as any); // Default allow
     });
 
@@ -158,7 +157,6 @@ describe('TenantList Component', () => {
     });
 
     it.skip('shows read-only status badge for platform_user', () => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         vi.mocked(useCan).mockImplementation(() => ({ data: { can: false } } as any));
 
         const mockUser = {

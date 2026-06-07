@@ -2,15 +2,13 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { RegistryReplicationService } from "./registry-replication.service.js";
 import { QueueService } from "@soopa/queue";
-import { DATABASE_CONNECTION } from "@soopa/database";
 import { DB_MANAGER } from "@soopa/dbmanager";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("RegistryReplicationService", () => {
   let service: RegistryReplicationService;
   let queueService: any;
-  let globalDb: any;
-  let tenantDb: any;
+  let registryPort: any;
   let dbManager: any;
 
   beforeEach(async () => {
@@ -18,54 +16,33 @@ describe("RegistryReplicationService", () => {
       consume: vi.fn(),
     };
 
-    globalDb = {
-      select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue([
-        {
-          id: "outbox1",
-          tenantId: "tenant1",
-          entityType: "APP_CONNECTION",
-          action: "UPSERT",
-          payload: {
-            id: "conn1",
-            schemaName: "global_only",
-            schemaPlan: "global_only",
-            validField: "yes",
-            createdAt: "2026-05-14T10:00:00Z",
-          },
+    registryPort = {
+      fetchGlobalOutboxRecord: vi.fn().mockResolvedValue({
+        id: "outbox1",
+        tenantId: "tenant1",
+        entityType: "APP_CONNECTION",
+        action: "UPSERT",
+        payload: {
+          id: "conn1",
+          schemaName: "global_only",
+          schemaPlan: "global_only",
+          validField: "yes",
+          createdAt: "2026-05-14T10:00:00Z",
         },
-      ]),
-      update: vi.fn().mockReturnThis(),
-      set: vi.fn().mockReturnThis(),
-    };
-
-    const mockTx = {
-      insert: vi.fn().mockReturnThis(),
-      values: vi.fn().mockReturnThis(),
-      onConflictDoUpdate: vi.fn().mockReturnThis(),
-      delete: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-    };
-
-    tenantDb = {
-      transaction: vi
-        .fn()
-        .mockImplementation(
-          async (cb: (tx: any) => Promise<void>) => await cb(mockTx),
-        ),
+      }),
+      replicateEntity: vi.fn().mockResolvedValue(undefined),
+      markGlobalOutboxSuccess: vi.fn().mockResolvedValue(undefined),
     };
 
     dbManager = {
-      getTenantDb: vi.fn().mockResolvedValue(tenantDb),
+      getTenantDb: vi.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RegistryReplicationService,
         { provide: QueueService, useValue: queueService },
-        { provide: DATABASE_CONNECTION, useValue: globalDb },
+        { provide: "IRegistryReplicationPort", useValue: registryPort },
         { provide: DB_MANAGER, useValue: dbManager },
       ],
     }).compile();
@@ -82,7 +59,7 @@ describe("RegistryReplicationService", () => {
   it("should initialize queue consumer on module init", () => {
     service.onModuleInit();
     expect(queueService.consume).toHaveBeenCalledWith(
-      "registry-replication-queue", // QueueName.RegistryReplicationQueue
+      "registry-replication-queue",
       expect.any(Function),
     );
   });
@@ -93,7 +70,7 @@ describe("RegistryReplicationService", () => {
 
     // Pass empty message
     await handler({});
-    expect(globalDb.select).not.toHaveBeenCalled();
+    expect(registryPort.fetchGlobalOutboxRecord).not.toHaveBeenCalled();
   });
 
   it("should process UPSERT for APP_CONNECTION correctly", async () => {
@@ -102,69 +79,161 @@ describe("RegistryReplicationService", () => {
 
     await handler({ outboxId: "outbox1" });
 
-    expect(globalDb.select).toHaveBeenCalled();
-    expect(dbManager.getTenantDb).toHaveBeenCalledWith("tenant1");
-    expect(tenantDb.transaction).toHaveBeenCalled();
-
-    // Check that update was called to mark SUCCESS
-    expect(globalDb.update).toHaveBeenCalled();
+    expect(registryPort.fetchGlobalOutboxRecord).toHaveBeenCalledWith(
+      "outbox1",
+    );
+    expect(registryPort.replicateEntity).toHaveBeenCalled();
+    expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalledWith(
+      "outbox1",
+    );
   });
 
   it("should process DELETE for INTEGRATION_STITCH correctly", async () => {
-    globalDb.limit.mockResolvedValueOnce([
-      {
-        id: "outbox2",
-        tenantId: "tenant1",
-        entityType: "INTEGRATION_STITCH",
-        action: "DELETE",
-        entityId: "stitch1",
-      },
-    ]);
+    registryPort.fetchGlobalOutboxRecord.mockResolvedValueOnce({
+      id: "outbox2",
+      tenantId: "tenant1",
+      entityType: "INTEGRATION_STITCH",
+      action: "DELETE",
+      entityId: "stitch1",
+    });
 
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
 
     await handler({ outboxId: "outbox2" });
 
-    expect(tenantDb.transaction).toHaveBeenCalled();
-    expect(globalDb.update).toHaveBeenCalled();
+    expect(registryPort.replicateEntity).toHaveBeenCalled();
+    expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalledWith(
+      "outbox2",
+    );
   });
 
   it("should process UPSERT for FIELD_MAPPING correctly", async () => {
-    globalDb.limit.mockResolvedValueOnce([
-      {
-        id: "outbox3",
-        tenantId: "tenant1",
-        entityType: "FIELD_MAPPING",
-        action: "UPSERT",
-        payload: { id: "map1" },
-      },
-    ]);
+    registryPort.fetchGlobalOutboxRecord.mockResolvedValueOnce({
+      id: "outbox3",
+      tenantId: "tenant1",
+      entityType: "FIELD_MAPPING",
+      action: "UPSERT",
+      payload: { id: "map1" },
+    });
 
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
 
     await handler({ outboxId: "outbox3" });
 
-    expect(tenantDb.transaction).toHaveBeenCalled();
-    expect(globalDb.update).toHaveBeenCalled();
+    expect(registryPort.replicateEntity).toHaveBeenCalled();
+    expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalledWith(
+      "outbox3",
+    );
   });
 
   it("should return early if outbox record not found", async () => {
-    globalDb.limit.mockResolvedValueOnce([]);
+    registryPort.fetchGlobalOutboxRecord.mockResolvedValueOnce(null);
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
 
     await handler({ outboxId: "outbox_missing" });
-    expect(dbManager.getTenantDb).not.toHaveBeenCalled();
+    expect(registryPort.replicateEntity).not.toHaveBeenCalled();
   });
 
   it("should throw error if replication fails", async () => {
-    tenantDb.transaction.mockRejectedValueOnce(new Error("DB locked"));
+    registryPort.replicateEntity.mockRejectedValueOnce(new Error("DB locked"));
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
 
     await expect(handler({ outboxId: "outbox1" })).rejects.toThrow("DB locked");
-    expect(globalDb.update).not.toHaveBeenCalled(); // Should not mark SUCCESS
+    expect(registryPort.markGlobalOutboxSuccess).not.toHaveBeenCalled();
+  });
+
+  it("should throw error for unrecognized action/entityType", async () => {
+    registryPort.fetchGlobalOutboxRecord.mockResolvedValueOnce({
+      id: "outbox_unknown",
+      tenantId: "tenant1",
+      entityType: "APP_CONNECTION",
+      action: "UNKNOWN",
+    });
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+
+    await expect(handler({ outboxId: "outbox_unknown" })).rejects.toThrow(
+      "Unrecognized registry outbox operation",
+    );
+  });
+
+  it("should retry on foreign key violation for FIELD_MAPPING", async () => {
+    registryPort.fetchGlobalOutboxRecord.mockResolvedValueOnce({
+      id: "outbox_fk",
+      tenantId: "tenant1",
+      entityType: "FIELD_MAPPING",
+      action: "UPSERT",
+      payload: {},
+    });
+
+    registryPort.replicateEntity
+      .mockRejectedValueOnce({ code: "23503" })
+      .mockResolvedValueOnce(undefined);
+
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+
+    await expect(handler({ outboxId: "outbox_fk" })).resolves.not.toThrow();
+    expect(registryPort.replicateEntity).toHaveBeenCalledTimes(2);
+    expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalled();
+  });
+
+  it("should provision schema on INTEGRATION_STITCH UPSERT", async () => {
+    registryPort.fetchGlobalOutboxRecord.mockResolvedValueOnce({
+      id: "outbox_stitch",
+      tenantId: "tenant1",
+      entityType: "INTEGRATION_STITCH",
+      action: "UPSERT",
+      payload: { srcDataSourceId: "ds1", destDataSourceId: "ds2" },
+    });
+
+    registryPort.getStitchDataSources = vi.fn().mockResolvedValue([
+      {
+        id: "ds1",
+        appName: "salesforce",
+        metadata: { appProfile: "standard" },
+      },
+      { id: "ds2", appName: "hubspot", metadata: { appProfile: "default" } },
+    ]);
+
+    dbManager.applyPlan = vi.fn().mockResolvedValue(undefined);
+
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+
+    await handler({ outboxId: "outbox_stitch" });
+
+    expect(registryPort.getStitchDataSources).toHaveBeenCalledWith(
+      "tenant1",
+      "ds1",
+      "ds2",
+    );
+    expect(dbManager.applyPlan).toHaveBeenCalledTimes(2);
+    expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalled();
+  });
+
+  it("should throw if stitch data sources are missing", async () => {
+    registryPort.fetchGlobalOutboxRecord.mockResolvedValueOnce({
+      id: "outbox_stitch",
+      tenantId: "tenant1",
+      entityType: "INTEGRATION_STITCH",
+      action: "UPSERT",
+      payload: { srcDataSourceId: "ds1", destDataSourceId: "ds2" },
+    });
+
+    registryPort.getStitchDataSources = vi
+      .fn()
+      .mockResolvedValue([{ id: "ds1", appName: "salesforce", metadata: {} }]); // ds2 is missing
+
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+
+    await expect(handler({ outboxId: "outbox_stitch" })).rejects.toThrow(
+      "Stitch data sources not yet replicated",
+    );
   });
 });

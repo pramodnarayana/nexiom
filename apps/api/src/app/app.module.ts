@@ -99,7 +99,10 @@ import { PluginsModule } from '../modules/plugins/plugins.module.js';
     TenantsModule,
     InvitationsModule,
     DbModule,
-    PiecesModule.forRoot({ anchorUrl: import.meta.url }),
+    PiecesModule.forRoot(),
+    ...(process.env.ENABLE_PLUGIN_MIGRATIONS === 'true'
+      ? [PiecesModule.withMigrations()]
+      : []),
     SystemAdminModule,
     RolesModule,
     ConnectionsModule,

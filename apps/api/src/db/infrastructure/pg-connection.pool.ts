@@ -1,16 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import type { Client } from 'pg';
 
+const PG_CACHE_KEY = Symbol.for('nexiom.pg.cache');
+
 @Injectable()
 export class PgConnectionPool {
-  private static cachedPg: typeof import('pg') | null = null;
-
   async resolvePgModule(): Promise<{
     PgClient: typeof import('pg').Client;
     dbUrl: string;
   }> {
-    PgConnectionPool.cachedPg ??= await import('pg');
-    const { Client: PgClient } = PgConnectionPool.cachedPg;
+    const globalObj = globalThis as unknown as {
+      [PG_CACHE_KEY]: typeof import('pg') | undefined;
+    };
+    let pgModule = globalObj[PG_CACHE_KEY];
+    if (!pgModule) {
+      pgModule = await import('pg');
+      globalObj[PG_CACHE_KEY] = pgModule;
+    }
+    const { Client: PgClient } = pgModule;
 
     const dbUrl = process.env.DATABASE_URL;
     if (!dbUrl) {

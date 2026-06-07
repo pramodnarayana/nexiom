@@ -22,12 +22,14 @@ describe('useDataExplorer', () => {
     vi.spyOn(router, 'useNavigate').mockReturnValue(mockNavigate);
   });
 
-  it('redirects to dashboard if workspaceId is missing', () => {
+  it('redirects to dashboard if workspaceId is missing', async () => {
     vi.spyOn(router, 'useParams').mockReturnValue({});
     
     renderHook(() => useDataExplorer());
 
-    expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true });
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true });
+    });
     expect(stitchesApi.listStitches).not.toHaveBeenCalled();
   });
 

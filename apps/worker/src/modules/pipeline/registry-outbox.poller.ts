@@ -1,6 +1,6 @@
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -9,23 +9,24 @@ import {
 import { QueueName } from "@soopa/queue";
 import { QueueService } from "@soopa/queue";
 import { processInChunks } from "./outbox.utils.js";
+import { BaseOutboxPoller, type OutboxTable } from "./base-outbox.poller.js";
 
 const BATCH_SIZE = 50;
-const MAX_ATTEMPTS = 6;
 
 @Injectable()
-export class RegistryOutboxPoller {
-  private readonly logger = new Logger(RegistryOutboxPoller.name);
+export class RegistryOutboxPoller extends BaseOutboxPoller {
+  protected readonly logger = new Logger(RegistryOutboxPoller.name);
   private isProcessing = false;
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
-    private readonly queueService: QueueService,
-  ) {}
+    protected readonly queueService: QueueService,
+  ) {
+    super();
+  }
 
   @Cron(CronExpression.EVERY_5_SECONDS)
   async processOutbox(): Promise<void> {
-    // Re-entrancy guard: prevent concurrent runs
     if (this.isProcessing) {
       this.logger.debug("Skipping processOutbox - already running");
       return;
@@ -33,7 +34,6 @@ export class RegistryOutboxPoller {
 
     this.isProcessing = true;
     try {
-      // Atomically claim rows from the global outbox
       const claimed = await this.globalDb.transaction(async (tx) => {
         return tx
           .update(globalRegistryOutbox)
@@ -59,10 +59,16 @@ export class RegistryOutboxPoller {
 
       this.logger.debug(`Claimed ${claimed.length} registry outbox rows`);
 
-      const results = await processInChunks(
-        claimed,
-        10, // Concurrency cap
-        (row) => this.processOutboxRow(row),
+      const results = await processInChunks(claimed, 10, (row) =>
+        this.deliverRow(
+          this.globalDb,
+          "global", // schema name not strictly applicable here
+          globalRegistryOutbox as unknown as OutboxTable,
+          row,
+          QueueName.RegistryReplicationQueue,
+          { outboxId: row.id },
+          false, // do not mark SUCCESS immediately
+        ),
       );
 
       results.forEach((result, idx) => {
@@ -82,55 +88,6 @@ export class RegistryOutboxPoller {
       );
     } finally {
       this.isProcessing = false;
-    }
-  }
-
-  private async processOutboxRow(
-    row: typeof globalRegistryOutbox.$inferSelect,
-  ): Promise<void> {
-    let queueSuccess = false;
-    try {
-      // Send to the dedicated Registry Replication Queue
-      await this.queueService.send(QueueName.RegistryReplicationQueue, {
-        outboxId: row.id,
-      });
-      queueSuccess = true;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      try {
-        if (row.attempts >= MAX_ATTEMPTS) {
-          await this.globalDb
-            .update(globalRegistryOutbox)
-            .set({ status: "FAILED", errorMessage })
-            .where(eq(globalRegistryOutbox.id, row.id));
-          this.logger.error(
-            `RegistryOutbox delivery permanently failed for outboxId=${row.id}: ${errorMessage}`,
-          );
-        } else {
-          const delayMs = Math.pow(2, row.attempts) * 1_000;
-          const nextRetryAt = new Date(Date.now() + delayMs);
-          await this.globalDb
-            .update(globalRegistryOutbox)
-            .set({ status: "PENDING", errorMessage, nextRetryAt }) // Use PENDING for retry, there's no RETRY enum
-            .where(eq(globalRegistryOutbox.id, row.id));
-          this.logger.warn(
-            `RegistryOutbox delivery delayed for outboxId=${row.id} (attempt ${row.attempts}): ${errorMessage}`,
-          );
-        }
-      } catch (dbErr) {
-        this.logger.error(
-          `Failed to persist status for global_registry_outbox id=${row.id}: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`,
-        );
-      }
-      return;
-    }
-
-    if (queueSuccess) {
-      // Don't mark SUCCESS yet — the ReplicationService will mark it SUCCESS when it actually completes!
-      // This guarantees at-least-once delivery semantics in case the queue worker drops the message.
-      this.logger.debug(
-        `Published registry replication task for outboxId=${row.id}`,
-      );
     }
   }
 }

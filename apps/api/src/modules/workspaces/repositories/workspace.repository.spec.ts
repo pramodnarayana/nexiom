@@ -183,15 +183,17 @@ describe('WorkspaceRepository', () => {
       const mockExec = {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
         leftJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockResolvedValue(connections),
       };
       vi.spyOn(repo as any, 'getExecutor').mockReturnValue(mockExec);
 
-      const result = await repo.listConnections(ORG_ID, 'PRODUCTION');
+      const result = await repo.listConnections(ORG_ID, 'PRODUCTION', 'ws-id');
 
       expect(mockExec.leftJoin).toHaveBeenCalled();
+      expect(mockExec.innerJoin).toHaveBeenCalled();
       expect(result).toEqual(connections);
     });
   });

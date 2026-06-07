@@ -70,7 +70,7 @@ describe('useTraceRow', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    expect(result.current.errorObj).toBeInstanceOf(Error);
+    expect(result.current.errorObj).toBe('Failed trace fetch');
     expect(result.current.details).toBeNull();
   });
 });

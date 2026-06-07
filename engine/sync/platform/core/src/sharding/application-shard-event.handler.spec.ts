@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ApplicationShardEventHandler } from './application-shard-event.handler.js';
-import { ApplicationLoaderService } from './application-loader.service.js';
+import { ApplicationLoaderService, ShardNotFoundError } from './application-loader.service.js';
 
 describe('ApplicationShardEventHandler', () => {
     let handler: ApplicationShardEventHandler;
@@ -78,8 +78,8 @@ describe('ApplicationShardEventHandler', () => {
         expect(shardMock.prepareUpdate).toHaveBeenCalled();
     });
 
-    it('handlePrepareUpdate catches ENOENT', async () => {
-        loaderMock.load.mockRejectedValueOnce(new Error('ENOENT'));
+    it('handlePrepareUpdate catches ShardNotFoundError', async () => {
+        loaderMock.load.mockRejectedValueOnce(new ShardNotFoundError('not found'));
         const res = await handler.handlePrepareUpdate({ appName: 'app', appProfile: 'profile', data: { a: 1 } });
         expect(res).toEqual({ a: 1 });
     });
@@ -100,8 +100,8 @@ describe('ApplicationShardEventHandler', () => {
         expect(shardMock.getWebhookResponse).toHaveBeenCalled();
     });
 
-    it('handleGetWebhookResponse catches ENOENT', async () => {
-        loaderMock.load.mockRejectedValueOnce(new Error('ENOENT'));
+    it('handleGetWebhookResponse catches ShardNotFoundError', async () => {
+        loaderMock.load.mockRejectedValueOnce(new ShardNotFoundError('not found'));
         const res = await handler.handleGetWebhookResponse({ appName: 'app', appProfile: 'profile', body: {}, headers: {} });
         expect(res).toBeNull();
     });

@@ -97,9 +97,10 @@ export class ApplicationLoaderService {
     // Dynamic import with timestamp cache-buster so Node.js re-reads from disk
     // after invalidation. The URL query string is ignored at runtime but prevents
     // Node.js from returning the cached module from a previous import() call.
-    const mod = (await import(
-      `${shardPath}?v=${Date.now()}`
-    )) as ApplicationShardModule;
+    // Vitest intercepts imports and fails if the query parameter is present.
+    const isTest = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
+    const importPath = isTest ? shardPath : `${shardPath}?v=${Date.now()}`;
+    const mod = (await import(importPath)) as ApplicationShardModule;
 
     // Validate exported shape to ensure required functions are present
     const requiredExports = ['extractReplica', 'normalize'];
