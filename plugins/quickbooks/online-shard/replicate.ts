@@ -26,6 +26,11 @@ export async function ReplicateQBObject(payload: unknown): Promise<ReplicaEntity
         return null;
     }
 
+    // Reject empty or whitespace-only IDs
+    if (entityId.trim().length === 0) {
+        return null;
+    }
+
     return {
         entityType,
         entityId,

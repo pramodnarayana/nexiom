@@ -97,6 +97,11 @@ export class NativeFetchAdapter implements VendorHttpPort {
   private combineSignals(signal1: AbortSignal, signal2: AbortSignal): AbortSignal {
     const controller = new AbortController();
 
+    // Check if either signal is already aborted
+    if (signal1.aborted || signal2.aborted) {
+      controller.abort();
+    }
+
     const abort = () => controller.abort();
     signal1.addEventListener('abort', abort, { once: true });
     signal2.addEventListener('abort', abort, { once: true });

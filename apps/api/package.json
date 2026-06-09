@@ -44,7 +44,6 @@
 		"@nestjs/platform-express": "^11.0.1",
 		"@nestjs/schedule": "^6.1.1",
 		"@soopa/ai-engine": "workspace:*",
-		"@soopa/application-salesforce-revenova": "workspace:*",
 		"@soopa/auth": "workspace:*",
 		"@soopa/cache": "workspace:*",
 		"@soopa/credentials": "workspace:*",

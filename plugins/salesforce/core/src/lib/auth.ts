@@ -23,12 +23,12 @@ export const salesforceAuth = PieceAuth.OAuth2({
     },
     validateConnectResponse: (response: Record<string, unknown>) => {
         const instanceUrl = response.instance_url || (response.data as Record<string, unknown> | undefined)?.instance_url;
-        if (!instanceUrl) {
-            throw new Error('Salesforce token response missing instance_url');
+        if (typeof instanceUrl !== 'string' || instanceUrl.trim() === '') {
+            throw new Error('Salesforce token response missing or invalid instance_url');
         }
         const accessToken = response.access_token || (response.data as Record<string, unknown> | undefined)?.access_token;
-        if (!accessToken) {
-            throw new Error('Salesforce token response missing access_token');
+        if (typeof accessToken !== 'string' || accessToken.trim() === '') {
+            throw new Error('Salesforce token response missing or invalid access_token');
         }
     }
 });
