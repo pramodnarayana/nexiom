@@ -10,6 +10,33 @@ import {
 import { sql } from 'drizzle-orm';
 
 /**
+ * Allowed schema name pattern — must be provisioned by DBManager.
+ * Enforced before calling pgSchema() to prevent SQL injection.
+ */
+const TENANT_SCHEMA_PATTERN = /^ws_[a-z0-9_]+$/;
+
+/**
+ * Validates that a schema name is safe to pass to pgSchema().
+ * Throws if the name is invalid or oversized.
+ */
+function validateSchemaName(schemaName: string): void {
+    if (!schemaName) {
+        throw new Error('Schema name cannot be empty');
+    }
+    if (schemaName.length > 63) {
+        throw new Error(
+            `Schema name "${schemaName}" exceeds PostgreSQL identifier limit of 63 characters`
+        );
+    }
+    if (!TENANT_SCHEMA_PATTERN.test(schemaName)) {
+        throw new Error(
+            `Invalid schema name "${schemaName}". ` +
+            `Must match ${TENANT_SCHEMA_PATTERN.toString()} — only DBManager-provisioned names are allowed.`
+        );
+    }
+}
+
+/**
  * buildTmsSchema(schemaName)
  *
  * TMS domain schema builder — part of @soopa/domain-tms.
@@ -41,6 +68,7 @@ import { sql } from 'drizzle-orm';
  */
 /* v8 ignore start */
 export function buildTmsSchema(schemaName: string) {
+    validateSchemaName(schemaName);
     const schema = pgSchema(schemaName);
 
     const common = {

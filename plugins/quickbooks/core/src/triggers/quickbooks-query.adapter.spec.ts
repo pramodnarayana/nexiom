@@ -82,5 +82,17 @@ describe('QuickBooksQueryAdapter', () => {
                 });
             }).toThrowError('Invalid limit: -5');
         });
+
+        it('should build a query with cursor tie-break when cursorIdField and cursorIdValue are provided', () => {
+            const result = QuickBooksQueryAdapter.buildQBOQuery('Invoice', {
+                cursorField: 'MetaData.LastUpdatedTime',
+                cursorValue: '2026-01-01T00:00:00.000Z',
+                cursorIdField: 'Id',
+                cursorIdValue: '123',
+                limit: 50
+            });
+
+            expect(result).toBe("SELECT * FROM Invoice WHERE MetaData.LastUpdatedTime > '2026-01-01T00:00:00.000Z' OR (MetaData.LastUpdatedTime = '2026-01-01T00:00:00.000Z' AND Id > '123') ORDER BY MetaData.LastUpdatedTime ASC, Id ASC MAXRESULTS 50");
+        });
     });
 });

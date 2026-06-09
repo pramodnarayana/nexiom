@@ -34,7 +34,7 @@ export class QuickBooksQueryAdapter {
         if (!/^[a-zA-Z0-9_.:]+$/.test(spec.cursorField)) {
             throw new Error(`Invalid cursorField: ${spec.cursorField}`);
         }
-        if (!/^[-a-zA-Z0-9_:.+ ]+$/.test(spec.cursorValue)) {
+        if (!spec.cursorValue.trim() || !/^[-a-zA-Z0-9_:.+ ]+$/.test(spec.cursorValue)) {
             throw new Error(`Invalid cursor format: ${spec.cursorValue}`);
         }
         if (spec.cursorIdField && !spec.cursorIdValue) {
@@ -47,7 +47,7 @@ export class QuickBooksQueryAdapter {
         if (spec.cursorIdField && !/^[a-zA-Z0-9_.:]+$/.test(spec.cursorIdField)) {
             throw new Error(`Invalid cursorIdField: ${spec.cursorIdField}`);
         }
-        if (spec.cursorIdValue && !/^[-a-zA-Z0-9_:.+ ]+$/.test(spec.cursorIdValue)) {
+        if (spec.cursorIdValue && (!spec.cursorIdValue.trim() || !/^[-a-zA-Z0-9_:.+ ]+$/.test(spec.cursorIdValue))) {
             throw new Error(`Invalid cursor format: ${spec.cursorIdValue}`);
         }
     }

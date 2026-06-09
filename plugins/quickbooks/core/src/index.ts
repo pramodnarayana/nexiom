@@ -374,12 +374,19 @@ export const quickbooks = createPiece({
     // In local/mock mode baseUrl points to http://mock_gateway:4000/mock/quickbooks.
     // In production, baseUrl is the QB API endpoint; realmId identifies the company.
     const vendorParams = (credentials['vendorParams'] as Record<string, unknown> | undefined) || {};
-    const realmId = (credentials['realmId'] as string | undefined) 
-      ?? (credentials['realm_id'] as string | undefined) 
-      ?? (vendorParams['companyId'] as string | undefined) 
-      ?? 'stub';
-      
-    const accessToken = (credentials['access_token'] as string | undefined) ?? (credentials['accessToken'] as string | undefined) ?? 'stub';
+    const realmId = (credentials['realmId'] as string | undefined)
+      ?? (credentials['realm_id'] as string | undefined)
+      ?? (vendorParams['companyId'] as string | undefined);
+
+    if (!realmId) {
+      throw new Error('QuickBooks realmId is required but not found in credentials. Check realmId, realm_id, or vendorParams.companyId.');
+    }
+
+    const accessToken = (credentials['access_token'] as string | undefined) ?? (credentials['accessToken'] as string | undefined);
+
+    if (!accessToken) {
+      throw new Error('QuickBooks accessToken is required but not found in credentials. Check access_token or accessToken fields.');
+    }
     
     const env = resolveEnvironment(vendorParams);
     const useSandbox = env === 'test';

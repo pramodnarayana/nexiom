@@ -1,14 +1,20 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NativeFetchAdapter, SalesforceFetchError } from './native-fetch.adapter.js';
 
 describe('NativeFetchAdapter (Salesforce)', () => {
     let adapter: NativeFetchAdapter;
     let mockFetch: ReturnType<typeof vi.fn>;
+    let originalFetch: typeof global.fetch;
 
     beforeEach(() => {
         adapter = new NativeFetchAdapter();
         mockFetch = vi.fn();
+        originalFetch = global.fetch;
         global.fetch = mockFetch as any;
+    });
+
+    afterEach(() => {
+        global.fetch = originalFetch;
     });
 
     it('should successfully get json data', async () => {

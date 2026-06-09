@@ -56,15 +56,19 @@ export class WorkspacePiecesController {
         ),
       );
 
+    let workspacePieceId: string;
     if (existing.length > 0) {
       await this.db
         .update(workspacePieces)
         .set({ status: 'INSTALLING' })
         .where(eq(workspacePieces.id, existing[0].id));
+      workspacePieceId = existing[0].id;
     } else {
-      await this.db
+      const inserted = await this.db
         .insert(workspacePieces)
-        .values({ workspaceId, pieceId, status: 'INSTALLING' });
+        .values({ workspaceId, pieceId, status: 'INSTALLING' })
+        .returning({ id: workspacePieces.id });
+      workspacePieceId = inserted[0].id;
     }
 
     const installEvent: PluginInstallEvent = {
@@ -77,7 +81,17 @@ export class WorkspacePiecesController {
         webhookReceivedAt: new Date().toISOString(),
       },
     };
-    await this.queueService.send(QueueName.PluginInstallQueue, installEvent);
+
+    try {
+      await this.queueService.send(QueueName.PluginInstallQueue, installEvent);
+    } catch (error) {
+      // Rollback the status to FAILED if queue send fails
+      await this.db
+        .update(workspacePieces)
+        .set({ status: 'FAILED' })
+        .where(eq(workspacePieces.id, workspacePieceId));
+      throw error;
+    }
 
     return { status: 'accepted', message: 'Installation queued' };
   }

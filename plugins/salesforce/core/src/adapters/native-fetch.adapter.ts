@@ -12,11 +12,20 @@ export class SalesforceFetchError extends Error {
 
 export class NativeFetchAdapter implements VendorHttpPort {
   async get<T>(url: string, headers: Record<string, string>, signal?: AbortSignal): Promise<VendorHttpResponse<T>> {
-    const res = await fetch(url, {
-      method: 'GET',
-      headers,
-      signal,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const combinedSignal = signal
+      ? this.combineSignals(signal, controller.signal)
+      : controller.signal;
+
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers,
+        signal: combinedSignal,
+      });
+      clearTimeout(timeoutId);
     
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -32,20 +41,33 @@ export class NativeFetchAdapter implements VendorHttpPort {
       responseHeaders[key] = value;
     });
 
-    return {
-      status: res.status,
-      data,
-      headers: responseHeaders,
-    };
+      return {
+        status: res.status,
+        data,
+        headers: responseHeaders,
+      };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
   }
 
   async post<T>(url: string, headers: Record<string, string>, body: unknown, signal?: AbortSignal): Promise<VendorHttpResponse<T>> {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const combinedSignal = signal
+      ? this.combineSignals(signal, controller.signal)
+      : controller.signal;
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: combinedSignal,
+      });
+      clearTimeout(timeoutId);
     
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -61,10 +83,24 @@ export class NativeFetchAdapter implements VendorHttpPort {
       responseHeaders[key] = value;
     });
 
-    return {
-      status: res.status,
-      data,
-      headers: responseHeaders,
-    };
+      return {
+        status: res.status,
+        data,
+        headers: responseHeaders,
+      };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  }
+
+  private combineSignals(signal1: AbortSignal, signal2: AbortSignal): AbortSignal {
+    const controller = new AbortController();
+
+    const abort = () => controller.abort();
+    signal1.addEventListener('abort', abort, { once: true });
+    signal2.addEventListener('abort', abort, { once: true });
+
+    return controller.signal;
   }
 }

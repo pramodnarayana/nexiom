@@ -8,6 +8,9 @@
   "servers": [
     { "url": "http://localhost:4010" }
   ],
+  "security": [
+    { "bearerAuth": [] }
+  ],
   "paths": {
     "/v3/company/{realmId}/query": {
       "get": {
@@ -254,6 +257,13 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
     "schemas": {
       "QueryResponse": {
         "type": "object",

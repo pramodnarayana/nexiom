@@ -1,7 +1,7 @@
 {
   "name": "pieces-quickbooks",
-  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "packages/quickbooks/core/src",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "plugins/quickbooks/core/src",
   "projectType": "library",
   "release": {
     "version": {
@@ -20,12 +20,12 @@
         "{options.outputPath}"
       ],
       "options": {
-        "outputPath": "dist/packages/quickbooks/core",
-        "tsConfig": "packages/quickbooks/core/tsconfig.lib.json",
-        "packageJson": "packages/quickbooks/core/package.json",
-        "main": "packages/quickbooks/core/src/index.ts",
+        "outputPath": "dist/plugins/quickbooks/core",
+        "tsConfig": "plugins/quickbooks/core/tsconfig.lib.json",
+        "packageJson": "plugins/quickbooks/core/package.json",
+        "main": "plugins/quickbooks/core/src/index.ts",
         "assets": [
-          "packages/quickbooks/core/*.md"
+          "plugins/quickbooks/core/*.md"
         ],
         "buildableProjectDepsInPackageJsonType": "dependencies",
         "updateBuildableProjectDepsInPackageJson": true,
@@ -50,7 +50,7 @@
     "prebuild": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "packages/quickbooks/core",
+        "cwd": "plugins/quickbooks/core",
         "command": "pnpm install --silent"
       },
       "dependsOn": [

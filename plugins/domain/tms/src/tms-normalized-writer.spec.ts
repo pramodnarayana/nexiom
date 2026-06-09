@@ -84,6 +84,12 @@ describe('tmsNormalizedWriter', () => {
             .toThrow('TMS normalized writer: type TMS_LOAD is recognized but not yet implemented (traceId=trace_1)');
     });
 
+    it('should throw an error for unimplemented types like TMS_INVOICE', async () => {
+        await expect(tmsNormalizedWriter(mockTx, mockDb, 'ws_tenant_1', 'rep_1', 'src_1', 'trace_1', 'TMS_INVOICE', {}))
+            .rejects
+            .toThrow('TMS normalized writer: type TMS_INVOICE is recognized but not yet implemented (traceId=trace_1)');
+    });
+
     it('should do nothing for unknown types', async () => {
         await tmsNormalizedWriter(mockTx, mockDb, 'ws_tenant_1', 'rep_1', 'src_1', 'trace_1', 'UNKNOWN_TYPE', {});
         expect(mockTx.execute).not.toHaveBeenCalled();

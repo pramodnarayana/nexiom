@@ -41,6 +41,7 @@ export const tmsTargetBuilder: AppTargetBuilderFn = async (
     // ── 2. Transportation Profile ─────────────────────────────────────────────
     let tp: Record<string, unknown> | null = null;
     let remitTo: Record<string, unknown> | null = null;
+    let tpRemitToSourceId: string | null = null;
 
     if (account.tpSourceId) {
         const tpRows = await dbTyped
@@ -62,16 +63,16 @@ export const tmsTargetBuilder: AppTargetBuilderFn = async (
                 stateDotNumber: r.stateDotNumber,
                 usDotNumber: r.usDotNumber,
             };
-            
-            // To be resolved below
-            (account as Record<string, unknown>)._tpRemitToSourceId = r.carrierRemitTo;
+
+            // Store for remit-to resolution
+            tpRemitToSourceId = r.carrierRemitTo;
         } else {
             missingDependencies.push({ entityType: 'TMS_TP', sourceId: account.tpSourceId as string });
         }
     }
 
     // ── 3. Remit-To Account (COALESCE: account first, then tp) ────────────────
-    const finalRemitToSourceId = (account as Record<string, unknown>).remitToSourceId || (account as Record<string, unknown>)._tpRemitToSourceId;
+    const finalRemitToSourceId = account.remitToSourceId || tpRemitToSourceId;
 
     if (finalRemitToSourceId) {
         const selfRemit = await dbTyped.select().from(tmsCarrier)

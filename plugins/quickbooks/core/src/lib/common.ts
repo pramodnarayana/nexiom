@@ -23,7 +23,9 @@ export function resolveEnvironment(props?: Record<string, unknown>): QuickBooksE
 export const quickbooksCommon = {
     getApiUrl: (realmId: string, useSandbox: boolean = false) => {
         const baseUrl = useSandbox ? QUICKBOOKS_API_URL_SANDBOX : QUICKBOOKS_API_URL_PRODUCTION;
-        return `${baseUrl}/${realmId}`;
+        // Normalize and encode realmId
+        const normalizedRealmId = realmId.trim().replace(/^\/+|\/+$/g, '');
+        return `${baseUrl}/${encodeURIComponent(normalizedRealmId)}`;
     },
 };
 

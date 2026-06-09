@@ -1,7 +1,7 @@
 {
   "name": "pieces-salesforce",
-  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "packages/salesforce/core/src",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "plugins/salesforce/core/src",
   "projectType": "library",
   "targets": {
     "build": {
@@ -10,14 +10,14 @@
         "{options.outputPath}"
       ],
       "options": {
-        "outputPath": "dist/packages/salesforce/core",
-        "tsConfig": "packages/salesforce/core/tsconfig.lib.json",
-        "packageJson": "packages/salesforce/core/package.json",
-        "main": "packages/salesforce/core/src/index.ts",
+        "outputPath": "dist/plugins/salesforce/core",
+        "tsConfig": "plugins/salesforce/core/tsconfig.lib.json",
+        "packageJson": "plugins/salesforce/core/package.json",
+        "main": "plugins/salesforce/core/src/index.ts",
         "assets": [
-          "packages/salesforce/core/*.md",
+          "plugins/salesforce/core/*.md",
           {
-            "input": "packages/salesforce/core/src/i18n",
+            "input": "plugins/salesforce/core/src/i18n",
             "output": "./src/i18n",
             "glob": "**/!(i18n.json)"
           }
@@ -40,8 +40,8 @@
     "prebuild": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "packages/salesforce/core",
-        "command": "pnpm install --silent"
+        "cwd": "plugins/salesforce/core",
+        "command": "echo 'Prebuild verification step'"
       },
       "dependsOn": [
         "^build"

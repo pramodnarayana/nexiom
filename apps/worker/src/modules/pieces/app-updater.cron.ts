@@ -50,6 +50,7 @@ export class AppUpdaterCron {
           try {
             const response = await axios.get<{ version: string }>(
               `https://registry.npmjs.org/${app.packageName}/latest`,
+              { timeout: 5000 },
             );
             latestVersion = response.data.version;
             if (latestVersion)
@@ -74,13 +75,21 @@ export class AppUpdaterCron {
             },
           };
 
-          await this.queueService.send(
-            QueueName.PluginInstallQueue,
-            installEvent,
-          );
-          this.logger.log(
-            `Enqueued auto-update for ${app.packageName} from ${app.currentVersion} to ${latestVersion} for workspace ${app.workspaceId}`,
-          );
+          try {
+            await this.queueService.send(
+              QueueName.PluginInstallQueue,
+              installEvent,
+            );
+            this.logger.log(
+              `Enqueued auto-update for ${app.packageName} from ${app.currentVersion} to ${latestVersion} for workspace ${app.workspaceId}`,
+            );
+          } catch (queueError) {
+            this.logger.error(
+              `Failed to enqueue update for ${app.packageName} (workspace ${app.workspaceId})`,
+              queueError,
+            );
+            // Continue processing other apps
+          }
         }
       }
     } catch (error) {

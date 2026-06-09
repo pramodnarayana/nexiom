@@ -889,9 +889,15 @@ async function getSalesforceFields(
 	authentication: SalesforceAuthValue,
 	object: string
 ): Promise<HttpResponse<Record<string, unknown>>> {
+	// Validate object name to prevent URL injection
+	if (!/^[A-Za-z0-9_]+$/.test(object)) {
+		throw new Error(`Invalid Salesforce object name: ${object}. Only alphanumeric characters and underscores are allowed.`);
+	}
+
+	const encodedObject = encodeURIComponent(object);
 	return await httpClient.sendRequest<Record<string, unknown>>({
 		method: HttpMethod.GET,
-		url: `${authentication.data['instance_url']}/services/data/${SF_API_VERSION}/sobjects/${object}/describe`,
+		url: `${authentication.data['instance_url']}/services/data/${SF_API_VERSION}/sobjects/${encodedObject}/describe`,
 		authentication: {
 			type: AuthenticationType.BEARER_TOKEN,
 			token: authentication['access_token'],
