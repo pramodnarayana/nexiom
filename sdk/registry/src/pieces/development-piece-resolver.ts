@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { pathToFileURL } from 'url';
 import type { IPieceResolver } from './piece-resolver.port.js';
 import { WorkspaceSyncService } from './workspace-sync.service.js';
 
@@ -25,6 +26,6 @@ export class DevelopmentPieceResolver implements IPieceResolver {
     }
 
     this.logger.debug(`Resolving piece ${packageName} natively from workspace cache.`);
-    return await import(`file://${workspacePath}`);
+    return await import(pathToFileURL(workspacePath).href);
   }
 }

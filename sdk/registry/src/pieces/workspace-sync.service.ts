@@ -1,4 +1,5 @@
 import { Injectable, Logger, Inject, OnModuleInit } from '@nestjs/common';
+import { pathToFileURL } from 'url';
 import * as path from 'path';
 import * as fs from 'fs';
 import { PIECE_REPOSITORY, type IPieceRepository } from './piece-repository.port.js';
@@ -19,10 +20,12 @@ export class WorkspaceSyncService implements OnModuleInit {
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
-    this.initialized = true;
 
     const isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
-    if (!isDev) return;
+    if (!isDev) {
+      this.initialized = true;
+      return;
+    }
 
     this.logger.log(`Startup Sync: Scanning workspace plugins directory...`);
     try {
@@ -30,7 +33,7 @@ export class WorkspaceSyncService implements OnModuleInit {
       if (!fs.existsSync(pluginsWorkspaceDir)) {
         pluginsWorkspaceDir = path.resolve(process.cwd(), '../../plugins');
       }
-      
+
       if (!fs.existsSync(pluginsWorkspaceDir)) {
         this.logger.warn(`Startup Sync: Could not locate plugins directory at ${pluginsWorkspaceDir}`);
         return;
@@ -41,35 +44,35 @@ export class WorkspaceSyncService implements OnModuleInit {
         const categoryPath = path.join(pluginsWorkspaceDir, category);
         const stat = await fs.promises.stat(categoryPath);
         if (!stat.isDirectory()) continue;
-        
+
         const pieceDirs = await fs.promises.readdir(categoryPath);
         for (const pieceDir of pieceDirs) {
           const piecePath = path.join(categoryPath, pieceDir);
           const pieceStat = await fs.promises.stat(piecePath);
           if (!pieceStat.isDirectory()) continue;
-          
+
           const pkgJsonPath = path.join(piecePath, 'package.json');
           try {
             await fs.promises.access(pkgJsonPath);
             const pkg = JSON.parse(await fs.promises.readFile(pkgJsonPath, 'utf8'));
-            
+
             if (pkg.name && pkg.name.startsWith('@soopa/')) {
               try {
                 const entryPoint = pkg.main || 'dist/index.js';
                 const absolutePath = path.resolve(piecePath, entryPoint);
-                const exported = await import(`file://${absolutePath}`);
-                
+                const exported = await import(pathToFileURL(absolutePath).href);
+
                 this.workspacePieces.set(pkg.name, absolutePath);
 
                 let pieceDef: Record<string, unknown> | null = null;
-                
+
                 for (const val of Object.values(exported)) {
                   if (typeof val === 'object' && val !== null && 'name' in val && 'displayName' in val) {
                     pieceDef = val as Record<string, unknown>;
                     break;
                   }
                 }
-                
+
                 if (pieceDef) {
                   await this.pieceRepo.upsertPiece({
                     name: String(pieceDef.name),
@@ -89,6 +92,7 @@ export class WorkspaceSyncService implements OnModuleInit {
           }
         }
       }
+      this.initialized = true;
     } catch (err) {
       this.logger.warn(`Startup Sync: Failed to scan workspace plugins directory: ${err}`);
     }

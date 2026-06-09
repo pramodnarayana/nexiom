@@ -120,11 +120,13 @@ export class SalesforceUseCases {
 
   async describeStreams(credentials: SalesforceCredentials): Promise<StreamDescriptor[]> {
     const objects = await this.describeObjects(credentials);
-    return objects.map((o) => ({
-      streamName: o.name,
-      replicationMethod: 'FULL_TABLE',
-      keyProperties: ['Id'],
-    }));
+    return objects
+      .filter((o) => o.queryable)
+      .map((o) => ({
+        streamName: o.name,
+        replicationMethod: 'FULL_TABLE',
+        keyProperties: ['Id'],
+      }));
   }
 
   async poll(credentials: SalesforceCredentials, streamName: string, _window: PollWindow, nextPageCursor?: Record<string, unknown>): Promise<PollPage> {
@@ -216,8 +218,7 @@ export class SalesforceUseCases {
       if (typeof v === 'number' || typeof v === 'boolean') {
         return `${k} = ${v}`;
       }
-      const strVal = String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      return `${k} = '${strVal}'`;
+      throw new TypeError(`Filter value for key "${k}" has unsupported type ${typeof v}: ${JSON.stringify(v)}`);
     });
     const whereClause = conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '';
 

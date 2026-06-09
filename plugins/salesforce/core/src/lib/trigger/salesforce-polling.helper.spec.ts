@@ -49,7 +49,7 @@ describe('salesforce-polling.helper', () => {
         });
 
         afterEach(() => {
-            vi.clearAllMocks();
+            vi.restoreAllMocks();
         });
 
         it('should poll with fallback date if no cursor exists', async () => {
@@ -117,7 +117,7 @@ describe('salesforce-polling.helper', () => {
         });
 
         it('should recover from bad JSON cursor', async () => {
-            vi.mocked(mockStore.get).mockResolvedValue('{"bad":"json"}');
+            vi.mocked(mockStore.get).mockResolvedValue('{bad:json');
             
             mockGet.mockResolvedValue({ data: { records: [] }, headers: {} });
 

@@ -36,7 +36,7 @@ export function assertSafeSalesforceField(fieldName: string): void {
 
 /** Parses a compound or legacy cursor string into { sinceDate, sinceId }. */
 function parseCursor(raw: string, fallbackDate: string): { sinceDate: string; sinceId: string } {
-    const isIsoDate = (d: string) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(d);
+    const isIsoDate = (d: string) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}|[+-]\d{4})$/.test(d);
     const validDate = (d: string) => isIsoDate(d) ? d : fallbackDate;
     const sanitizeId = (id: string) => /^[A-Za-z0-9]+$/.test(id) ? id : '';
 

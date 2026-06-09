@@ -55,6 +55,7 @@ export class PluginManagerService implements OnModuleInit {
 
       } catch (error) {
         this.logger.error(`Failed to initialize plugins directory at ${this.pluginsPath}`, error);
+        this.initPromise = null;
         throw error;
       }
     })();

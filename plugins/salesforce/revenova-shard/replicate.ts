@@ -64,7 +64,7 @@ export async function ReplicateRevenovaObject(payload: unknown): Promise<{ entit
     // TODO: Replace regex-based extraction with a proper XML parser (e.g., fast-xml-parser or DOMParser)
     // to handle nested nodes, CDATA, and numeric/hex entities correctly.
     const data: Record<string, string> = {};
-    const fieldRegex = /<sf:([a-zA-Z0-9_]+)[^>]*>(.*?)<\/sf:\1>/g;
+    const fieldRegex = /<sf:([a-zA-Z0-9_]+)[^>]*>([\s\S]*?)<\/sf:\1>/g;
     let match;
     while ((match = fieldRegex.exec(body)) !== null) {
         const [, key, value] = match;

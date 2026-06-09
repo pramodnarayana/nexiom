@@ -92,9 +92,6 @@ importers:
       '@soopa/ai-engine':
         specifier: workspace:*
         version: link:../../engine/ai/core
-      '@soopa/application-salesforce-revenova':
-        specifier: workspace:*
-        version: link:../../plugins/salesforce/revenova-piece
       '@soopa/auth':
         specifier: workspace:*
         version: link:../../packages/auth
