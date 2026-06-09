@@ -374,17 +374,17 @@ export const quickbooks = createPiece({
     // In local/mock mode baseUrl points to http://mock_gateway:4000/mock/quickbooks.
     // In production, baseUrl is the QB API endpoint; realmId identifies the company.
     const vendorParams = (credentials['vendorParams'] as Record<string, unknown> | undefined) || {};
-    const realmId = (credentials['realmId'] as string | undefined)
-      ?? (credentials['realm_id'] as string | undefined)
-      ?? (vendorParams['companyId'] as string | undefined);
+    const rawRealmId = credentials['realmId'] ?? credentials['realm_id'] ?? vendorParams['companyId'];
+    const realmId = typeof rawRealmId === 'string' ? rawRealmId.trim() : (rawRealmId ? String(rawRealmId).trim() : '');
 
-    if (!realmId) {
+    if (!realmId || realmId === '') {
       throw new Error('QuickBooks realmId is required but not found in credentials. Check realmId, realm_id, or vendorParams.companyId.');
     }
 
-    const accessToken = (credentials['access_token'] as string | undefined) ?? (credentials['accessToken'] as string | undefined);
+    const rawAccessToken = credentials['access_token'] ?? credentials['accessToken'];
+    const accessToken = typeof rawAccessToken === 'string' ? rawAccessToken.trim() : (rawAccessToken ? String(rawAccessToken).trim() : '');
 
-    if (!accessToken) {
+    if (!accessToken || accessToken === '') {
       throw new Error('QuickBooks accessToken is required but not found in credentials. Check access_token or accessToken fields.');
     }
     

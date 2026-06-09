@@ -29,7 +29,8 @@
 		"@soopa/piece-framework": "workspace:*",
 		"@soopa/queue": "workspace:*",
 		"live-plugin-manager": "^1.1.0",
-		"piscina": "^5.1.4"
+		"piscina": "^5.1.4",
+		"uuid": "^13.0.0"
 	},
 	"devDependencies": {
 		"@nestjs/testing": "^11.1.11",

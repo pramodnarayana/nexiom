@@ -130,7 +130,10 @@ export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceA
     invalidate(auth: SalesforceAuth, objectName: string, store?: TriggerStore): void {
         this.cache.delete(`${auth.instance_url}:${objectName}`);
         if (store) {
-            store.delete(`${STORE_SCHEMA_KEY_PREFIX}${auth.instance_url}:${objectName}`).catch(() => { });
+            const storeKey = `${STORE_SCHEMA_KEY_PREFIX}${auth.instance_url}:${objectName}`;
+            store.delete(storeKey).catch((error) => {
+                log.error('Failed to delete schema from persistent store', { storeKey, objectName, instance_url: auth.instance_url, error: String(error) });
+            });
         }
     }
 

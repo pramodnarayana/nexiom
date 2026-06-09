@@ -11,7 +11,6 @@ import type { SalesforceAuth } from '../salesforce-types.js';
 const log = new IgtLogger({ app: 'salesforce' });
 
 export type BulkJobState =
-    | 'IDLE'
     | 'IN_PROGRESS'
     | 'AWAITING_RESULTS'
     | 'FAILED';
@@ -32,7 +31,7 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
         const storeKey = 'igt_bulk_job_checkpoint';
         const checkpoint = await store.get<BulkJobCheckpoint>(storeKey);
 
-        if (!checkpoint || checkpoint.state === 'IDLE' || checkpoint.state === 'FAILED' || checkpoint.soql !== soql) {
+        if (!checkpoint || checkpoint.state === 'FAILED' || checkpoint.soql !== soql) {
             return this.createBulkJob(auth, soql, store, storeKey);
         }
 
@@ -74,10 +73,10 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
             }, { operation: 'query', query: soql });
             data = res.data;
         } catch (e: unknown) {
-            // Check for 404 or 410 which indicate the job was deleted/expired
+            // Check for 404 or 410 which indicate the resource is inaccessible or deleted
             if (e instanceof SalesforceFetchError && (e.status === 404 || e.status === 410)) {
                 await store.delete(storeKey);
-                throw new Error('Salesforce bulk query job expired or not found. State reset.');
+                throw new Error('Salesforce bulk query job creation failed: resource not found or inaccessible (404/410) — possible API version/endpoint/permission issue; state reset.');
             }
             throw new Error(`Salesforce bulk query job creation failed: ${String(e)}`);
         }

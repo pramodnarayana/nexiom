@@ -1,10 +1,13 @@
-/* v8 ignore start */
+
 import {
     type IQueryAdapter,
     type ObjectSchema,
-    type QuerySpec
+    type QuerySpec,
+    IgtLogger
 } from '@soopa/piece-framework/discovery';
 import { assertSafeSalesforceObject } from '../trigger/salesforce-polling.helper.js';
+
+const log = new IgtLogger({ app: 'salesforce' });
 
 /* v8 ignore start */
 export class SalesforceQueryAdapter implements IQueryAdapter {
@@ -79,7 +82,7 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
             } else {
                 // tieBreakerField was requested but no value is available yet (e.g. first poll).
                 // Fall back to cursor-only pagination so the caller is aware.
-                console.warn(
+                log.warn(
                     `[SalesforceQueryAdapter] tieBreakerField '${spec.tieBreakerField}' is set ` +
                     `but tieBreakerValue is missing for object '${spec.objectName}'. ` +
                     `Falling back to cursor-only pagination.`

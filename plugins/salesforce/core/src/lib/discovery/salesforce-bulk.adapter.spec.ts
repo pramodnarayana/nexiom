@@ -42,6 +42,8 @@ describe('SalesforceBulkAdapter', () => {
 
     afterEach(() => {
         vi.clearAllMocks();
+        mockGet.mockRestore();
+        mockPost.mockRestore();
     });
 
     describe('runBulkJob', () => {

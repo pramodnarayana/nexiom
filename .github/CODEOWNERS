@@ -4,4 +4,4 @@
 /sdk/**                      @soopa/platform-team
 
 # Application team owns the plugins
-/plugins/*                   @soopa/app-team
+/plugins/**                   @soopa/app-team

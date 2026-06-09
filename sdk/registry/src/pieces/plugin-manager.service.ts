@@ -3,6 +3,7 @@ import { PluginManager, IPluginInfo } from 'live-plugin-manager';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
+import { pathToFileURL } from 'url';
 import { QUEUE_SERVICE, QueueName } from '@soopa/queue';
 import type { IQueueService, PluginMigrationEvent } from '@soopa/queue';
 
@@ -109,7 +110,7 @@ export class PluginManagerService implements OnModuleInit {
     try {
       const mainFile = pluginInfo.mainFile || 'dist/index.js';
       const modulePath = path.resolve(pluginInfo.location, mainFile);
-      return await import(`file://${modulePath}`);
+      return await import(pathToFileURL(modulePath).href);
     } catch (importErr) {
       this.logger.error(`Failed to dynamically load ESM piece package ${packageName}`, importErr);
       return this.manager.require(packageName) as Record<string, unknown>;

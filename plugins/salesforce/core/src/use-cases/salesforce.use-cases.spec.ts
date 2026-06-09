@@ -114,8 +114,7 @@ describe('SalesforceUseCases', () => {
             data: { fields: [
               { name: 'IsActive', filterable: true },
               { name: 'Count', filterable: true },
-              { name: 'NullField', filterable: true },
-              { name: 'Other', filterable: true }
+              { name: 'NullField', filterable: true }
             ] }
           };
         }
@@ -128,13 +127,22 @@ describe('SalesforceUseCases', () => {
         throw new Error('Unexpected URL');
       };
 
-      await useCases.executeFind(creds, 'Account', { IsActive: true, Count: 42, NullField: null, Other: { complex: true } });
+      await useCases.executeFind(creds, 'Account', { IsActive: true, Count: 42, NullField: null });
 
       const decoded = decodeURIComponent(requestedUrl);
       expect(decoded).toContain('IsActive = true');
       expect(decoded).toContain('Count = 42');
       expect(decoded).toContain('NullField = NULL');
-      expect(decoded).toContain("Other = '[object Object]'");
+    });
+
+    it('throws if filter value has unsupported type', async () => {
+      fakeHttp.getStub = (url) => {
+        if (url.includes('/describe')) return { status: 200, headers: {}, data: { fields: [{ name: 'Other', filterable: true }] } };
+        if (url.includes('/sobjects')) return { status: 200, headers: {}, data: { sobjects: [{ name: 'Account', queryable: true }] } };
+        throw new Error();
+      };
+      await expect(useCases.executeFind(creds, 'Account', { Other: { complex: true } }))
+        .rejects.toThrow('Filter value for key "Other" has unsupported type');
     });
   });
 
