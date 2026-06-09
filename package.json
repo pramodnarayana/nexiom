@@ -4,7 +4,7 @@
 	"version": "1.0.0",
 	"scripts": {
 		"dev": "dotenv -e .env -- turbo dev --concurrency=20",
-		"dev:light": "QUEUE_ENABLED=false dotenv -e .env -- pnpm --parallel --filter=api --filter=web --filter=@soopa/ai-engine --filter=@soopa/piece-quickbooks --filter=@soopa/piece-salesforce --filter=@soopa/piece-registry --filter=@soopa/application-salesforce-revenova dev",
+		"dev:light": "QUEUE_ENABLED=false dotenv -e .env -- pnpm --parallel --filter=api --filter=web --filter=@soopa/ai-engine --filter=@soopa/piece-registry dev",
 		"build": "turbo build",
 		"lint": "turbo lint",
 		"test": "turbo test",
@@ -62,7 +62,8 @@
 	"pnpm": {
 		"overrides": {
 			"axios": "1.13.2",
-			"esbuild": "0.25.12"
+			"esbuild": "0.25.12",
+			"drizzle-orm": "0.45.1"
 		}
 	},
 	"dependencies": {

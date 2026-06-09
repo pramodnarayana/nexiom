@@ -1,0 +1,7 @@
+# Platform team owns the core engine and SDK
+/apps/*                      @soopa/platform-team
+/packages/*                  @soopa/platform-team
+/sdk/*                       @soopa/platform-team
+
+# Application team owns the plugins
+/plugins/*                   @soopa/app-team

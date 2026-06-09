@@ -37,7 +37,7 @@ import { CredentialRepository } from './repositories/credential.repository.js';
 @Global()
 @Module({
   imports: [DbModule, PiecesModule, StorageResolverModule],
-  controllers: [OAuthCallbackController, OAuthController, CredentialController],
+  controllers: [OAuthCallbackController, CredentialController, OAuthController],
   providers: [
     {
       provide: TokenManagerService,

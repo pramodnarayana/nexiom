@@ -8,6 +8,7 @@ export * from './schema/global/credentials.js';
 export * from './schema/global/workspace.js';
 export * from './schema/global/stitches.js';
 export * from './schema/global/registry_outbox.js';
+export * from './schema/global/workspace_pieces.js';
 export * from './schema/tenant/canonical_mappings.js';
 export * from './schema/tenant/sync-cursors.js';
 export * from './schema/tenant/pipeline.js';

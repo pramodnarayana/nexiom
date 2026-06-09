@@ -54,7 +54,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
 
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
     @Inject(forwardRef(() => DeliveryRetryService))
-    private readonly retryService: DeliveryRetryService,
+    private readonly retryService: any,
     private readonly gemService: GemHydrationService,
     private readonly claimDeliveryUseCase: ClaimDeliveryUseCase,
     @Optional() private readonly tokenManagerService?: TokenManagerService,

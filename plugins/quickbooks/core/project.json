@@ -1,0 +1,61 @@
+{
+  "name": "pieces-quickbooks",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/quickbooks/core/src",
+  "projectType": "library",
+  "release": {
+    "version": {
+      "currentVersionResolver": "git-tag",
+      "preserveLocalDependencyProtocols": false,
+      "manifestRootsToUpdate": [
+        "dist/{projectRoot}"
+      ]
+    }
+  },
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": [
+        "{options.outputPath}"
+      ],
+      "options": {
+        "outputPath": "dist/packages/quickbooks/core",
+        "tsConfig": "packages/quickbooks/core/tsconfig.lib.json",
+        "packageJson": "packages/quickbooks/core/package.json",
+        "main": "packages/quickbooks/core/src/index.ts",
+        "assets": [
+          "packages/quickbooks/core/*.md"
+        ],
+        "buildableProjectDepsInPackageJsonType": "dependencies",
+        "updateBuildableProjectDepsInPackageJson": true,
+        "clean": false
+      },
+      "dependsOn": [
+        "^build",
+        "prebuild"
+      ]
+    },
+    "nx-release-publish": {
+      "options": {
+        "packageRoot": "dist/{projectRoot}"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "outputs": [
+        "{options.outputFile}"
+      ]
+    },
+    "prebuild": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/quickbooks/core",
+        "command": "pnpm install --silent"
+      },
+      "dependsOn": [
+        "^build"
+      ]
+    }
+  }
+}
