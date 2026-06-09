@@ -1,0 +1,44 @@
+{
+	"name": "@soopa/piece-registry",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"dev": "tsc --watch --preserveWatchOutput",
+		"build": "tsc",
+		"test": "vitest run",
+		"test:cov": "vitest run --coverage",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@nestjs/common": "^11.1.11",
+		"@nestjs/config": "^4.0.2",
+		"@soopa/cache": "workspace:*",
+		"@soopa/database": "workspace:*",
+		"@soopa/dbmanager": "workspace:*",
+		"@soopa/credentials": "workspace:*",
+		"@soopa/piece-framework": "workspace:*",
+		"@soopa/queue": "workspace:*",
+		"live-plugin-manager": "^1.1.0",
+		"piscina": "^5.1.4",
+		"uuid": "^13.0.0"
+	},
+	"devDependencies": {
+		"@nestjs/testing": "^11.1.11",
+		"typescript": "^5.7.3",
+		"vitest": "^4.0.18"
+	},
+	"peerDependencies": {
+		"@nestjs/common": "^11.1.11",
+		"drizzle-orm": "^0.45.1"
+	}
+}

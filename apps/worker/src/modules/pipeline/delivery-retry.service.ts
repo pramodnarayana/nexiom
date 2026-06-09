@@ -1,4 +1,5 @@
-import { Injectable, Logger, Inject, forwardRef } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
+import { ModuleRef } from "@nestjs/core";
 import { sql, eq } from "drizzle-orm";
 import type { DrizzleDb } from "@soopa/database";
 import {
@@ -17,10 +18,11 @@ import { DeliveryService } from "./delivery.service.js";
 export class DeliveryRetryService {
   private readonly logger = new Logger(DeliveryRetryService.name);
 
-  constructor(
-    @Inject(forwardRef(() => DeliveryService))
-    private readonly deliveryService: DeliveryService,
-  ) {}
+  constructor(private readonly moduleRef: ModuleRef) {}
+
+  private get deliveryService(): DeliveryService {
+    return this.moduleRef.get(DeliveryService, { strict: false });
+  }
 
   /**
    * Check if source-side finalization completed for a given delivery.

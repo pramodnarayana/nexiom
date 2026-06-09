@@ -1,0 +1,52 @@
+{
+  "name": "pieces-salesforce",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "plugins/salesforce/core/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": [
+        "{options.outputPath}"
+      ],
+      "options": {
+        "outputPath": "dist/plugins/salesforce/core",
+        "tsConfig": "plugins/salesforce/core/tsconfig.lib.json",
+        "packageJson": "plugins/salesforce/core/package.json",
+        "main": "plugins/salesforce/core/src/index.ts",
+        "assets": [
+          "plugins/salesforce/core/*.md",
+          {
+            "input": "plugins/salesforce/core/src/i18n",
+            "output": "./src/i18n",
+            "glob": "**/!(i18n.json)"
+          }
+        ],
+        "buildableProjectDepsInPackageJsonType": "dependencies",
+        "updateBuildableProjectDepsInPackageJson": true,
+        "clean": false
+      },
+      "dependsOn": [
+        "^build",
+        "prebuild"
+      ]
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "outputs": [
+        "{options.outputFile}"
+      ]
+    },
+    "prebuild": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "plugins/salesforce/core",
+        "command": "echo 'Prebuild verification step'"
+      },
+      "dependsOn": [
+        "^build"
+      ]
+    }
+  },
+  "tags": []
+}

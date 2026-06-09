@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import '@soopa/application-salesforce-revenova';
+
 import express from 'express';
 import { Logger } from 'nestjs-pino';
 import { NestFactory } from '@nestjs/core';

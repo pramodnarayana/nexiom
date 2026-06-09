@@ -18,6 +18,14 @@ export class DbSeedCommand extends CommandRunner {
 
   async run(): Promise<void> {
     try {
+      console.log(
+        'SeederService:',
+        this.seederService ? 'defined' : 'undefined',
+      );
+      console.log(
+        'SyncSeederService:',
+        this.syncSeederService ? 'defined' : 'undefined',
+      );
       await this.seederService.seed();
       await this.seederService.seedAbac(ABAC_PERMISSIONS);
       await this.syncSeederService.seedMappings(LOCAL_SEED_MAPPINGS);

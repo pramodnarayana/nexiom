@@ -6,9 +6,13 @@ import { PiecesModule } from "@soopa/piece-registry";
 import { QueueModule, createQueueModuleOptions } from "@soopa/queue";
 import { CacheModule } from "@soopa/cache";
 import { ObservabilityModule } from "./modules/observability/observability.module.js";
+import { PiecesWorkerModule } from "./modules/pieces/pieces.module.js";
+
+import { EventEmitterModule } from "@nestjs/event-emitter";
 
 @Module({
   imports: [
+    EventEmitterModule.forRoot({ global: true }),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: [".env.local", ".env", "../../.env"],
@@ -26,6 +30,7 @@ import { ObservabilityModule } from "./modules/observability/observability.modul
     }),
     CacheModule,
     PipelineModule,
+    PiecesWorkerModule,
   ],
   controllers: [],
   providers: [],
