@@ -1,14 +1,12 @@
 packages:
   - 'apps/*'
   - 'packages/*'
-  - 'engine/sync/platform/*'
-  - 'engine/sync/application/*'
-  - 'engine/sync/application/*/*'
-  - 'engine/ai/*'
-  - 'packages/pieces/platform/*'
-  - 'packages/pieces/application/*'
-  - 'packages/pieces/application/*/*'
   - 'packages/domain/*'
+  - '!packages/domain/tms'
+  - 'engine/sync/platform/*'
+  - 'engine/ai/*'
+  - 'sdk/*'
+  - 'plugins/*/*'
 
 onlyBuiltDependencies:
   - '@nestjs/core'

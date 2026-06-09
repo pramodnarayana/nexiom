@@ -72,7 +72,7 @@ export const tmsTargetBuilder: AppTargetBuilderFn = async (
     }
 
     // ── 3. Remit-To Account (COALESCE: account first, then tp) ────────────────
-    const finalRemitToSourceId = account.remitToSourceId || tpRemitToSourceId;
+    const finalRemitToSourceId = ('remitToSourceId' in account ? account.remitToSourceId : undefined) || tpRemitToSourceId;
 
     if (finalRemitToSourceId) {
         const selfRemit = await dbTyped.select().from(tmsCarrier)

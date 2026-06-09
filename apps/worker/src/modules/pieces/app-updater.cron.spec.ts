@@ -102,6 +102,7 @@ describe("AppUpdaterCron", () => {
 
       expect(axiosMock.get).toHaveBeenCalledWith(
         "https://registry.npmjs.org/@soopa/piece-outdated/latest",
+        { timeout: 5000 },
       );
       expect(queueServiceMock.send).toHaveBeenCalled();
     });

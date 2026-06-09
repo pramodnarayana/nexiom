@@ -1,8 +1,0 @@
-/**
- * No domain schema to provision for QuickBooks as a destination.
- * It does not have custom tables like tms_carrier.
- */
-export async function provisionQBDomain(_db: unknown, _schemaName: string): Promise<void> {
-    // No-op for now. If QB requires specific destination tracking tables, 
-    // they would be created here.
-}

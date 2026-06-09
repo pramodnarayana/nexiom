@@ -16,6 +16,7 @@ describe('WorkspacePiecesController', () => {
     values: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     set: ReturnType<typeof vi.fn>;
+    returning: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -28,9 +29,10 @@ describe('WorkspacePiecesController', () => {
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockResolvedValue([]),
       insert: vi.fn().mockReturnThis(),
-      values: vi.fn().mockResolvedValue([]),
+      values: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
       set: vi.fn().mockReturnThis(),
+      returning: vi.fn().mockResolvedValue([{ id: 'wp-mock-id' }]),
     };
 
     controller = new WorkspacePiecesController(
