@@ -14,20 +14,23 @@ export async function ReplicateQBObject(payload: unknown): Promise<ReplicaEntity
     
     // Note: The actual shape depends on how the QB piece parses the webhook in the gateway.
     // For now, we assume a generic normalized format passed down from L1.
-    const entityType = p.name || p.type;
-    let entityId = p.id ?? p.Id;
+    let rawEntityType = p.name || p.type;
+    let rawEntityId = p.id ?? p.Id;
 
     // Coerce numeric IDs to strings
-    if (typeof entityId === 'number') {
-        entityId = String(entityId);
+    if (typeof rawEntityId === 'number') {
+        rawEntityId = String(rawEntityId);
     }
 
-    if (typeof entityType !== 'string' || typeof entityId !== 'string') {
+    if (typeof rawEntityType !== 'string' || typeof rawEntityId !== 'string') {
         return null;
     }
 
+    const entityType = rawEntityType.trim();
+    const entityId = rawEntityId.trim();
+
     // Reject empty or whitespace-only IDs and types
-    if (entityId.trim().length === 0 || entityType.trim().length === 0) {
+    if (entityId.length === 0 || entityType.length === 0) {
         return null;
     }
 

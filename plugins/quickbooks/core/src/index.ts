@@ -375,14 +375,22 @@ export const quickbooks = createPiece({
     // In production, baseUrl is the QB API endpoint; realmId identifies the company.
     const vendorParams = (credentials['vendorParams'] as Record<string, unknown> | undefined) || {};
     const rawRealmId = credentials['realmId'] ?? credentials['realm_id'] ?? vendorParams['companyId'];
-    const realmId = typeof rawRealmId === 'string' ? rawRealmId.trim() : (rawRealmId ? String(rawRealmId).trim() : '');
+    let realmId = '';
+    if (typeof rawRealmId === 'string') {
+      realmId = rawRealmId.trim();
+    } else if (typeof rawRealmId === 'number' && Number.isFinite(rawRealmId)) {
+      realmId = String(rawRealmId).trim();
+    }
 
     if (!realmId || realmId === '') {
       throw new Error('QuickBooks realmId is required but not found in credentials. Check realmId, realm_id, or vendorParams.companyId.');
     }
 
     const rawAccessToken = credentials['access_token'] ?? credentials['accessToken'];
-    const accessToken = typeof rawAccessToken === 'string' ? rawAccessToken.trim() : (rawAccessToken ? String(rawAccessToken).trim() : '');
+    let accessToken = '';
+    if (typeof rawAccessToken === 'string') {
+      accessToken = rawAccessToken.trim();
+    }
 
     if (!accessToken || accessToken === '') {
       throw new Error('QuickBooks accessToken is required but not found in credentials. Check access_token or accessToken fields.');

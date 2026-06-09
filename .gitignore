@@ -28,6 +28,7 @@ dist-ssr
 *.sln
 *.sw?
 .env
+.env.example
 coverage
 better-auth-tutorial-eval/
 # Local Scripts

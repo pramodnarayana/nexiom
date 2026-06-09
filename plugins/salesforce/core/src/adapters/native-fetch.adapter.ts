@@ -94,6 +94,48 @@ export class NativeFetchAdapter implements VendorHttpPort {
     }
   }
 
+  async patch<T>(url: string, headers: Record<string, string>, body: unknown, signal?: AbortSignal): Promise<VendorHttpResponse<T>> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const combinedSignal = signal
+      ? this.combineSignals(signal, controller.signal)
+      : controller.signal;
+
+    try {
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(body),
+        signal: combinedSignal,
+      });
+      clearTimeout(timeoutId);
+    
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new SalesforceFetchError(`Salesforce API error ${res.status}: ${text}`, res.status);
+    }
+    
+    const contentType = res.headers.get('content-type') || '';
+    const isJson = contentType.includes('application/json');
+    const data = (isJson ? await res.json().catch(() => ({})) : await res.text()) as T;
+
+    const responseHeaders: Record<string, string> = {};
+    res.headers.forEach((value, key) => {
+      responseHeaders[key] = value;
+    });
+
+      return {
+        status: res.status,
+        data,
+        headers: responseHeaders,
+      };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  }
+
   private combineSignals(signal1: AbortSignal, signal2: AbortSignal): AbortSignal {
     const controller = new AbortController();
 

@@ -32,6 +32,13 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
         const checkpoint = await store.get<BulkJobCheckpoint>(storeKey);
 
         if (!checkpoint || checkpoint.state === 'FAILED' || checkpoint.soql !== soql) {
+            if (checkpoint && checkpoint.jobId && checkpoint.state !== 'FAILED') {
+                try {
+                    await this.abortJob(auth, checkpoint.jobId);
+                } catch (err: unknown) {
+                    log.warn(`Failed to abort previous bulk job ${checkpoint.jobId} before replacement`, { error: String(err) });
+                }
+            }
             return this.createBulkJob(auth, soql, store, storeKey);
         }
 
@@ -45,6 +52,9 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
             storeKey,
         });
         try {
+            await this.abortJob(auth, checkpoint.jobId).catch(err => {
+                log.warn(`Failed to abort bulk job ${checkpoint.jobId} during reset`, { error: String(err) });
+            });
             await store.delete(storeKey);
         } catch (error_) {
             log.error('Failed to reset unexpected bulk job checkpoint', {
@@ -54,6 +64,17 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
             });
         }
         return [];
+    }
+
+    private async abortJob(auth: SalesforceAuth, jobId: string): Promise<void> {
+        const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/jobs/query/${jobId}`;
+        const http = new NativeFetchAdapter();
+        await http.patch(url, {
+            Authorization: `Bearer ${auth.access_token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json'
+        }, { state: 'Aborted' });
+        log.info('Successfully aborted running bulk job', { jobId });
     }
 
     private async createBulkJob(

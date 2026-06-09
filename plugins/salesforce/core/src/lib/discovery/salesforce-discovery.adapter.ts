@@ -13,6 +13,7 @@ const log = new IgtLogger({ app: 'salesforce' });
 
 export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceAuth> {
     private readonly cache = new Map<string, ObjectSchema>();
+    private readonly inFlightDeletions = new Map<string, Promise<void>>();
     private readonly TTL_MS = 15 * 60 * 1000; // 15 minutes
 
     private readonly MAX_CACHE_SIZE = 100;
@@ -29,6 +30,12 @@ export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceA
                 return cached;
             }
             this.cache.delete(memKey); // Lazy expiration
+        }
+
+        // Wait for any pending deletions for this object before reading from persistent store
+        const pendingDeletion = this.inFlightDeletions.get(memKey);
+        if (pendingDeletion) {
+            await pendingDeletion.catch(() => {});
         }
 
         // Tier 2 — persistent store (survives pod restarts)
@@ -128,12 +135,18 @@ export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceA
     }
 
     invalidate(auth: SalesforceAuth, objectName: string, store?: TriggerStore): void {
-        this.cache.delete(`${auth.instance_url}:${objectName}`);
+        const memKey = `${auth.instance_url}:${objectName}`;
+        this.cache.delete(memKey);
         if (store) {
-            const storeKey = `${STORE_SCHEMA_KEY_PREFIX}${auth.instance_url}:${objectName}`;
-            store.delete(storeKey).catch((error) => {
+            const storeKey = `${STORE_SCHEMA_KEY_PREFIX}${memKey}`;
+            const deletionPromise = store.delete(storeKey).catch((error) => {
                 log.error('Failed to delete schema from persistent store', { storeKey, objectName, instance_url: auth.instance_url, error: String(error) });
+            }).finally(() => {
+                if (this.inFlightDeletions.get(memKey) === deletionPromise) {
+                    this.inFlightDeletions.delete(memKey);
+                }
             });
+            this.inFlightDeletions.set(memKey, deletionPromise);
         }
     }
 

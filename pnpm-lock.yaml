@@ -1551,6 +1551,9 @@ importers:
       piscina:
         specifier: ^5.1.4
         version: 5.1.4
+      uuid:
+        specifier: ^13.0.0
+        version: 13.0.0
     devDependencies:
       '@nestjs/testing':
         specifier: ^11.1.11
