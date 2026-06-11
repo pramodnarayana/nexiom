@@ -21,13 +21,19 @@ import {
   UpsertFieldMappingBody,
   BulkUpsertAndDeleteBody,
 } from './field-mappings.validation.js';
-import { FieldMappingsRepository } from './repositories/field-mappings.repository.js';
+import { UpsertFieldMappingUseCase } from './core/use-cases/field-mappings/upsert-field-mapping.use-case.js';
+import { DeleteFieldMappingUseCase } from './core/use-cases/field-mappings/delete-field-mapping.use-case.js';
+import { BulkUpsertAndDeleteFieldMappingsUseCase } from './core/use-cases/field-mappings/bulk-upsert-and-delete-field-mappings.use-case.js';
 import { requireOrgId } from '../workspaces/workspace.utils.js';
 
 @UseGuards(AuthGuard, PermissionsGuard)
 @Controller('stitches/:stitchId/mappings')
 export class FieldMappingsController {
-  constructor(private readonly fieldMappings: FieldMappingsRepository) {}
+  constructor(
+    private readonly upsertFieldMappingUseCase: UpsertFieldMappingUseCase,
+    private readonly deleteFieldMappingUseCase: DeleteFieldMappingUseCase,
+    private readonly bulkUpsertAndDeleteFieldMappingsUseCase: BulkUpsertAndDeleteFieldMappingsUseCase,
+  ) {}
 
   /** Upsert a field-mapping template for a given canonical type on a stitch. */
   @Post()
@@ -38,7 +44,11 @@ export class FieldMappingsController {
     @Param('stitchId', ParseUUIDPipe) stitchId: string,
     @Body() body: UpsertFieldMappingBody,
   ) {
-    return this.fieldMappings.upsertMapping(requireOrgId(auth), stitchId, body);
+    return this.upsertFieldMappingUseCase.execute(
+      requireOrgId(auth),
+      stitchId,
+      body,
+    );
   }
 
   /** Alias for POST — PATCH upserts the same way for idempotent client calls. */
@@ -50,7 +60,11 @@ export class FieldMappingsController {
     @Param('stitchId', ParseUUIDPipe) stitchId: string,
     @Body() body: UpsertFieldMappingBody,
   ) {
-    return this.fieldMappings.upsertMapping(requireOrgId(auth), stitchId, body);
+    return this.upsertFieldMappingUseCase.execute(
+      requireOrgId(auth),
+      stitchId,
+      body,
+    );
   }
 
   /**
@@ -65,7 +79,7 @@ export class FieldMappingsController {
     @Param('stitchId', ParseUUIDPipe) stitchId: string,
     @Param('sourceCanonical') sourceCanonical: string,
   ) {
-    await this.fieldMappings.deleteMapping(
+    await this.deleteFieldMappingUseCase.execute(
       requireOrgId(auth),
       stitchId,
       sourceCanonical,
@@ -84,7 +98,7 @@ export class FieldMappingsController {
     @Param('stitchId', ParseUUIDPipe) stitchId: string,
     @Body() body: BulkUpsertAndDeleteBody,
   ) {
-    return this.fieldMappings.bulkUpsertAndDelete(
+    return this.bulkUpsertAndDeleteFieldMappingsUseCase.execute(
       requireOrgId(auth),
       stitchId,
       body,

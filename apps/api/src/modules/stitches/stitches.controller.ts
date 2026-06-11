@@ -19,7 +19,11 @@ import {
   AuthContext,
   type RequestAuthContext,
 } from '@soopa/auth';
-import { StitchesService } from './stitches.service.js';
+import { CreateStitchUseCase } from './core/use-cases/stitches/create-stitch.use-case.js';
+import { ListStitchesUseCase } from './core/use-cases/stitches/list-stitches.use-case.js';
+import { GetStitchUseCase } from './core/use-cases/stitches/get-stitch.use-case.js';
+import { UpdateStitchUseCase } from './core/use-cases/stitches/update-stitch.use-case.js';
+import { ArchiveStitchUseCase } from './core/use-cases/stitches/archive-stitch.use-case.js';
 import { CreateStitch, UpdateStitch } from './stitches.validation.js';
 
 import { requireOrgId } from '../workspaces/workspace.utils.js';
@@ -27,12 +31,18 @@ import { requireOrgId } from '../workspaces/workspace.utils.js';
 @UseGuards(AuthGuard, PermissionsGuard)
 @Controller('stitches')
 export class StitchesController {
-  constructor(private readonly stitchesService: StitchesService) {}
+  constructor(
+    private readonly createStitchUseCase: CreateStitchUseCase,
+    private readonly listStitchesUseCase: ListStitchesUseCase,
+    private readonly getStitchUseCase: GetStitchUseCase,
+    private readonly updateStitchUseCase: UpdateStitchUseCase,
+    private readonly archiveStitchUseCase: ArchiveStitchUseCase,
+  ) {}
 
   @Post()
   @RequirePermission('stitches', 'manage')
   create(@AuthContext() auth: RequestAuthContext, @Body() body: CreateStitch) {
-    return this.stitchesService.create(requireOrgId(auth), body);
+    return this.createStitchUseCase.execute(requireOrgId(auth), body);
   }
 
   @Get()
@@ -43,7 +53,7 @@ export class StitchesController {
     workspaceId?: string,
     @Query('includeArchived') includeArchived?: string,
   ) {
-    return this.stitchesService.list(
+    return this.listStitchesUseCase.execute(
       requireOrgId(auth),
       workspaceId,
       includeArchived === 'true',
@@ -56,7 +66,7 @@ export class StitchesController {
     @AuthContext() auth: RequestAuthContext,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.stitchesService.findOne(requireOrgId(auth), id);
+    return this.getStitchUseCase.execute(requireOrgId(auth), id);
   }
 
   @Patch(':id')
@@ -66,7 +76,7 @@ export class StitchesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UpdateStitch,
   ) {
-    return this.stitchesService.update(requireOrgId(auth), id, body);
+    return this.updateStitchUseCase.execute(requireOrgId(auth), id, body);
   }
 
   @Delete(':id')
@@ -76,6 +86,6 @@ export class StitchesController {
     @AuthContext() auth: RequestAuthContext,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.stitchesService.remove(requireOrgId(auth), id);
+    return this.archiveStitchUseCase.execute(requireOrgId(auth), id);
   }
 }

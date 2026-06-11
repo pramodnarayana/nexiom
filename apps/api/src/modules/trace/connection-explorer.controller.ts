@@ -11,8 +11,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@soopa/auth';
-import { DataExplorerService } from './data-explorer.service.js';
 import { validateFilterGroup } from './filter-parser.js';
+import { ListConnectionDataUseCase } from './core/use-cases/explorer/list-connection-data.use-case.js';
+import { GetConnectionTraceUseCase } from './core/use-cases/explorer/get-connection-trace.use-case.js';
+import { ListTraceRoutesUseCase } from './core/use-cases/explorer/list-trace-routes.use-case.js';
+import { ListObjectsUseCase } from './core/use-cases/explorer/list-objects.use-case.js';
 
 const ALLOWED_TABS = [
   'inbound',
@@ -26,7 +29,12 @@ type TabName = (typeof ALLOWED_TABS)[number];
 @Controller('connections/:connectionId/explorer')
 @UseGuards(AuthGuard)
 export class ConnectionExplorerController {
-  constructor(private readonly explorer: DataExplorerService) {}
+  constructor(
+    private readonly listDataUseCase: ListConnectionDataUseCase,
+    private readonly getTraceUseCase: GetConnectionTraceUseCase,
+    private readonly listRoutesUseCase: ListTraceRoutesUseCase,
+    private readonly listObjectsUseCase: ListObjectsUseCase,
+  ) {}
 
   private requireOrg(ctx: RequestAuthContext): string {
     const orgId = ctx.user?.organizationId;
@@ -44,19 +52,19 @@ export class ConnectionExplorerController {
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
     @Query('workspaceId', new ParseUUIDPipe({ optional: true }))
     workspaceId?: string,
-    @Query('filters') filters?: string,
+    @Query('filters') filtersRaw?: string,
     @Query('objectType') objectType?: string,
   ) {
     if (!ALLOWED_TABS.includes(tab as TabName)) {
-      throw new NotFoundException(`Tab "${tab}" not found`);
+      throw new BadRequestException(`Invalid tab: ${tab}`);
     }
 
     let parsedFilters: import('./filter-parser.js').FilterGroup | undefined =
       undefined;
-    if (filters) {
+    if (filtersRaw) {
       try {
         parsedFilters = JSON.parse(
-          filters,
+          filtersRaw,
         ) as import('./filter-parser.js').FilterGroup;
         if (!validateFilterGroup(parsedFilters)) {
           throw new BadRequestException('Invalid filters format');
@@ -67,53 +75,16 @@ export class ConnectionExplorerController {
     }
 
     const orgId = this.requireOrg(ctx);
-    const dispatchMap: Record<TabName, () => Promise<unknown>> = {
-      inbound: () =>
-        this.explorer.listConnectionInbound(
-          orgId,
-          connectionId,
-          page,
-          limit,
-          workspaceId,
-          objectType,
-          parsedFilters,
-        ),
-      replica: () =>
-        this.explorer.listConnectionReplica(
-          orgId,
-          connectionId,
-          page,
-          limit,
-          workspaceId,
-          objectType,
-          parsedFilters,
-        ),
-      normalized: () =>
-        this.explorer.listConnectionNormalized(
-          orgId,
-          connectionId,
-          page,
-          limit,
-          workspaceId,
-          objectType,
-          parsedFilters,
-        ),
-      'entity-map': () => {
-        throw new BadRequestException(
-          'Entity Map is not available in Connection Explorer',
-        );
-      },
-      outbound: () =>
-        this.explorer.listConnectionOutbound(
-          orgId,
-          connectionId,
-          page,
-          limit,
-          workspaceId,
-        ),
-    };
-
-    return dispatchMap[tab as TabName]();
+    return this.listDataUseCase.execute(
+      orgId,
+      connectionId,
+      tab as TabName,
+      page,
+      limit,
+      workspaceId,
+      objectType,
+      parsedFilters,
+    );
   }
 
   @Get('traces/:traceId')
@@ -123,7 +94,7 @@ export class ConnectionExplorerController {
     @Param('traceId', ParseUUIDPipe) traceId: string,
   ) {
     const orgId = this.requireOrg(ctx);
-    return this.explorer.getConnectionTrace(orgId, connectionId, traceId);
+    return this.getTraceUseCase.execute(orgId, connectionId, traceId);
   }
 
   @Get('traces/:traceId/routes')
@@ -133,7 +104,7 @@ export class ConnectionExplorerController {
     @Param('traceId', ParseUUIDPipe) traceId: string,
   ) {
     const orgId = this.requireOrg(ctx);
-    return this.explorer.listTraceRoutes(orgId, connectionId, traceId);
+    return this.listRoutesUseCase.execute(orgId, connectionId, traceId);
   }
 
   @Get(':tab/objects')
@@ -148,7 +119,7 @@ export class ConnectionExplorerController {
       throw new NotFoundException(`Tab "${tab}" not found`);
     }
     const orgId = this.requireOrg(ctx);
-    return this.explorer.listObjectsByConnection(
+    return this.listObjectsUseCase.execute(
       orgId,
       connectionId,
       tab,

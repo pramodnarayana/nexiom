@@ -2,9 +2,9 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { createHash } from 'node:crypto';
 import {
-  TriggerExecutorService,
-  type TriggerRunParams,
-} from './trigger-executor.service.js';
+  RunPollUseCase,
+  type PollRunParams,
+} from './core/use-cases/run-poll.use-case.js';
 import { PieceRegistryService } from '@soopa/piece-registry';
 import { ITriggerDlqService } from './interfaces/trigger-dlq.interface.js';
 
@@ -52,7 +52,7 @@ export class DlqProcessorService {
 
   constructor(
     @Inject(ITriggerDlqService) private readonly dlqService: ITriggerDlqService,
-    private readonly executor: TriggerExecutorService,
+    private readonly runPollUseCase: RunPollUseCase,
     private readonly pieceRegistry: PieceRegistryService,
   ) {}
 
@@ -138,7 +138,7 @@ export class DlqProcessorService {
       return;
     }
 
-    const params: TriggerRunParams = {
+    const params: PollRunParams = {
       trigger,
       appName: job.appName,
       triggerName: job.triggerName,
@@ -151,10 +151,7 @@ export class DlqProcessorService {
     };
 
     try {
-      const executed = await this.executor.runPoll(
-        params,
-        /* fromDlqRetry */ true,
-      );
+      const executed = await this.runPollUseCase.execute(params, true);
 
       if (!executed) {
         // Lock contention — defer via delayed sorted-set (MIN_RETRY_DELAY_MS)

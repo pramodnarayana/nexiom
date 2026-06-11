@@ -1,9 +1,7 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { ITriggerDlqService } from './interfaces/trigger-dlq.interface.js';
-import type {
-  TriggerRunParams,
-  WebhookRunParams,
-} from './trigger-executor.service.js';
+import type { PollRunParams } from './core/use-cases/run-poll.use-case.js';
+import type { WebhookRunParams } from './core/use-cases/run-webhook.use-case.js';
 
 @Injectable()
 export class TriggerRetryPolicyService {
@@ -12,7 +10,7 @@ export class TriggerRetryPolicyService {
   ) {}
 
   async handleRecordIngestFailure(
-    params: TriggerRunParams | WebhookRunParams,
+    params: PollRunParams | WebhookRunParams,
     fromDlqRetry: boolean,
     records: unknown[],
     currentIndex: number,
@@ -33,22 +31,29 @@ export class TriggerRetryPolicyService {
     }
 
     const remainingRecords = records.slice(currentIndex);
-    let dlqParams: TriggerRunParams | WebhookRunParams = params;
+    let dlqParams: Record<string, unknown> = params as unknown as Record<
+      string,
+      unknown
+    >;
     if ('payload' in params) {
+      const withPayload = params as unknown as { payload: unknown };
       dlqParams = {
-        ...params,
-        payload: Array.isArray(params.payload)
+        ...(params as Record<string, unknown>),
+        payload: Array.isArray(withPayload.payload)
           ? remainingRecords
-          : params.payload,
+          : withPayload.payload,
       };
     }
 
-    await this.pushToDlq(dlqParams, err);
+    await this.pushToDlq(
+      dlqParams as unknown as PollRunParams | WebhookRunParams,
+      err,
+    );
     throw err;
   }
 
   async pushToDlq(
-    params: TriggerRunParams | WebhookRunParams,
+    params: PollRunParams | WebhookRunParams,
     err: unknown,
   ): Promise<void> {
     const job = JSON.stringify({
@@ -60,7 +65,10 @@ export class TriggerRetryPolicyService {
       objectType: params.objectType,
       propsValue: params.propsValue,
       auth: params.auth,
-      payload: 'payload' in params ? params.payload : undefined,
+      payload:
+        'payload' in params
+          ? (params as Record<string, unknown>).payload
+          : undefined,
       failedAt: new Date().toISOString(),
       error: err instanceof Error ? err.message : String(err),
       attempt: 1,

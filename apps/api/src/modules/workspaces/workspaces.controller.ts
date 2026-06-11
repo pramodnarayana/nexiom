@@ -21,8 +21,13 @@ import {
   AuthContext,
   type RequestAuthContext,
 } from '@soopa/auth';
-import { WorkspaceProvisionerUseCase } from './use-cases/workspace-provisioner.use-case.js';
-import { WorkspaceRepository } from './repositories/workspace.repository.js';
+import {
+  CreateWorkspaceUseCase,
+  UpdateWorkspaceUseCase,
+  DeleteWorkspaceUseCase,
+  GetWorkspaceUseCase,
+  ListWorkspacesUseCase,
+} from './core/use-cases/workspace.use-cases.js';
 import { CreateWorkspace, UpdateWorkspace } from './workspaces.validation.js';
 import { requireOrgId } from './workspace.utils.js';
 import { isUniqueViolation } from '../../shared/db.utils.js';
@@ -31,8 +36,11 @@ import { isUniqueViolation } from '../../shared/db.utils.js';
 @Controller('workspaces')
 export class WorkspacesController {
   constructor(
-    private readonly workspaceProvisioner: WorkspaceProvisionerUseCase,
-    private readonly workspaceRepository: WorkspaceRepository,
+    private readonly createWorkspaceUseCase: CreateWorkspaceUseCase,
+    private readonly listWorkspacesUseCase: ListWorkspacesUseCase,
+    private readonly getWorkspaceUseCase: GetWorkspaceUseCase,
+    private readonly updateWorkspaceUseCase: UpdateWorkspaceUseCase,
+    private readonly deleteWorkspaceUseCase: DeleteWorkspaceUseCase,
   ) {}
 
   @Post()
@@ -41,13 +49,17 @@ export class WorkspacesController {
     @AuthContext() auth: RequestAuthContext,
     @Body() body: CreateWorkspace,
   ) {
-    return this.workspaceProvisioner.execute(requireOrgId(auth), body);
+    return this.createWorkspaceUseCase.execute({
+      orgId: requireOrgId(auth),
+      name: body.name,
+      envType: body.envType ?? 'PRODUCTION',
+    });
   }
 
   @Get()
   @RequirePermission('workspaces', 'read')
   list(@AuthContext() auth: RequestAuthContext) {
-    return this.workspaceRepository.findByOrg(requireOrgId(auth));
+    return this.listWorkspacesUseCase.execute(requireOrgId(auth));
   }
 
   @Get(':id')
@@ -56,10 +68,7 @@ export class WorkspacesController {
     @AuthContext() auth: RequestAuthContext,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    const ws = await this.workspaceRepository.findByIdAndOrg(
-      id,
-      requireOrgId(auth),
-    );
+    const ws = await this.getWorkspaceUseCase.execute(requireOrgId(auth), id);
     if (!ws) throw new NotFoundException('Workspace not found');
     return ws;
   }
@@ -77,9 +86,9 @@ export class WorkspacesController {
       throw new BadRequestException('No updatable fields provided.');
 
     try {
-      const updated = await this.workspaceRepository.updateWorkspace(
-        id,
+      const updated = await this.updateWorkspaceUseCase.execute(
         orgId,
+        id,
         body,
       );
       if (!updated) throw new NotFoundException('Workspace not found');
@@ -101,10 +110,8 @@ export class WorkspacesController {
     @AuthContext() auth: RequestAuthContext,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    const deleted = await this.workspaceRepository.deleteWorkspace(
-      id,
-      requireOrgId(auth),
-    );
+    const orgId = requireOrgId(auth);
+    const deleted = await this.deleteWorkspaceUseCase.execute(orgId, id);
     if (!deleted) throw new NotFoundException('Workspace not found');
   }
 }

@@ -49,12 +49,13 @@
     "@soopa/credentials": "workspace:*",
     "@soopa/database": "workspace:*",
     "@soopa/dbmanager": "workspace:*",
-    "@soopa/pipeline": "workspace:*",
     "@soopa/identity": "workspace:*",
+    "@soopa/observability": "workspace:*",
     "@soopa/piece-framework": "workspace:*",
     "@soopa/piece-quickbooks": "workspace:*",
     "@soopa/piece-registry": "workspace:*",
     "@soopa/piece-salesforce": "workspace:*",
+    "@soopa/pipeline": "workspace:*",
     "@soopa/queue": "workspace:*",
     "ai": "^6.0.146",
     "bcryptjs": "^3.0.3",
@@ -77,8 +78,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "uuid": "^13.0.0",
-    "zod": "^4.3.5",
-    "@soopa/observability": "workspace:*"
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -102,6 +102,7 @@
     "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-boundaries": "^6.0.2",
     "eslint-plugin-prettier": "^5.2.3",
     "globals": "^16.5.0",
     "pino-pretty": "^13.1.3",
