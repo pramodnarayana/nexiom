@@ -1,4 +1,3 @@
-import { BaseOutboxPoller, type OutboxTable } from "./base-outbox.poller.js";
 import { processInChunks } from "@soopa/pipeline";
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
@@ -11,24 +10,28 @@ import {
   dataSources,
 } from "@soopa/database";
 import { QueueName } from "@soopa/queue";
-import { QueueService } from "@soopa/queue";
 import { getWorkspaceSchemaName } from "@soopa/dbmanager";
 import type { DatabaseManager } from "@soopa/dbmanager";
 import { DB_MANAGER } from "@soopa/dbmanager";
 
+import { ProcessOutboxUseCase } from "../core/use-cases/outbox/process-outbox.use-case.js";
+import {
+  DrizzleOutboxRepositoryAdapter,
+  type OutboxTableSchema,
+} from "../adapters/outbound/drizzle-outbox.repository.js";
+import { NestQueuePublisherAdapter } from "../adapters/outbound/nest-queue.publisher.js";
+
 const BATCH_SIZE = 50;
 
 @Injectable()
-export class NormalizedOutboxPoller extends BaseOutboxPoller {
-  protected readonly logger = new Logger(NormalizedOutboxPoller.name);
+export class NormalizedOutboxPoller {
+  private readonly logger = new Logger(NormalizedOutboxPoller.name);
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
-    protected readonly queueService: QueueService,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
-  ) {
-    super();
-  }
+    private readonly queuePublisherAdapter: NestQueuePublisherAdapter,
+  ) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async processOutbox(): Promise<void> {
@@ -88,7 +91,12 @@ export class NormalizedOutboxPoller extends BaseOutboxPoller {
             await this.executeSafeSchemaOperation(
               tenant.tenantId,
               schemaName,
-              () => this.drainWorkspaceOutbox(tenantDb, schemaName),
+              () =>
+                this.drainWorkspaceOutbox(
+                  tenantDb,
+                  tenant.tenantId,
+                  schemaName,
+                ),
             );
           }
         } catch (tenantErr) {
@@ -106,63 +114,44 @@ export class NormalizedOutboxPoller extends BaseOutboxPoller {
 
   private async drainWorkspaceOutbox(
     tenantDb: DrizzleDb,
+    tenantId: string,
     schemaName: string,
   ): Promise<void> {
     const { normalizedOutbox } = buildTenantSchema(schemaName);
 
-    const claimed = await tenantDb.transaction(async (tx) => {
-      await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
+    const repositoryAdapter = new DrizzleOutboxRepositoryAdapter(
+      tenantDb,
+      normalizedOutbox as unknown as OutboxTableSchema,
+    );
+
+    const useCase = new ProcessOutboxUseCase(
+      repositoryAdapter,
+      this.queuePublisherAdapter,
+      {
+        batchSize: BATCH_SIZE,
+        maxAttempts: 6,
+        queueName: QueueName.NormalizedQueue,
+        payloadMapper: (row) => ({
+          traceId: row.traceId,
+          dataSourceId: row.dataSourceId,
+        }),
+      },
+    );
+
+    await useCase.execute(tenantId, schemaName);
+  }
+
+  private async executeSafeSchemaOperation(
+    tenantId: string,
+    schemaName: string,
+    operation: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await operation();
+    } catch (schemaErr) {
+      this.logger.error(
+        `[${tenantId}] Failed to drain outbox for schema ${schemaName}: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`,
       );
-
-      return tx
-        .update(normalizedOutbox)
-        .set({
-          status: "PROCESSING",
-          attempts: sql`${normalizedOutbox.attempts} + 1`,
-          nextRetryAt: sql`NOW() + INTERVAL '5 minutes'`,
-        })
-        .where(
-          sql`${normalizedOutbox.id} IN (
-            SELECT id FROM ${sql.identifier(schemaName)}.normalized_outbox
-            WHERE status = 'PENDING' 
-               OR (status = 'RETRY' AND next_retry_at <= NOW())
-               OR (status = 'PROCESSING' AND next_retry_at <= NOW())
-            ORDER BY next_retry_at ASC
-            LIMIT ${BATCH_SIZE}
-            FOR UPDATE SKIP LOCKED
-          )`,
-        )
-        .returning();
-    });
-
-    if (claimed.length === 0) return;
-
-    this.logger.debug(
-      `[${schemaName}] Claimed ${claimed.length} normalized outbox rows`,
-    );
-
-    const results = await processInChunks(claimed, 5, (row) =>
-      this.deliverRow(
-        tenantDb,
-        schemaName,
-        normalizedOutbox as unknown as OutboxTable,
-        row,
-        QueueName.NormalizedQueue,
-        { traceId: row.traceId, dataSourceId: row.dataSourceId },
-      ),
-    );
-
-    results.forEach((result, idx) => {
-      if (result.status === "rejected") {
-        this.logger.error(
-          `[${schemaName}] processOutboxRow critically failed for row id=${claimed[idx].id}: ${
-            result.reason instanceof Error
-              ? result.reason.message
-              : String(result.reason)
-          }`,
-        );
-      }
-    });
+    }
   }
 }

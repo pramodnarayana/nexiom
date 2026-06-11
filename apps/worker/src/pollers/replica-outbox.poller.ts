@@ -1,5 +1,3 @@
-import { BaseOutboxPoller, OutboxTable } from "./base-outbox.poller.js";
-import {} from "@soopa/pipeline";
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { eq, sql } from "drizzle-orm";
@@ -11,24 +9,28 @@ import {
   dataSources,
 } from "@soopa/database";
 import { QueueName } from "@soopa/queue";
-import { QueueService } from "@soopa/queue";
 import { getWorkspaceSchemaName } from "@soopa/dbmanager";
 import type { DatabaseManager } from "@soopa/dbmanager";
 import { DB_MANAGER } from "@soopa/dbmanager";
 
+import { ProcessOutboxUseCase } from "../core/use-cases/outbox/process-outbox.use-case.js";
+import {
+  DrizzleOutboxRepositoryAdapter,
+  type OutboxTableSchema,
+} from "../adapters/outbound/drizzle-outbox.repository.js";
+import { NestQueuePublisherAdapter } from "../adapters/outbound/nest-queue.publisher.js";
+
 const BATCH_SIZE = 50;
 
 @Injectable()
-export class ReplicaOutboxPoller extends BaseOutboxPoller {
-  protected readonly logger = new Logger(ReplicaOutboxPoller.name);
+export class ReplicaOutboxPoller {
+  private readonly logger = new Logger(ReplicaOutboxPoller.name);
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
-    protected readonly queueService: QueueService,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
-  ) {
-    super();
-  }
+    private readonly queuePublisherAdapter: NestQueuePublisherAdapter,
+  ) {}
 
   @Cron(CronExpression.EVERY_5_SECONDS)
   async processOutbox(): Promise<void> {
@@ -53,7 +55,12 @@ export class ReplicaOutboxPoller extends BaseOutboxPoller {
               await this.executeSafeSchemaOperation(
                 tenant.tenantId,
                 schemaName,
-                () => this.drainWorkspaceOutbox(tenantDb, schemaName),
+                () =>
+                  this.drainWorkspaceOutbox(
+                    tenantDb,
+                    tenant.tenantId,
+                    schemaName,
+                  ),
               );
             }
           } catch (tenantErr) {
@@ -72,6 +79,7 @@ export class ReplicaOutboxPoller extends BaseOutboxPoller {
 
   private async drainWorkspaceOutbox(
     tenantDb: DrizzleDb,
+    tenantId: string,
     schemaName: string,
   ): Promise<void> {
     const existsResult = await tenantDb.execute<{ schema_exists: boolean }>(
@@ -90,49 +98,39 @@ export class ReplicaOutboxPoller extends BaseOutboxPoller {
 
     const { replicaOutbox } = buildTenantSchema(schemaName);
 
-    const claimed = await tenantDb.transaction(async (tx) => {
-      await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+    const repositoryAdapter = new DrizzleOutboxRepositoryAdapter(
+      tenantDb,
+      replicaOutbox as unknown as OutboxTableSchema,
+    );
+
+    const useCase = new ProcessOutboxUseCase(
+      repositoryAdapter,
+      this.queuePublisherAdapter,
+      {
+        batchSize: BATCH_SIZE,
+        maxAttempts: 6,
+        queueName: QueueName.ReplicaQueue,
+        payloadMapper: (row) => ({
+          traceId: row.traceId,
+          dataSourceId: row.dataSourceId,
+        }),
+      },
+    );
+
+    await useCase.execute(tenantId, schemaName);
+  }
+
+  private async executeSafeSchemaOperation(
+    tenantId: string,
+    schemaName: string,
+    operation: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await operation();
+    } catch (schemaErr) {
+      this.logger.error(
+        `[${tenantId}] Failed to drain outbox for schema ${schemaName}: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`,
       );
-
-      return tx
-        .update(replicaOutbox)
-        .set({
-          status: "PROCESSING",
-          attempts: sql`${replicaOutbox.attempts} + 1`,
-          nextRetryAt: sql`NOW() + INTERVAL '5 minutes'`,
-        })
-        .where(
-          sql`${replicaOutbox.id} IN (
-            SELECT id FROM ${sql.identifier(schemaName)}.replica_outbox
-            WHERE status = 'PENDING' 
-               OR (status = 'RETRY' AND next_retry_at <= NOW())
-               OR (status = 'PROCESSING' AND next_retry_at <= NOW())
-            ORDER BY next_retry_at ASC
-            LIMIT ${BATCH_SIZE}
-            FOR UPDATE SKIP LOCKED
-          )`,
-        )
-        .returning();
-    });
-
-    if (claimed.length === 0) return;
-
-    this.logger.debug(
-      `[${schemaName}] Claimed ${claimed.length} replica outbox rows`,
-    );
-
-    await Promise.allSettled(
-      claimed.map((row) =>
-        this.deliverRow(
-          tenantDb,
-          schemaName,
-          replicaOutbox as unknown as OutboxTable,
-          row,
-          QueueName.ReplicaQueue,
-          { traceId: row.traceId, dataSourceId: row.dataSourceId },
-        ),
-      ),
-    );
+    }
   }
 }

@@ -1,19 +1,14 @@
 import { sanitizeError, isValidPipelineMessage } from "@soopa/pipeline";
 import {
   Injectable,
-  Inject,
   Logger,
   OnModuleInit,
   OnModuleDestroy,
 } from "@nestjs/common";
-import { eq } from "drizzle-orm";
 import { QueueService, QueueName } from "@soopa/queue";
-import {
-  DATABASE_CONNECTION,
-  dataSources,
-  type DrizzleDb,
-} from "@soopa/database";
-import { PipelineHookBrokerService } from "@soopa/pipeline";
+import { ProcessActiveFetchUseCase } from "../core/use-cases/active-fetch/process-active-fetch.use-case.js";
+import { DrizzleDataSourceRepositoryAdapter } from "../adapters/outbound/drizzle-data-source.repository.js";
+import { NestPipelineHookBrokerAdapter } from "../adapters/outbound/nest-pipeline-hook-broker.adapter.js";
 
 @Injectable()
 export class ActiveFetchWorker implements OnModuleInit, OnModuleDestroy {
@@ -21,8 +16,8 @@ export class ActiveFetchWorker implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly queueService: QueueService,
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
-    private readonly hookBroker: PipelineHookBrokerService,
+    private readonly dataSourceRepository: DrizzleDataSourceRepositoryAdapter,
+    private readonly hookBrokerAdapter: NestPipelineHookBrokerAdapter,
   ) {}
 
   onModuleInit() {
@@ -65,48 +60,12 @@ export class ActiveFetchWorker implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    this.logger.debug(
-      {
-        event: "active_fetch.started",
-        traceId,
-        dataSourceId,
-        count: missingDependencies.length,
-      },
-      "ActiveFetchWorker started",
-    );
-
     try {
-      const connRows = await this.db
-        .select()
-        .from(dataSources)
-        .where(eq(dataSources.id, dataSourceId))
-        .limit(1);
-
-      if (!connRows[0]) {
-        throw new Error(`Data source ${dataSourceId} not found in dataSources`);
-      }
-
-      const connectionAppName = connRows[0].appName;
-      const metadata = connRows[0].metadata as Record<string, unknown> | null;
-
-      const trimmedAppProfile =
-        typeof metadata?.appProfile === "string"
-          ? metadata.appProfile.trim()
-          : "";
-      const appProfile =
-        trimmedAppProfile !== "" ? trimmedAppProfile : "standard";
-
-      await this.hookBroker.activeFetch(
-        connectionAppName,
-        appProfile,
-        missingDependencies,
-        dataSourceId,
+      const useCase = new ProcessActiveFetchUseCase(
+        this.dataSourceRepository,
+        this.hookBrokerAdapter,
       );
-
-      this.logger.log(
-        { event: "active_fetch.completed", traceId, dataSourceId },
-        "ActiveFetchWorker completed successfully",
-      );
+      await useCase.execute(traceId, dataSourceId, missingDependencies);
     } catch (err) {
       this.logger.error(
         {
