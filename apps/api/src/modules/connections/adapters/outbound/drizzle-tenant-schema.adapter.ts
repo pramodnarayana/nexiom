@@ -22,6 +22,7 @@ import type { DatabaseManager } from '@soopa/dbmanager';
 import type { TenantSchemaPort } from '../../core/ports/outbound/tenant-schema.port.js';
 import type { ProvisionInfo } from '../../core/types/connection.types.js';
 import type { StorageResolverPort } from '../../core/ports/outbound/storage-resolver.port.js';
+import { PipelineStorageResolverAdapter } from './pipeline-storage-resolver.adapter.js';
 
 @Injectable()
 export class DrizzleTenantSchemaAdapter implements TenantSchemaPort {
@@ -30,7 +31,7 @@ export class DrizzleTenantSchemaAdapter implements TenantSchemaPort {
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
-    @Inject('StorageResolverPort')
+    @Inject(PipelineStorageResolverAdapter)
     private readonly storageResolver: StorageResolverPort,
   ) {}
 
@@ -238,7 +239,7 @@ export class DrizzleTenantSchemaAdapter implements TenantSchemaPort {
     for (let i = 0; i < key.length; i++) {
       const char = key.charCodeAt(i);
       hash = (hash << 5) - hash + char;
-      hash = hash & hash;
+      hash = hash | 0;
     }
     return Math.abs(hash);
   }

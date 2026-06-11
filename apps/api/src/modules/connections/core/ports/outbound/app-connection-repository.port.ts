@@ -15,8 +15,8 @@ export interface AppConnectionRepositoryPort {
   ): Promise<ProvisionInfo>;
 
   /**
-   * Deletes an app_connection. Validates absence of global_entity_map references.
-   * If there's a reference, throws ConflictException.
+   * Deletes an app_connection. This is a low-level delete.
+   * Note: The GEM reference check and ConflictException are handled by the TenantSchema adapter before calling this port.
    */
   deleteConnection(tenantId: string, dataSourceId: string): Promise<void>;
 }

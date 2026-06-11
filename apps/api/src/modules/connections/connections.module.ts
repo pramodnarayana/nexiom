@@ -90,10 +90,6 @@ import { DeleteConnectionUseCase } from './core/use-cases/delete-connection.use-
     HttpOAuthClientAdapter,
     NestPieceRegistryAdapter,
     PipelineStorageResolverAdapter,
-    {
-      provide: 'StorageResolverPort',
-      useExisting: PipelineStorageResolverAdapter,
-    },
 
     // --- Use Cases ---
     {

@@ -61,17 +61,15 @@ export class GetTraceUseCase {
         destSchemaNameRaw,
       );
 
-    const [srcSchemaName, destSchemaName] = await Promise.all([
-      this.storageResolver.resolveSchemaName(srcDataSourceId),
-      this.storageResolver.resolveSchemaName(stitch.destDataSourceId),
-    ]);
+    const srcSchemaName =
+      await this.storageResolver.resolveSchemaName(srcDataSourceId);
 
     const trace = await this.traceRepo.getTrace(
       stitchId,
       traceId,
       srcDataSourceId,
       srcSchemaName,
-      destSchemaName,
+      destSchemaNameRaw,
     );
 
     this.logger.debug(

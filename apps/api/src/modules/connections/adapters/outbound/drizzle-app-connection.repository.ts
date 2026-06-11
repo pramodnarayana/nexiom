@@ -110,7 +110,6 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
 
         return {
           dataSourceId: updated.id,
-          createdRegistry: false,
           schemaName: '',
           createdAppConnection: false,
         };

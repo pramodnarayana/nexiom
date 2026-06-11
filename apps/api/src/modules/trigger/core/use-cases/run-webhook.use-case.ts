@@ -1,4 +1,9 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { Trigger } from '@soopa/piece-framework';
 import type { TriggerGatewayRepositoryPort } from '../ports/outbound/trigger-gateway-repository.port.js';
 import type { TriggerStorageResolverPort } from '../ports/outbound/trigger-storage-resolver.port.js';
@@ -44,7 +49,11 @@ export class RunWebhookUseCase {
     const { trigger, headers, rawBody, secret } = params;
 
     if (trigger.verifySignature) {
-      trigger.verifySignature(headers, rawBody, secret ?? '');
+      try {
+        trigger.verifySignature(headers, rawBody, secret ?? '');
+      } catch (_err: unknown) {
+        throw new UnauthorizedException('Invalid webhook signature');
+      }
     }
 
     const payload = this.payloadTransformer.parseWebhookPayload(rawBody);

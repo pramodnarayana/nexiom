@@ -81,7 +81,7 @@ export class ListTracesUseCase {
       throw new NotFoundException(`Stitch ${stitchId} not found`);
     }
 
-    const srcSchemaNameRaw = await this.storageResolver.resolveSchemaName(
+    const destSchemaNameRaw = await this.storageResolver.resolveSchemaName(
       stitch.destDataSourceId,
     );
 
@@ -90,7 +90,7 @@ export class ListTracesUseCase {
         orgId,
         stitchId,
         stitch.destDataSourceId,
-        srcSchemaNameRaw,
+        destSchemaNameRaw,
       );
 
     const srcSchemaName =

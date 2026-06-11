@@ -58,9 +58,10 @@ export class EnableTriggerUseCase {
 
     let wroteRegistryRow = false;
     let registeredPublication = false;
+    let resolvedSchemaName: string | undefined;
 
     try {
-      const resolvedSchemaName = await this.storageResolver.resolveSchemaName(
+      resolvedSchemaName = await this.storageResolver.resolveSchemaName(
         params.dataSourceId,
       );
 
@@ -97,10 +98,8 @@ export class EnableTriggerUseCase {
         }
       }
 
-      if (registeredPublication) {
+      if (registeredPublication && resolvedSchemaName) {
         try {
-          const resolvedSchemaName =
-            await this.storageResolver.resolveSchemaName(params.dataSourceId);
           await this.dbProvisioner.unregisterPublication(resolvedSchemaName);
         } catch (pubRevertErr: unknown) {
           this.logger.error(
