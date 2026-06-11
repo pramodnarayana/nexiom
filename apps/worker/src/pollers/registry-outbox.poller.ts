@@ -1,29 +1,30 @@
-import { BaseOutboxPoller, OutboxTable } from "./base-outbox.poller.js";
-import { processInChunks } from "@soopa/pipeline";
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
-import { sql } from "drizzle-orm";
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   globalRegistryOutbox,
 } from "@soopa/database";
 import { QueueName } from "@soopa/queue";
-import { QueueService } from "@soopa/queue";
+
+import { ProcessOutboxUseCase } from "../core/use-cases/outbox/process-outbox.use-case.js";
+import {
+  DrizzleOutboxRepositoryAdapter,
+  type OutboxTableSchema,
+} from "../adapters/outbound/drizzle-outbox.repository.js";
+import { NestQueuePublisherAdapter } from "../adapters/outbound/nest-queue.publisher.js";
 
 const BATCH_SIZE = 50;
 
 @Injectable()
-export class RegistryOutboxPoller extends BaseOutboxPoller {
-  protected readonly logger = new Logger(RegistryOutboxPoller.name);
+export class RegistryOutboxPoller {
+  private readonly logger = new Logger(RegistryOutboxPoller.name);
   private isProcessing = false;
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
-    protected readonly queueService: QueueService,
-  ) {
-    super();
-  }
+    private readonly queuePublisherAdapter: NestQueuePublisherAdapter,
+  ) {}
 
   @Cron(CronExpression.EVERY_5_SECONDS)
   async processOutbox(): Promise<void> {
@@ -34,54 +35,25 @@ export class RegistryOutboxPoller extends BaseOutboxPoller {
 
     this.isProcessing = true;
     try {
-      const claimed = await this.globalDb.transaction(async (tx) => {
-        return tx
-          .update(globalRegistryOutbox)
-          .set({
-            status: "PROCESSING",
-            attempts: sql`${globalRegistryOutbox.attempts} + 1`,
-            nextRetryAt: sql`NOW() + INTERVAL '5 minutes'`,
-          })
-          .where(
-            sql`${globalRegistryOutbox.id} IN (
-              SELECT id FROM ${globalRegistryOutbox}
-              WHERE (status = 'PENDING' AND next_retry_at <= NOW())
-                 OR (status = 'PROCESSING' AND next_retry_at <= NOW())
-              ORDER BY next_retry_at ASC
-              LIMIT ${BATCH_SIZE}
-              FOR UPDATE SKIP LOCKED
-            )`,
-          )
-          .returning();
-      });
-
-      if (claimed.length === 0) return;
-
-      this.logger.debug(`Claimed ${claimed.length} registry outbox rows`);
-
-      const results = await processInChunks(claimed, 10, (row) =>
-        this.deliverRow(
-          this.globalDb,
-          "global", // schema name not strictly applicable here
-          globalRegistryOutbox as unknown as OutboxTable,
-          row,
-          QueueName.RegistryReplicationQueue,
-          { outboxId: row.id },
-          false, // do not mark SUCCESS immediately
-        ),
+      const repositoryAdapter = new DrizzleOutboxRepositoryAdapter(
+        this.globalDb,
+        globalRegistryOutbox as unknown as OutboxTableSchema,
       );
 
-      results.forEach((result, idx) => {
-        if (result.status === "rejected") {
-          this.logger.error(
-            `RegistryOutbox processRow critically failed for row id=${claimed[idx].id}: ${
-              result.reason instanceof Error
-                ? result.reason.message
-                : String(result.reason)
-            }`,
-          );
-        }
-      });
+      const useCase = new ProcessOutboxUseCase(
+        repositoryAdapter,
+        this.queuePublisherAdapter,
+        {
+          batchSize: BATCH_SIZE,
+          maxAttempts: 6,
+          queueName: QueueName.RegistryReplicationQueue,
+          payloadMapper: (row) => ({ outboxId: row.id }),
+          markSuccessImmediately: false,
+        },
+      );
+
+      // We use "global" as schema name because it is the global outbox (no tenant context required)
+      await useCase.execute("global", "public");
     } catch (err) {
       this.logger.error(
         `Failed to process registry outbox: ${err instanceof Error ? err.message : String(err)}`,

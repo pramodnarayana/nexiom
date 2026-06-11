@@ -25,6 +25,21 @@ import { RegistryOutboxPoller } from "./pollers/registry-outbox.poller.js";
 // Cron
 import { AppUpdaterCron } from "./cron/app-updater.cron.js";
 
+// Adapters
+import { NestQueuePublisherAdapter } from "./adapters/outbound/nest-queue.publisher.js";
+import { DrizzleDataSourceRepositoryAdapter } from "./adapters/outbound/drizzle-data-source.repository.js";
+import { NestPipelineHookBrokerAdapter } from "./adapters/outbound/nest-pipeline-hook-broker.adapter.js";
+import { NestChatStreamOrchestratorAdapter } from "./adapters/outbound/nest-chat-stream-orchestrator.adapter.js";
+import { RedisRealtimeEventPubSubAdapter } from "./adapters/outbound/redis-realtime-event-pubsub.adapter.js";
+import { NestChatPersistenceAdapter } from "./adapters/outbound/nest-chat-persistence.adapter.js";
+import { AiSdkTitleGeneratorAdapter } from "./adapters/outbound/ai-sdk-title-generator.adapter.js";
+import { DrizzleWorkspacePiecesRepositoryAdapter } from "./adapters/outbound/drizzle-workspace-pieces.repository.js";
+import { NestPieceRegistryAdapter } from "./adapters/outbound/nest-piece-registry.adapter.js";
+import { NodeFsGitRepositoryAdapter } from "./adapters/outbound/node-fs-git-repository.adapter.js";
+import { NestCacheInvalidatorAdapter } from "./adapters/outbound/nest-cache-invalidator.adapter.js";
+
+// Ai Module
+
 @Module({
   imports: [
     EventEmitterModule.forRoot({ global: true }),
@@ -50,14 +65,32 @@ import { AppUpdaterCron } from "./cron/app-updater.cron.js";
   ],
   controllers: [],
   providers: [
+    // Adapters
+    NestQueuePublisherAdapter,
+    DrizzleDataSourceRepositoryAdapter,
+    NestPipelineHookBrokerAdapter,
+    NestChatStreamOrchestratorAdapter,
+    RedisRealtimeEventPubSubAdapter,
+    NestChatPersistenceAdapter,
+    AiSdkTitleGeneratorAdapter,
+    DrizzleWorkspacePiecesRepositoryAdapter,
+    NestPieceRegistryAdapter,
+    NodeFsGitRepositoryAdapter,
+    NestCacheInvalidatorAdapter,
+
+    // Consumers
     CopilotWorker,
     ActiveFetchWorker,
     GitopsSyncWorker,
     AppInstallerProcessor,
+
+    // Pollers
     InboundOutboxPoller,
     ReplicaOutboxPoller,
     NormalizedOutboxPoller,
     RegistryOutboxPoller,
+
+    // Cron
     AppUpdaterCron,
   ],
 })
