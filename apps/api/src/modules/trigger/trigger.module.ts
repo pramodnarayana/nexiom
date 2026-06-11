@@ -11,7 +11,7 @@ import { TriggerPayloadTransformer } from './trigger-payload-transformer.js';
 import { TriggerRetryPolicyService } from './trigger-retry-policy.service.js';
 import { DATABASE_CONNECTION } from '@soopa/database';
 import type { DrizzleDb } from '@soopa/database';
-import { StorageResolverModule } from '@soopa/engine';
+import { StorageResolverModule } from '@soopa/pipeline';
 import { IDistributedLockService } from './interfaces/distributed-lock.interface.js';
 import { ITriggerDlqService } from './interfaces/trigger-dlq.interface.js';
 import { RedisDistributedLockService } from './infrastructure/redis-distributed-lock.service.js';

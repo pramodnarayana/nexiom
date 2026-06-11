@@ -3,7 +3,7 @@ import { WebhooksController } from './webhooks.controller.js';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';
 import { DbModule } from '../../db/db.module.js';
-import { StorageResolverModule } from '@soopa/engine';
+import { StorageResolverModule } from '@soopa/pipeline';
 import { PiecesModule } from '@soopa/piece-registry';
 import { ObservabilityModule } from '../observability/observability.module.js';
 

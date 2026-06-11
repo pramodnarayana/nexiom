@@ -13,7 +13,7 @@ import {
   buildTenantSchema,
   assertValidSchemaName,
 } from '@soopa/database';
-import { StorageResolverService } from '@soopa/engine';
+import { StorageResolverService } from '@soopa/pipeline';
 import type { DatabaseManager } from '@soopa/dbmanager';
 
 // ---------------------------------------------------------------------------

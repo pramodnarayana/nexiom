@@ -8,7 +8,7 @@ import {
   assertValidSchemaName,
 } from '@soopa/database';
 import { buildDrizzleFilter } from './filter-parser.js';
-import { StorageResolverService } from '@soopa/engine';
+import { StorageResolverService } from '@soopa/pipeline';
 import { DB_MANAGER } from '@soopa/dbmanager';
 import type { DatabaseManager } from '@soopa/dbmanager';
 import { TraceService } from './trace.service.js';
