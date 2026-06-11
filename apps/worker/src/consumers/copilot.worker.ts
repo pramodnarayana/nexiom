@@ -203,11 +203,6 @@ export class CopilotWorker implements OnModuleInit {
         this.logger.log(`Successfully completed AI Job ${data.jobId}`);
       } else {
         const errorMsg = "Response body is missing from orchestrator";
-        await this.redis.publish(
-          `job:stream:${data.jobId}`,
-          `error: ${errorMsg}\n`,
-        );
-        await this.redis.publish(`job:stream:${data.jobId}`, `[DONE]\n`);
         await this.chatPersistence.appendMessage({
           tenantId: data.tenantId,
           conversationId: data.conversationId,

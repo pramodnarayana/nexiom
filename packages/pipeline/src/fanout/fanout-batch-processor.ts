@@ -277,14 +277,11 @@ export class FanoutBatchProcessor {
             `Failed best-effort MQ publish: ${sanitizeError(sendErr)}`,
           );
 
-          await this.outboxRepo.upsertPendingOutboundGateway(
+          await this.outboxRepo.markOutboundGatewayFailed(
             srcTenantId,
             destSchemaName,
             traceId,
-            stitch.id,
-            stitch.destDataSourceId,
-            dataSourceId,
-            hydratedPayload
+            stitch.id
           );
 
           throw sendErr;

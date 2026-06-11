@@ -56,9 +56,11 @@ async function run() {
   try {
     // Find any active connection for testing
     const res = await pool.query(`
-            SELECT id, workspace_id, app_name, metadata 
-            FROM app_connection 
+            SELECT id, workspace_id, app_name, metadata
+            FROM app_connection
             WHERE status = 'ACTIVE'
+            AND app_name = 'salesforce'
+            ORDER BY id ASC
             LIMIT 1
         `);
 

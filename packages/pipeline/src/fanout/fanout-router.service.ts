@@ -129,77 +129,80 @@ export class FanoutRouterService implements OnModuleInit {
         return { kind: "found" as const };
       });
 
-      if (fanoutResult.kind === "superseded") {
-        this.logger.log(
-          {
-            event: "l4.superseded",
-            traceId,
-            dataSourceId,
-            layer: "L4",
-          },
-          "L4: normalized traceId superseded by newer trace — ACK without processing",
-        );
-        return;
-      }
-
-      const stitches = await this.stitchRepo.findActiveStitches(tenantId, dataSourceId, canonicalType);
-
-      if (stitches.length === 0) {
-        this.logger.debug(
-          { event: "l4.no_routes", traceId, dataSourceId, layer: "L4" },
-          "No active stitches found for source connection",
-        );
-        if (srcVendorId) {
-          await this.stateRepo.releaseSyncLock(dataSourceId, srcVendorId, schemaName, tenantId);
-        }
-        return;
-      }
-
-      const srcConnMeta = await this.connRepo.getTenantConnectionMeta(dataSourceId, tenantId);
-      if (!srcConnMeta) {
-        throw new Error(
-          `Source connection record not found for GEM metadata (dataSourceId=${dataSourceId}, traceId=${traceId})`,
-        );
-      }
-      
-      const srcAppName = srcConnMeta.appName;
-      const appProfile = srcConnMeta.appProfile;
-
-      lockRefCount.count = stitches.length;
-
       try {
-        const stitchResults = await processInChunks(stitches, 5, (stitch) =>
-          this.batchProcessor.processSingleStitch(
-            schemaName,
-            traceId,
-            dataSourceId,
-            srcAppName,
-            appProfile,
-            tenantId,
-            srcVendorId,
-            canonicalType,
-            normalizedData,
-            stitch,
-            start,
-            lockRefCount,
-          ),
-        );
+        if (fanoutResult.kind === "superseded") {
+          this.logger.log(
+            {
+              event: "l4.superseded",
+              traceId,
+              dataSourceId,
+              layer: "L4",
+            },
+            "L4: normalized traceId superseded by newer trace — ACK without processing",
+          );
+          return;
+        }
 
-        stitchResults.forEach((result, idx) => {
-          if (result.status === "rejected") {
-            this.logger.error(
-              {
-                event: "l4.stitch_resolution_failed",
-                traceId,
-                routeId: stitches[idx].id,
-                err: sanitizeErrorObject(result.reason),
-              },
-              `Stitch resolution partially failed (best-effort skipped): ${sanitizeError(result.reason)}`,
-            );
+        const stitches = await this.stitchRepo.findActiveStitches(tenantId, dataSourceId, canonicalType);
+
+        if (stitches.length === 0) {
+          this.logger.debug(
+            { event: "l4.no_routes", traceId, dataSourceId, layer: "L4" },
+            "No active stitches found for source connection",
+          );
+          return;
+        }
+
+        const srcConnMeta = await this.connRepo.getTenantConnectionMeta(dataSourceId, tenantId);
+        if (!srcConnMeta) {
+          throw new Error(
+            `Source connection record not found for GEM metadata (dataSourceId=${dataSourceId}, traceId=${traceId})`,
+          );
+        }
+
+        const srcAppName = srcConnMeta.appName;
+        const appProfile = srcConnMeta.appProfile;
+
+        lockRefCount.count = stitches.length;
+
+        try {
+          const stitchResults = await processInChunks(stitches, 5, (stitch) =>
+            this.batchProcessor.processSingleStitch(
+              schemaName,
+              traceId,
+              dataSourceId,
+              srcAppName,
+              appProfile,
+              tenantId,
+              srcVendorId,
+              canonicalType,
+              normalizedData,
+              stitch,
+              start,
+              lockRefCount,
+            ),
+          );
+
+          stitchResults.forEach((result, idx) => {
+            if (result.status === "rejected") {
+              this.logger.error(
+                {
+                  event: "l4.stitch_resolution_failed",
+                  traceId,
+                  routeId: stitches[idx].id,
+                  err: sanitizeErrorObject(result.reason),
+                },
+                `Stitch resolution partially failed (best-effort skipped): ${sanitizeError(result.reason)}`,
+              );
+            }
+          });
+        } finally {
+          if (srcVendorId && lockRefCount.count === 0) {
+            await this.stateRepo.releaseSyncLock(dataSourceId, srcVendorId, schemaName, tenantId);
           }
-        });
+        }
       } finally {
-        if (srcVendorId && lockRefCount.count === 0) {
+        if (srcVendorId) {
           await this.stateRepo.releaseSyncLock(dataSourceId, srcVendorId, schemaName, tenantId);
         }
       }

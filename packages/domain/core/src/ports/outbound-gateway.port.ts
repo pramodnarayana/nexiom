@@ -5,7 +5,7 @@ export interface OutboundGatewayRecord {
   dataSourceId: string;
   srcDataSourceId: string;
   payload: Record<string, unknown>;
-  status: 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAIL' | 'RETRY';
+  status: 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAIL' | 'RETRY' | 'DEFERRED_DEPENDENCY';
   attempts: number;
 }
 

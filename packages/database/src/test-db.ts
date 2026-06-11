@@ -1,4 +1,5 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
+import { sql } from 'drizzle-orm';
 import { Pool } from 'pg';
 import * as identitySchema from './schema/global/identity.js';
 import * as routingSchema from './schema/global/routing.js';
@@ -71,6 +72,6 @@ export class TestDatabaseManager {
      */
     async createSchema(schemaName: string): Promise<void> {
         if (!this.db) throw new Error('TestDatabaseManager not started. Call start() first.');
-        await this.db.execute({ sql: `CREATE SCHEMA IF NOT EXISTS "${schemaName}"`, params: [] } as any);
+        await this.db.execute(sql`CREATE SCHEMA IF NOT EXISTS ${sql.identifier(schemaName)}`);
     }
 }
