@@ -24,8 +24,9 @@ export class InstallPieceUseCase {
       `Processing PluginInstallEvent for ${command.packageName}@${command.version}`,
     );
 
+    let pluginInfo;
     try {
-      const pluginInfo = await this.registry.installPiece(
+      pluginInfo = await this.registry.installPiece(
         command.packageName,
         command.version,
       );
@@ -33,21 +34,9 @@ export class InstallPieceUseCase {
       this.logger.log(
         `Installed ${command.packageName} v${pluginInfo.version} successfully.`,
       );
-
-      if (command.workspaceId && command.pieceId) {
-        await this.repository.markInstalled(
-          command.workspaceId,
-          command.pieceId,
-          pluginInfo.version,
-        );
-
-        this.logger.log(
-          `Marked workspace piece as INSTALLED for workspace ${command.workspaceId}`,
-        );
-      }
     } catch (error) {
       this.logger.error(
-        `Failed to process App Installation for ${command.packageName}`,
+        `Failed to install ${command.packageName}`,
         error,
       );
 
@@ -63,6 +52,26 @@ export class InstallPieceUseCase {
       }
 
       throw error;
+    }
+
+    if (command.workspaceId && command.pieceId) {
+      try {
+        await this.repository.markInstalled(
+          command.workspaceId,
+          command.pieceId,
+          pluginInfo.version,
+        );
+
+        this.logger.log(
+          `Marked workspace piece as INSTALLED for workspace ${command.workspaceId}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to persist INSTALLED status for ${command.packageName}`,
+          error,
+        );
+        // Do NOT call markFailed here - installation succeeded
+      }
     }
   }
 }

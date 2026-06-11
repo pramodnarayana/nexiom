@@ -1,5 +1,6 @@
 import { Logger } from "@nestjs/common";
 import { QueueName } from "@soopa/queue";
+import * as semver from "semver";
 import type { QueuePublisherPort } from "../../ports/outbound/queue-publisher.port.js";
 import type {
   PieceRegistryPort,
@@ -63,15 +64,20 @@ export class CheckPieceUpdatesUseCase {
   }
 
   private isNewer(localVersion: string, remoteVersion: string): boolean {
-    const lParts = localVersion.split(".").map(Number);
-    const rParts = remoteVersion.split(".").map(Number);
+    try {
+      // Normalize versions and use semver comparison
+      const cleanLocal = semver.coerce(localVersion);
+      const cleanRemote = semver.coerce(remoteVersion);
 
-    for (let i = 0; i < 3; i++) {
-      const l = lParts[i] || 0;
-      const r = rParts[i] || 0;
-      if (r > l) return true;
-      if (r < l) return false;
+      if (!cleanLocal || !cleanRemote) {
+        // Fall back to string comparison if versions are invalid
+        return remoteVersion > localVersion;
+      }
+
+      return semver.gt(cleanRemote, cleanLocal);
+    } catch (_err) {
+      // Fall back to string comparison on error
+      return remoteVersion > localVersion;
     }
-    return false;
   }
 }

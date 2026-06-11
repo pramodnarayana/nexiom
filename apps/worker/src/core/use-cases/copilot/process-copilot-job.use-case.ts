@@ -31,9 +31,9 @@ export class ProcessCopilotJobUseCase {
       `Processing AI Job ${command.jobId} for conversation ${command.conversationId}`,
     );
 
-    // Fire and forget title generation
+    // Generate title for first user message
     if (command.messages.length === 1 && command.messages[0].role === "user") {
-      this.generateAndSaveTitle(
+      await this.generateAndSaveTitle(
         command.tenantId,
         command.conversationId,
         command.messages[0].content,
@@ -54,8 +54,6 @@ export class ProcessCopilotJobUseCase {
         finalResponseBuilder += chunk;
         await this.pubSub.publishStreamPart(command.jobId, chunk);
       }
-
-      await this.pubSub.publishDone(command.jobId);
 
       this.logger.debug(
         `Stream fully consumed. Payload length: ${finalResponseBuilder.length}`,
@@ -86,6 +84,8 @@ export class ProcessCopilotJobUseCase {
           status: "completed",
         });
       }
+
+      await this.pubSub.publishDone(command.jobId);
 
       this.logger.log(`Successfully completed AI Job ${command.jobId}`);
     } catch (error) {
@@ -132,23 +132,21 @@ export class ProcessCopilotJobUseCase {
     return { humanResponse, stepMetadata };
   }
 
-  private generateAndSaveTitle(
+  private async generateAndSaveTitle(
     tenantId: string,
     conversationId: string,
     firstMessage: string,
-  ): void {
-    this.titleGenerator
-      .generateTitle(firstMessage)
-      .then(async (newTitle) => {
-        this.logger.debug(`Generated title for ${conversationId}: ${newTitle}`);
-        return this.persistence.updateConversationTitle(
-          tenantId,
-          conversationId,
-          newTitle,
-        );
-      })
-      .catch((err) => {
-        this.logger.error("Failed to generate title", err);
-      });
+  ): Promise<void> {
+    try {
+      const newTitle = await this.titleGenerator.generateTitle(firstMessage);
+      this.logger.debug(`Generated title for ${conversationId}: [REDACTED]`);
+      await this.persistence.updateConversationTitle(
+        tenantId,
+        conversationId,
+        newTitle,
+      );
+    } catch (err) {
+      this.logger.error("Failed to generate title", err);
+    }
   }
 }

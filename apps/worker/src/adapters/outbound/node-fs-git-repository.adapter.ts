@@ -42,9 +42,11 @@ export class NodeFsGitRepositoryAdapter implements GitRepositoryPort {
       this.logger.warn(
         `Path traversal attempt detected: shardName="${shardName}" escapes SHARD_BASE_PATH. Rejecting sync.`,
       );
-      throw new Error(
-        `Security violation: shardName escapes trusted boundary — shardName="${shardName}"`,
-      );
+      return {
+        success: false,
+        pulledNewCommits: false,
+        output: `Path traversal attempt: shardName="${shardName}" escapes SHARD_BASE_PATH`,
+      };
     }
 
     try {

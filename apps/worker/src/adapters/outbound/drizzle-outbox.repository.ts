@@ -31,7 +31,7 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
     const tableName = this.table._.name;
 
     // Use raw SQL identifier for schema scoping
-    const claimed = await this.db.transaction(async (tx) => {
+    const claimed = await this.db.transaction(async (tx: DrizzleDb) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
@@ -66,7 +66,7 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
 
     // Manually map the returned rows to OutboxRow format if needed,
     // though drizzle's .returning() output usually matches it exactly
-    return claimed.map((row) => {
+    return claimed.map((row: any) => {
       // Drizzle returns the table columns
       return {
         ...row,
@@ -83,7 +83,7 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
   ): Promise<void> {
     const condition = this.buildCondition(rowId, claimToken);
 
-    await this.db.transaction(async (tx) => {
+    await this.db.transaction(async (tx: DrizzleDb) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
@@ -106,7 +106,7 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
     const status =
       this.table._.name === "global_registry_outbox" ? "PENDING" : "RETRY";
 
-    await this.db.transaction(async (tx) => {
+    await this.db.transaction(async (tx: DrizzleDb) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
@@ -134,7 +134,7 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
     const status =
       this.table._.name === "global_registry_outbox" ? "FAILED" : "FAIL";
 
-    await this.db.transaction(async (tx) => {
+    await this.db.transaction(async (tx: DrizzleDb) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
@@ -153,7 +153,9 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
       if (claimToken) {
         return sql`${this.table.id} = ${rowId} AND ${this.table.status} = 'PROCESSING' AND ${this.table.claimToken} = ${claimToken}`;
       } else {
-        return sql`${this.table.id} = ${rowId} AND ${this.table.status} = 'PROCESSING' AND ${this.table.claimToken} IS NULL`;
+        throw new Error(
+          `claimToken is required for tokenized table ${this.table._.name} but was null/undefined`,
+        );
       }
     }
     return sql`${this.table.id} = ${rowId} AND ${this.table.status} = 'PROCESSING'`;

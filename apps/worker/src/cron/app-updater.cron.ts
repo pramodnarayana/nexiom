@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { CheckPieceUpdatesUseCase } from "../core/use-cases/app-installer/check-piece-updates.use-case.js";
 import { NestPieceRegistryAdapter } from "../adapters/outbound/nest-piece-registry.adapter.js";
@@ -7,6 +7,8 @@ import { NestQueuePublisherAdapter } from "../adapters/outbound/nest-queue.publi
 
 @Injectable()
 export class AppUpdaterCron {
+  private readonly logger = new Logger(AppUpdaterCron.name);
+
   constructor(
     private readonly repositoryAdapter: DrizzleWorkspacePiecesRepositoryAdapter,
     private readonly registryAdapter: NestPieceRegistryAdapter,
@@ -23,8 +25,12 @@ export class AppUpdaterCron {
 
     try {
       await useCase.execute();
-    } catch (_error) {
-      // The use case internally catches and logs errors, but just in case
+    } catch (error) {
+      this.logger.error(
+        "Failed to execute app updater cron job",
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw error;
     }
   }
 }

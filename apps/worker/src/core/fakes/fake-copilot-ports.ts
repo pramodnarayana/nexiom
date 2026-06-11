@@ -58,7 +58,7 @@ export class FakeChatPersistence implements ChatPersistencePort {
     status: "completed" | "failed";
   }[] = [];
 
-  public titles: { conversationId: string; title: string }[] = [];
+  public titles: { tenantId: string; conversationId: string; title: string }[] = [];
 
   async appendMessage(params: {
     tenantId: string;
@@ -71,11 +71,11 @@ export class FakeChatPersistence implements ChatPersistencePort {
   }
 
   async updateConversationTitle(
-    _tenantId: string,
+    tenantId: string,
     conversationId: string,
     title: string,
   ): Promise<void> {
-    this.titles.push({ conversationId, title });
+    this.titles.push({ tenantId, conversationId, title });
   }
 }
 

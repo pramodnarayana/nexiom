@@ -78,6 +78,7 @@ export class ProcessOutboxUseCase {
         this.logger.error(
           `[${schemaName}] Published to queue but failed to update status to SUCCESS for outbox id=${row.id}: ${msg}`,
         );
+        throw dbErr;
       }
     }
   }
@@ -123,6 +124,7 @@ export class ProcessOutboxUseCase {
       this.logger.error(
         `[${schemaName}] Failed to persist FAIL/RETRY status for outbox id=${row.id}: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`,
       );
+      throw dbErr;
     }
   }
 }

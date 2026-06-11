@@ -23,7 +23,12 @@ export class SyncGitopsShardUseCase {
     }
 
     for (const shard of shards) {
-      await this.executeSingle(shard);
+      try {
+        await this.executeSingle(shard);
+      } catch (error) {
+        this.logger.error(`Failed to sync shard ${shard}`, error);
+        // Continue processing other shards
+      }
     }
   }
 

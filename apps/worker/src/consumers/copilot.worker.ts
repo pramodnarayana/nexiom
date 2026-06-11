@@ -4,10 +4,6 @@ import type { IQueueService } from "@soopa/queue";
 import { z } from "zod";
 
 import { ProcessCopilotJobUseCase } from "../core/use-cases/copilot/process-copilot-job.use-case.js";
-import { NestChatStreamOrchestratorAdapter } from "../adapters/outbound/nest-chat-stream-orchestrator.adapter.js";
-import { RedisRealtimeEventPubSubAdapter } from "../adapters/outbound/redis-realtime-event-pubsub.adapter.js";
-import { NestChatPersistenceAdapter } from "../adapters/outbound/nest-chat-persistence.adapter.js";
-import { AiSdkTitleGeneratorAdapter } from "../adapters/outbound/ai-sdk-title-generator.adapter.js";
 
 const JobPayloadSchema = z.object({
   jobId: z.string(),
@@ -16,7 +12,7 @@ const JobPayloadSchema = z.object({
   conversationId: z.string(),
   messages: z.array(
     z.object({
-      role: z.string(),
+      role: z.enum(["user", "assistant", "system"]),
       content: z.string(),
     }),
   ),
@@ -29,10 +25,7 @@ export class CopilotWorker implements OnModuleInit {
 
   constructor(
     @Inject(QUEUE_SERVICE) private readonly queueService: IQueueService,
-    private readonly orchestratorAdapter: NestChatStreamOrchestratorAdapter,
-    private readonly pubSubAdapter: RedisRealtimeEventPubSubAdapter,
-    private readonly persistenceAdapter: NestChatPersistenceAdapter,
-    private readonly titleGeneratorAdapter: AiSdkTitleGeneratorAdapter,
+    private readonly processCopilotJobUseCase: ProcessCopilotJobUseCase,
   ) {}
 
   onModuleInit() {
@@ -64,13 +57,6 @@ export class CopilotWorker implements OnModuleInit {
 
     const data = validationResult.data;
 
-    const useCase = new ProcessCopilotJobUseCase(
-      this.orchestratorAdapter,
-      this.pubSubAdapter,
-      this.persistenceAdapter,
-      this.titleGeneratorAdapter,
-    );
-
-    await useCase.execute(data);
+    await this.processCopilotJobUseCase.execute(data);
   }
 }

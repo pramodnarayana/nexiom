@@ -1,10 +1,11 @@
-export interface OutboxRow {
+export interface OutboxRow<T extends Record<string, unknown> = Record<string, unknown>> {
   id: string;
   attempts: number;
   claimToken?: string | null;
   traceId?: string;
   dataSourceId?: string;
-  [key: string]: any;
+  payload: unknown;
+  extra?: T;
 }
 
 export interface OutboxRepositoryPort {

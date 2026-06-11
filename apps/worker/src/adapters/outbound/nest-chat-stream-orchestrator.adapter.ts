@@ -15,10 +15,14 @@ export class NestChatStreamOrchestratorAdapter implements ChatStreamOrchestrator
     traceId: string,
     model?: string,
   ): Promise<AsyncIterable<string>> {
+    // Map worker ChatMessage[] to Vercel AI SDK UIMessage[] format
+    const uiMessages = messages.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    })) as Parameters<typeof this.orchestratorService.streamChat>[0];
+
     const webResponse = await this.orchestratorService.streamChat(
-      messages as unknown as Parameters<
-        typeof this.orchestratorService.streamChat
-      >[0],
+      uiMessages,
       tenantId,
       traceId,
       model,
@@ -42,6 +46,11 @@ export class NestChatStreamOrchestratorAdapter implements ChatStreamOrchestrator
             const { done, value } = await reader.read();
             if (done) break;
             yield decoder.decode(value, { stream: true });
+          }
+          // Flush any incomplete multibyte sequences
+          const finalChunk = decoder.decode();
+          if (finalChunk) {
+            yield finalChunk;
           }
         } finally {
           reader.releaseLock();

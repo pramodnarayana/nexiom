@@ -16,7 +16,7 @@ export class DrizzleWorkspacePiecesRepositoryAdapter implements WorkspacePiecesR
     pieceId: string,
     version: string,
   ): Promise<void> {
-    await this.db
+    const result = await this.db
       .update(workspacePieces)
       .set({
         status: "INSTALLED",
@@ -29,10 +29,16 @@ export class DrizzleWorkspacePiecesRepositoryAdapter implements WorkspacePiecesR
           eq(workspacePieces.pieceId, pieceId),
         ),
       );
+
+    if (result.rowCount === 0) {
+      throw new Error(
+        `No workspace piece found to mark installed for workspaceId=${workspaceId}, pieceId=${pieceId}`,
+      );
+    }
   }
 
   async markFailed(workspaceId: string, pieceId: string): Promise<void> {
-    await this.db
+    const result = await this.db
       .update(workspacePieces)
       .set({ status: "FAILED", updatedAt: new Date() })
       .where(
@@ -41,6 +47,12 @@ export class DrizzleWorkspacePiecesRepositoryAdapter implements WorkspacePiecesR
           eq(workspacePieces.pieceId, pieceId),
         ),
       );
+
+    if (result.rowCount === 0) {
+      throw new Error(
+        `No workspace piece found to mark failed for workspaceId=${workspaceId}, pieceId=${pieceId}`,
+      );
+    }
   }
 
   async getAllInstalledPieces(): Promise<InstalledPieceInfo[]> {
@@ -52,7 +64,8 @@ export class DrizzleWorkspacePiecesRepositoryAdapter implements WorkspacePiecesR
         workspaceId: workspacePieces.workspaceId,
       })
       .from(workspacePieces)
-      .innerJoin(pieces, eq(workspacePieces.pieceId, pieces.id));
+      .innerJoin(pieces, eq(workspacePieces.pieceId, pieces.id))
+      .where(eq(workspacePieces.status, "INSTALLED"));
 
     return apps.map((app) => ({
       ...app,
