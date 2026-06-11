@@ -5,14 +5,15 @@ CREATE TABLE IF NOT EXISTS "workspace_pieces_dedupe_audit" (
     "deleted_at" timestamp with time zone DEFAULT now()
 );
 
-WITH duplicates AS (
-    SELECT "id", "workspace_id", "piece_id"
+WITH numbered AS (
+    SELECT "id", "workspace_id", "piece_id",
+           ROW_NUMBER() OVER(PARTITION BY "workspace_id", "piece_id" ORDER BY "id" ASC) as rn
     FROM "workspace_pieces"
-    WHERE "id" NOT IN (
-        SELECT MIN("id")
-        FROM "workspace_pieces"
-        GROUP BY "workspace_id", "piece_id"
-    )
+),
+duplicates AS (
+    SELECT "id", "workspace_id", "piece_id"
+    FROM numbered
+    WHERE rn > 1
 ),
 audit_insert AS (
     INSERT INTO "workspace_pieces_dedupe_audit" ("deleted_id", "workspace_id", "piece_id")
