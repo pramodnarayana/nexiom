@@ -31,7 +31,7 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
     const tableName = this.table._.name;
 
     // Use raw SQL identifier for schema scoping
-    const claimed = await this.db.transaction(async (tx: DrizzleDb) => {
+    const claimed = await this.db.transaction(async (tx) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
@@ -66,11 +66,12 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
 
     // Manually map the returned rows to OutboxRow format if needed,
     // though drizzle's .returning() output usually matches it exactly
-    return claimed.map((row: any) => {
+    return claimed.map((row: unknown) => {
+      const r = row as Record<string, unknown>;
       // Drizzle returns the table columns
       return {
-        ...row,
-        claimToken: this.table.claimToken ? row.claimToken : null,
+        ...r,
+        claimToken: this.table.claimToken ? r.claimToken : null,
       } as unknown as OutboxRow;
     });
   }
@@ -83,7 +84,7 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
   ): Promise<void> {
     const condition = this.buildCondition(rowId, claimToken);
 
-    await this.db.transaction(async (tx: DrizzleDb) => {
+    await this.db.transaction(async (tx) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
@@ -106,7 +107,7 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
     const status =
       this.table._.name === "global_registry_outbox" ? "PENDING" : "RETRY";
 
-    await this.db.transaction(async (tx: DrizzleDb) => {
+    await this.db.transaction(async (tx) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
@@ -134,7 +135,7 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
     const status =
       this.table._.name === "global_registry_outbox" ? "FAILED" : "FAIL";
 
-    await this.db.transaction(async (tx: DrizzleDb) => {
+    await this.db.transaction(async (tx) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );

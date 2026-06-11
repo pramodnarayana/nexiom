@@ -50,19 +50,20 @@ export class ProcessOutboxUseCase {
     schemaName: string,
     row: OutboxRow,
   ): Promise<void> {
-    const payload = (
-      this.config.payloadMapper ? this.config.payloadMapper(row) : row.payload
-    ) as unknown;
+    const payload = this.config.payloadMapper
+      ? this.config.payloadMapper(row)
+      : row.payload;
 
+    let published = false;
     try {
       await this.queuePublisher.send(this.config.queueName, payload);
+      published = true;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       await this.handleFailure(tenantId, schemaName, row, errorMessage);
-      return;
     }
 
-    if (this.config.markSuccessImmediately !== false) {
+    if (published && this.config.markSuccessImmediately !== false) {
       try {
         await this.outboxRepository.markSuccess(
           tenantId,

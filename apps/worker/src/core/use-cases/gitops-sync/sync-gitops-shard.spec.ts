@@ -54,4 +54,15 @@ describe("SyncGitopsShardUseCase", () => {
 
     expect(cacheInvalidator.invalidatedShards).toHaveLength(0);
   });
+
+  it("should catch and log errors during execution of a single shard", async () => {
+    gitRepo.shards = ["shard-1", "shard-2"];
+    gitRepo.pull = async () => {
+      await Promise.resolve();
+      throw new Error("Git pull failed catastrophically");
+    };
+
+    // Should not throw, should catch and continue
+    await expect(useCase.executeAll()).resolves.not.toThrow();
+  });
 });

@@ -83,6 +83,7 @@ describe("ProcessCopilotJobUseCase", () => {
 
     expect(persistence.titles).toHaveLength(1);
     expect(persistence.titles[0]).toEqual({
+      tenantId: "tenant-1",
       conversationId: "conv-1",
       title: "A fake title",
     });

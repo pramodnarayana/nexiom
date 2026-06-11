@@ -1,4 +1,6 @@
-export interface OutboxRow<T extends Record<string, unknown> = Record<string, unknown>> {
+export interface OutboxRow<
+  T extends Record<string, unknown> = Record<string, unknown>,
+> {
   id: string;
   attempts: number;
   claimToken?: string | null;

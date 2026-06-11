@@ -163,5 +163,25 @@ describe("App Installer Use Cases", () => {
 
       await expect(useCase.execute()).resolves.not.toThrow();
     });
+
+    it("should fall back to string comparison if versions are invalid semver", async () => {
+      repository.installedPieces = [
+        {
+          workspaceId: "ws-1",
+          pieceId: "piece-1",
+          packageName: "@nexiom/salesforce",
+          currentVersion: "not-a-version",
+        },
+      ];
+
+      registry.latestVersions.set("@nexiom/salesforce", "still-not-a-version");
+
+      await useCase.execute();
+
+      expect(queuePublisher.messages).toHaveLength(1);
+      const payload = queuePublisher.messages[0]
+        .payload as import("@soopa/queue").PluginInstallEvent;
+      expect(payload.version).toBe("still-not-a-version");
+    });
   });
 });

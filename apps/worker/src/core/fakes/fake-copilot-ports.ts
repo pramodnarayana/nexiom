@@ -58,7 +58,8 @@ export class FakeChatPersistence implements ChatPersistencePort {
     status: "completed" | "failed";
   }[] = [];
 
-  public titles: { tenantId: string; conversationId: string; title: string }[] = [];
+  public titles: { tenantId: string; conversationId: string; title: string }[] =
+    [];
 
   async appendMessage(params: {
     tenantId: string;

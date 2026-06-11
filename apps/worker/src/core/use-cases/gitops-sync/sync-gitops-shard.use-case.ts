@@ -26,7 +26,11 @@ export class SyncGitopsShardUseCase {
       try {
         await this.executeSingle(shard);
       } catch (error) {
-        this.logger.error(`Failed to sync shard ${shard}`, error);
+        const errMsg =
+          error instanceof Error
+            ? (error.stack ?? error.message)
+            : String(error);
+        this.logger.error(`Failed to sync shard ${shard}: ${errMsg}`);
         // Continue processing other shards
       }
     }

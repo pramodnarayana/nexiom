@@ -19,7 +19,7 @@ export class NestChatStreamOrchestratorAdapter implements ChatStreamOrchestrator
     const uiMessages = messages.map((msg) => ({
       role: msg.role,
       content: msg.content,
-    })) as Parameters<typeof this.orchestratorService.streamChat>[0];
+    })) as unknown as Parameters<typeof this.orchestratorService.streamChat>[0];
 
     const webResponse = await this.orchestratorService.streamChat(
       uiMessages,

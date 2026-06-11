@@ -65,16 +65,16 @@ export class CheckPieceUpdatesUseCase {
 
   private isNewer(localVersion: string, remoteVersion: string): boolean {
     try {
-      // Normalize versions and use semver comparison
-      const cleanLocal = semver.coerce(localVersion);
-      const cleanRemote = semver.coerce(remoteVersion);
+      // Parse versions using valid/parse to preserve prerelease tags
+      const parsedLocal = semver.valid(localVersion);
+      const parsedRemote = semver.valid(remoteVersion);
 
-      if (!cleanLocal || !cleanRemote) {
+      if (!parsedLocal || !parsedRemote) {
         // Fall back to string comparison if versions are invalid
         return remoteVersion > localVersion;
       }
 
-      return semver.gt(cleanRemote, cleanLocal);
+      return semver.gt(parsedRemote, parsedLocal);
     } catch (_err) {
       // Fall back to string comparison on error
       return remoteVersion > localVersion;

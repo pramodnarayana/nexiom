@@ -43,7 +43,9 @@ describe("ProcessOutboxUseCase", () => {
       payloadMapper: (row) => ({ customTraceId: row.traceId }),
     });
 
-    repository.addRows([{ id: "row-1", attempts: 0, traceId: "t-123" }]);
+    repository.addRows([
+      { id: "row-1", attempts: 0, traceId: "t-123", payload: {} },
+    ]);
 
     await mappedUseCase.execute("tenant-1", "schema-1");
 
@@ -73,13 +75,18 @@ describe("ProcessOutboxUseCase", () => {
 
   it("should gracefully handle database errors when marking success", async () => {
     repository.addRows([{ id: "row-1", attempts: 0, payload: {} }]);
+    // Throw a non-Error to cover the String(dbErr) branch
     repository.shouldFailMarkSuccess = true;
+    repository.markSuccess = async () => {
+      await Promise.resolve();
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw "DB Error String";
+    };
 
     await expect(
       useCase.execute("tenant-1", "schema-1"),
     ).resolves.not.toThrow();
 
-    // It published to queue, but DB update threw. The status remains PROCESSING from the claim step.
     expect(publisher.messages.length).toBe(1);
     expect(repository.statuses.get("row-1")).toBe("PROCESSING");
   });
@@ -87,13 +94,39 @@ describe("ProcessOutboxUseCase", () => {
   it("should gracefully handle database errors when marking retry/failure", async () => {
     repository.addRows([{ id: "row-1", attempts: 1, payload: {} }]);
     publisher.shouldFail = true;
+
     repository.shouldFailMarkFailure = true;
+    repository.markRetry = async () => {
+      await Promise.resolve();
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw "DB Error String";
+    };
 
     await expect(
       useCase.execute("tenant-1", "schema-1"),
     ).resolves.not.toThrow();
 
-    // Publisher threw, then DB threw when marking retry.
     expect(repository.statuses.get("row-1")).toBe("PROCESSING");
+  });
+
+  it("should do nothing if no rows are claimed", async () => {
+    // repository has no rows initially
+    await useCase.execute("tenant-1", "schema-1");
+    expect(publisher.messages.length).toBe(0);
+  });
+
+  it("should handle non-Error throws from publisher", async () => {
+    repository.addRows([{ id: "row-1", attempts: 1, payload: {} }]);
+    publisher.send = async () => {
+      await Promise.resolve();
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw "Queue is completely broken";
+    };
+
+    await expect(
+      useCase.execute("tenant-1", "schema-1"),
+    ).resolves.not.toThrow();
+
+    expect(repository.statuses.get("row-1")).toBe("RETRY");
   });
 });

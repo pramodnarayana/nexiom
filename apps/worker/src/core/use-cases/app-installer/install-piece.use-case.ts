@@ -35,10 +35,7 @@ export class InstallPieceUseCase {
         `Installed ${command.packageName} v${pluginInfo.version} successfully.`,
       );
     } catch (error) {
-      this.logger.error(
-        `Failed to install ${command.packageName}`,
-        error,
-      );
+      this.logger.error(`Failed to install ${command.packageName}`, error);
 
       if (command.workspaceId && command.pieceId) {
         try {
