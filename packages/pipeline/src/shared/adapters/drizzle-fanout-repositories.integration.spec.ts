@@ -24,7 +24,7 @@ describe("Fanout Drizzle Adapters", () => {
   let gemAdapter: DrizzleGlobalEntityMapRepositoryAdapter;
   let outboxAdapter: DrizzleOutboundGatewayRepositoryAdapter;
   let stateAdapter: DrizzlePipelineStateRepositoryAdapter;
-  let stitchAdapter: DrizzleStitchRepositoryAdapter;
+  let stitchAdapter: DrizzleSharedStitchRepositoryAdapter;
   let syncLogAdapter: DrizzleSyncLogRepositoryAdapter;
   let txManagerAdapter: DrizzleTransactionManagerAdapter;
 
@@ -70,7 +70,7 @@ describe("Fanout Drizzle Adapters", () => {
     gemAdapter = new DrizzleGlobalEntityMapRepositoryAdapter(testDbManager.db!, mockDbManager);
     outboxAdapter = new DrizzleOutboundGatewayRepositoryAdapter(mockDbManager);
     stateAdapter = new DrizzlePipelineStateRepositoryAdapter(mockDbManager);
-    stitchAdapter = new DrizzleStitchRepositoryAdapter(mockDbManager);
+    stitchAdapter = new DrizzleSharedStitchRepositoryAdapter(mockDbManager);
     syncLogAdapter = new DrizzleSyncLogRepositoryAdapter(mockDbManager);
     txManagerAdapter = new DrizzleTransactionManagerAdapter(mockDbManager);
   }, 60000);
