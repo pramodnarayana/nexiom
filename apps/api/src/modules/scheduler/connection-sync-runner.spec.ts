@@ -6,7 +6,7 @@ import { DB_MANAGER } from '@soopa/dbmanager';
 import { REDIS_CLIENT } from '@soopa/cache';
 import { TokenManagerService } from '@soopa/credentials';
 import { PieceRegistryService } from '@soopa/piece-registry';
-import { CursorManagerService, StorageResolverService } from '@soopa/engine';
+import { CursorManagerService, StorageResolverService } from '@soopa/pipeline';
 import { ConnectionSyncRunner } from './connection-sync-runner.js';
 import { BadRequestException } from '@nestjs/common';
 import { describe, it, expect, vi, beforeEach } from 'vitest';

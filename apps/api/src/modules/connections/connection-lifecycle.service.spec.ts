@@ -10,7 +10,7 @@ import {
 import { CredentialInvalidatedEvent } from '@soopa/credentials';
 import type { MockedObject } from 'vitest';
 import type { DatabaseManager } from '@soopa/dbmanager';
-import type { StorageResolverService } from '@soopa/engine';
+import type { StorageResolverService } from '@soopa/pipeline';
 import type { DrizzleDb } from '@soopa/database';
 describe('ConnectionLifecycleService', () => {
   let service: ConnectionLifecycleService;

@@ -6,7 +6,7 @@ import {
   OAuthRefreshClient,
   RedisDistributedLock,
 } from '@soopa/credentials';
-import { DbModule } from '../../db/db.module.js';
+import { DatabaseModule } from '@soopa/database';
 import { REDIS_CLIENT } from '@soopa/cache';
 import type { Redis } from '@soopa/cache';
 import { OAuthCallbackController } from './connections/callback.controller.js';
@@ -14,7 +14,7 @@ import { ConnectionLifecycleService } from './connection-lifecycle.service.js';
 import { RegistryOAuthRefreshClient } from './connections/registry-token-refresh.service.js';
 import { OauthStateService } from './oauth-state.service.js';
 import { PiecesModule } from '@soopa/piece-registry';
-import { StorageResolverModule } from '@soopa/engine';
+import { StorageResolverModule } from '@soopa/pipeline';
 
 import { DATABASE_CONNECTION } from '@soopa/database';
 import { type DrizzleDb } from '@soopa/database';
@@ -36,7 +36,7 @@ import { CredentialRepository } from './repositories/credential.repository.js';
  */
 @Global()
 @Module({
-  imports: [DbModule, PiecesModule, StorageResolverModule],
+  imports: [DatabaseModule, PiecesModule, StorageResolverModule],
   controllers: [OAuthCallbackController, CredentialController, OAuthController],
   providers: [
     {

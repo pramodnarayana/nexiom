@@ -6,8 +6,8 @@ import {
 } from '@soopa/dbmanager';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import * as schema from '../../db/schema.js';
-import { DbModule } from '../../db/db.module.js';
+import * as schema from '@soopa/database';
+import { DatabaseModule } from '@soopa/database';
 import { DATABASE_CONNECTION } from '@soopa/database';
 import type { DrizzleDb } from '@soopa/database';
 
@@ -57,7 +57,7 @@ function buildCredentialResolver(): CredentialResolver {
 
 @Global()
 @Module({
-  imports: [DbModule],
+  imports: [DatabaseModule],
   providers: [
     {
       provide: DB_MANAGER,

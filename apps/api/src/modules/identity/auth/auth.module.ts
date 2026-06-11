@@ -5,7 +5,7 @@ import { PlatformGuard } from './platform.guard.js';
 import { EmailModule } from '../../email/email.module.js';
 import { AuthController } from './auth.controller.js';
 import { TenantsModule } from '../tenants/tenants.module.js';
-import { DbModule } from '../../../db/db.module.js';
+import { DatabaseModule } from '@soopa/database';
 import { InvitationsModule } from '../invitations/invitations.module.js';
 
 @Global()
@@ -13,7 +13,7 @@ import { InvitationsModule } from '../invitations/invitations.module.js';
   imports: [
     EmailModule,
     TenantsModule,
-    DbModule,
+    DatabaseModule,
     forwardRef(() => InvitationsModule),
     AuthModule,
   ],

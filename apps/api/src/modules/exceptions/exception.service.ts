@@ -15,7 +15,7 @@ import {
   assertValidSchemaName,
   type OutboundGatewayStatus,
 } from '@soopa/database';
-import { StorageResolverService } from '@soopa/engine';
+import { StorageResolverService } from '@soopa/pipeline';
 import { IDeliveryQueueDispatcher } from './interfaces/delivery-queue-dispatcher.interface.js';
 
 // ---------------------------------------------------------------------------

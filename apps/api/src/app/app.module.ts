@@ -9,7 +9,7 @@ import { UsersModule } from '../modules/identity/users/users.module.js';
 import { TenantsModule } from '../modules/identity/tenants/tenants.module.js';
 import { AuthModule } from '@soopa/auth';
 import { IdentityAuthModule } from '../modules/identity/auth/auth.module.js';
-import { DbModule } from '../db/db.module.js';
+import { DatabaseModule } from '@soopa/database';
 import { InvitationsModule } from '../modules/identity/invitations/invitations.module.js';
 import { SystemAdminModule } from '../modules/identity/system-admin/system-admin.module.js';
 import { RolesModule } from '../modules/identity/roles/roles.module.js';
@@ -19,7 +19,7 @@ import { DATABASE_CONNECTION, type DrizzleDb } from '@soopa/database';
 import { ConnectionsModule } from '../modules/connections/connections.module.js';
 import { TriggerModule } from '../modules/trigger/trigger.module.js';
 import { EmailModule } from '../modules/email/email.module.js';
-import { StorageResolverModule } from '@soopa/engine';
+import { StorageResolverModule } from '@soopa/pipeline';
 import { PiecesModule } from '@soopa/piece-registry';
 import { CacheModule } from '@soopa/cache';
 import { QueueModule, createQueueModuleOptions } from '@soopa/queue';
@@ -61,10 +61,10 @@ import { PluginsModule } from '../modules/plugins/plugins.module.js';
     IdentityModule.registerAsync({
       imports: [
         ConfigModule,
-        DbModule,
+        DatabaseModule,
         forwardRef(() => AuthModule),
         EmailModule,
-      ], // Ensure DbModule and EmailModule are here
+      ], // Ensure DatabaseModule and EmailModule are here
       inject: [ConfigService, DATABASE_CONNECTION, EmailService],
       useFactory: (
         configService: ConfigService,
@@ -98,7 +98,7 @@ import { PluginsModule } from '../modules/plugins/plugins.module.js';
     UsersModule,
     TenantsModule,
     InvitationsModule,
-    DbModule,
+    DatabaseModule,
     PiecesModule.forRoot(),
     ...(process.env.ENABLE_PLUGIN_MIGRATIONS === 'true'
       ? [PiecesModule.withMigrations()]

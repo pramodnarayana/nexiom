@@ -4,14 +4,14 @@ import {
   CursorManagerService,
   StorageResolverModule,
   StorageResolverService,
-} from '@soopa/engine';
+} from '@soopa/pipeline';
 import { PiecesModule, PieceRegistryService } from '@soopa/piece-registry';
 import { TokenManagerService } from '@soopa/credentials';
 import { REDIS_CLIENT } from '@soopa/cache';
 import { DATABASE_CONNECTION, type DrizzleDb } from '@soopa/database';
 import { DB_MANAGER, type DatabaseManager } from '@soopa/dbmanager';
 import type { Redis } from 'ioredis';
-import { DbModule } from '../../db/db.module.js';
+import { DatabaseModule } from '@soopa/database';
 import { ConnectionsModule } from '../connections/connections.module.js';
 import { ISchedulerClient } from './interfaces/scheduler-client.interface.js';
 import { IHttpClient } from './interfaces/http-client.interface.js';
@@ -37,7 +37,12 @@ const schedulerControllers: Type<any>[] = WINDMILL_ENABLED
   : [SchedulerController];
 
 @Module({
-  imports: [DbModule, ConnectionsModule, PiecesModule, StorageResolverModule],
+  imports: [
+    DatabaseModule,
+    ConnectionsModule,
+    PiecesModule,
+    StorageResolverModule,
+  ],
   controllers: schedulerControllers,
   providers: [
     {

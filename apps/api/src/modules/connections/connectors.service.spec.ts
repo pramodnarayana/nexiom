@@ -5,7 +5,7 @@ import { ConnectorsService } from './connectors.service.js';
 
 import { SAVEPOINT_MANAGER } from '@soopa/database';
 import { ConnectionLifecycleService } from './connection-lifecycle.service.js';
-import { StorageResolverService } from '@soopa/engine';
+import { StorageResolverService } from '@soopa/pipeline';
 
 import { EncryptionService, AppCredentialError } from '@soopa/credentials';
 import { PieceRegistryService } from '@soopa/piece-registry';
