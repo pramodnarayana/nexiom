@@ -25,7 +25,7 @@ export class TargetBuilderService {
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
-    @Inject(PipelineHookBrokerService) private readonly hookBroker: PipelineHookBrokerService,
+    private readonly hookBroker: PipelineHookBrokerService,
   ) {}
 
   async buildPayload(
@@ -114,7 +114,13 @@ export class TargetBuilderService {
       unknown
     >;
 
-    // Remove fragile identity check; rely only on empty-object check
+    // Strip null and undefined properties
+    for (const key of Object.keys(hydrated)) {
+      if (hydrated[key] == null) {
+        delete hydrated[key];
+      }
+    }
+
     if (Object.keys(hydrated).length === 0) {
       throw new Error(
         `Mapping rules failed to produce a valid payload for ${normalizedEntityType}. Check your field mapping configuration.`,

@@ -45,7 +45,6 @@ describe("DeliveryService", () => {
     // Apply namespace, outbound and inbound plans for proper tables
     await sqlManager.applyPlan(currentSchemaName, SchemaPlan.NAMESPACE_ONLY, { appName: "testApp", appProfile: "online" });
     await sqlManager.applyPlan(currentSchemaName, SchemaPlan.OUTBOUND_ACTIVE, { appName: "testApp", appProfile: "online" });
-    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.OUTBOUND_ACTIVE, { appName: "testApp", appProfile: "online" });
     // Global map table
     await testDbManager.db!.execute(sql`
       CREATE TABLE IF NOT EXISTS public.global_entity_map (
@@ -290,7 +289,6 @@ describe("DeliveryService", () => {
         "targetTenant",
         "targetObject",
         currentWorkspaceId,
-        testDbManager.db!,
       );
       expect(res).toBe(true);
       expect(gemService.writeGemMapping).toHaveBeenCalled();

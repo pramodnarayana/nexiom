@@ -11,11 +11,11 @@ function walkDir(dir, callback) {
 
 const replacements = [
   // Ports / Adapters / Interfaces are now in ../shared
-  { from: /from "\.\/ports\//g, to: 'from "../shared/ports/' },
-  { from: /from "\.\/adapters\//g, to: 'from "../shared/adapters/' },
-  { from: /from "\.\/interfaces\//g, to: 'from "../shared/interfaces/' },
-  { from: /from "\.\/outbox\.utils\.js"/g, to: 'from "../shared/outbox.utils.js"' },
-  { from: /from "\.\.\/ports\//g, to: 'from "../../shared/ports/' },
+  { from: /from (['"])\.\/ports\//g, to: 'from $1../shared/ports/' },
+  { from: /from (['"])\.\/adapters\//g, to: 'from $1../shared/adapters/' },
+  { from: /from (['"])\.\/interfaces\//g, to: 'from $1../shared/interfaces/' },
+  { from: /from (['"])\.\/outbox\.utils\.js\1/g, to: 'from $1../shared/outbox.utils.js$1' },
+  { from: /from (['"])\.\.\/ports\//g, to: 'from $1../../shared/ports/' },
 
   // Services that used to be adjacent but are now in other folders
   // In delivery:
@@ -24,10 +24,10 @@ const replacements = [
   // Upper level modules: storage-resolver, sharding, index, utils
   // If a file is in src/context/file.ts, it was previously src/orchestrator/file.ts
   // Previously it did `import ... from "../utils.js"`, now it should be `import ... from "../../utils.js"`
-  { from: /from "\.\.\/utils\.js"/g, to: 'from "../../utils.js"' },
-  { from: /from "\.\.\/index\.js"/g, to: 'from "../../index.js"' },
-  { from: /from "\.\.\/storage-resolver\//g, to: 'from "../../storage-resolver/' },
-  { from: /from "\.\.\/sharding\//g, to: 'from "../../sharding/' },
+  { from: /from (['"])\.\.\/utils\.js\1/g, to: 'from $1../../utils.js$1' },
+  { from: /from (['"])\.\.\/index\.js\1/g, to: 'from $1../../index.js$1' },
+  { from: /from (['"])\.\.\/storage-resolver\//g, to: 'from $1../../storage-resolver/' },
+  { from: /from (['"])\.\.\/sharding\//g, to: 'from $1../../sharding/' },
 ];
 
 walkDir('src', filePath => {

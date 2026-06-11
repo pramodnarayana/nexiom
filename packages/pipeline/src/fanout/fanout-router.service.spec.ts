@@ -18,7 +18,7 @@ describe("FanoutRouterService", () => {
     storageResolver = { resolveSchemaName: vi.fn().mockResolvedValue("ws_123") };
     dbManager = { getTenantDb: vi.fn().mockResolvedValue({}) };
     batchProcessor = { 
-      processSingleStitch: vi.fn().mockImplementation((_1,_2,_3,_4,_5,_6,_7,_8,_9,_10,_11,_12,_13, lockRefCount) => {
+      processSingleStitch: vi.fn().mockImplementation((_1,_2,_3,_4,_5,_6,_7,_8,_9,_10,_11, lockRefCount) => {
         lockRefCount.count--;
       }) 
     };
@@ -36,7 +36,7 @@ describe("FanoutRouterService", () => {
     stitchRepo = { findActiveStitches: vi.fn() };
     txManager = {
       runInTenantTransaction: vi.fn().mockImplementation(async (tenantId, schemaName, work) => {
-        return await work({}); // Fake tx
+        return await work({ execute: vi.fn() }); // Fake tx
       })
     };
 
@@ -77,6 +77,7 @@ describe("FanoutRouterService", () => {
 
   it("should abort if superseded", async () => {
     connRepo.getGlobalConnectionMeta.mockResolvedValue({ tenantId: "t-1" });
+    stateRepo.getReplicaSourceVendorId.mockResolvedValue("vendor-123");
     routingDecisionEngine.evaluateSuperseded.mockResolvedValue({ kind: "superseded" });
 
     await (service as any).processMessage({ traceId: "tr-1", dataSourceId: "ds-1" });

@@ -1,4 +1,4 @@
-import { BaseOutboxPoller, OutboxTable } from "./base-outbox.poller.js";
+import { BaseOutboxPoller, type OutboxTable } from "./base-outbox.poller.js";
 import {} from "@soopa/pipeline";
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import { randomUUID } from "crypto";

@@ -13,13 +13,12 @@ export * from './hydrator.js';
 export * from './sharding/application-loader.module.js';
 export * from './sharding/application-loader.service.js';
 export * from './sharding/application-shard.types.js';
-export * from './sharding/pipeline-hook-broker.service.js';export * from "./pipeline-core.module.js";
+export * from './sharding/pipeline-hook-broker.service.js';
+export * from "./pipeline-core.module.js";
 export * from './delivery/delivery.service.js';
 export * from './fanout/fanout-router.service.js';
 export * from './replication/replica.service.js';
 export * from './normalization/normalization.service.js';
 export * from './utils.js';
-
-export * from "./utils.js";
 
 export * from './shared/outbox.utils.js';

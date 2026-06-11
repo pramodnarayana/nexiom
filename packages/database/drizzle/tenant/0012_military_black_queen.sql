@@ -1,2 +1,3 @@
+ALTER TABLE "global_entity_map" DROP CONSTRAINT IF EXISTS "gem_unique_mapping_idx";--> statement-breakpoint
 DROP INDEX IF EXISTS "gem_unique_mapping_idx";--> statement-breakpoint
 ALTER TABLE "global_entity_map" ADD CONSTRAINT "gem_unique_mapping_idx" UNIQUE("stitch_id","source_data_source_id","source_entity_id","dest_data_source_id","dest_entity_type");

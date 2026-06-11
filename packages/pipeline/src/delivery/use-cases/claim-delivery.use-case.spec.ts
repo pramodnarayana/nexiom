@@ -112,6 +112,7 @@ describe('ClaimDeliveryUseCase', () => {
     const result = await useCase.execute({ ...defaultInput, writeL6ResultFn });
 
     expect(result).toEqual({ status: 'TERMINATED' });
+    expect(retryService.isSourceFinalized).toHaveBeenCalledWith('ten-1', 'ws_src-1', 'tr-1', 'rt-1');
     expect(retryService.retrySourceFinalization).toHaveBeenCalled();
   });
 
@@ -130,6 +131,7 @@ describe('ClaimDeliveryUseCase', () => {
     const result = await useCase.execute({ ...defaultInput, writeL6ResultFn });
 
     expect(result).toEqual({ status: 'TERMINATED' });
+    expect(retryService.isSourceFinalized).toHaveBeenCalledWith('ten-1', 'ws_src-1', 'tr-1', 'rt-1');
     expect(retryService.retrySourceFinalization).toHaveBeenCalled();
   });
 
@@ -147,7 +149,7 @@ describe('ClaimDeliveryUseCase', () => {
     const result = await useCase.execute({ ...defaultInput, writeL6ResultFn });
 
     expect(result).toEqual({ status: 'TERMINATED' });
-    expect(result).toEqual({ status: 'TERMINATED' });
+    expect(retryService.isSourceFinalized).toHaveBeenCalledWith('ten-1', 'ws_src-1', 'tr-1', 'rt-1');
     expect(retryService.retrySourceFinalization).not.toHaveBeenCalled();
   });
 
@@ -165,6 +167,7 @@ describe('ClaimDeliveryUseCase', () => {
     const result = await useCase.execute({ ...defaultInput, writeL6ResultFn });
 
     expect(result).toEqual({ status: 'TERMINATED' });
+    expect(retryService.isSourceFinalized).toHaveBeenCalledWith('ten-1', 'ws_src-1', 'tr-1', 'rt-1');
     expect(retryService.retrySourceFinalization).not.toHaveBeenCalled();
   });
 

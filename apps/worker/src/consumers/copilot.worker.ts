@@ -115,11 +115,6 @@ export class CopilotWorker implements OnModuleInit {
         // Check for non-OK response
         if (!webResponse.ok) {
           const errorText = await webResponse.text();
-          await this.redis.publish(
-            `job:stream:${data.jobId}`,
-            `error: ${errorText}\n`,
-          );
-          await this.redis.publish(`job:stream:${data.jobId}`, `[DONE]\n`);
           throw new Error(`Non-OK response from orchestrator: ${errorText}`);
         }
 
@@ -206,6 +201,21 @@ export class CopilotWorker implements OnModuleInit {
         }
 
         this.logger.log(`Successfully completed AI Job ${data.jobId}`);
+      } else {
+        const errorMsg = "Response body is missing from orchestrator";
+        await this.redis.publish(
+          `job:stream:${data.jobId}`,
+          `error: ${errorMsg}\n`,
+        );
+        await this.redis.publish(`job:stream:${data.jobId}`, `[DONE]\n`);
+        await this.chatPersistence.appendMessage({
+          tenantId: data.tenantId,
+          conversationId: data.conversationId,
+          role: "system",
+          content: errorMsg,
+          status: "failed",
+        });
+        throw new Error(errorMsg);
       }
     } catch (error) {
       // Publish failure marker to Redis before throwing

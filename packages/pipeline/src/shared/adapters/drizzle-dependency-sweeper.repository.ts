@@ -39,12 +39,12 @@ export class DrizzleDependencySweeperRepositoryAdapter implements DependencySwee
       );
   }
 
-  async getDeferredTraces(tenantId: string, schemaName: string, olderThanMinutes: number): Promise<{ traceId: string }[]> {
+  async getDeferredTraces(tenantId: string, schemaName: string, olderThanMinutes: number): Promise<{ traceId: string; routeId: string }[]> {
     const tenantDb = await this.dbManager.getTenantDb(tenantId);
     const { outboundGateway } = buildTenantSchema(schemaName);
 
     return await tenantDb
-      .select({ traceId: outboundGateway.traceId })
+      .select({ traceId: outboundGateway.traceId, routeId: outboundGateway.routeId })
       .from(outboundGateway)
       .where(
         and(
@@ -67,7 +67,7 @@ export class DrizzleDependencySweeperRepositoryAdapter implements DependencySwee
       .where(inArray(replicaEntity.traceId, traceIds));
   }
 
-  async claimDeferredTrace(tenantId: string, schemaName: string, traceId: string): Promise<boolean> {
+  async claimDeferredTrace(tenantId: string, schemaName: string, traceId: string, routeId: string): Promise<boolean> {
     const tenantDb = await this.dbManager.getTenantDb(tenantId);
     const { outboundGateway } = buildTenantSchema(schemaName);
 
@@ -77,7 +77,27 @@ export class DrizzleDependencySweeperRepositoryAdapter implements DependencySwee
       .where(
         and(
           eq(outboundGateway.traceId, traceId),
+          eq(outboundGateway.routeId, routeId),
           eq(outboundGateway.status, "DEFERRED_DEPENDENCY"),
+        ),
+      )
+      .returning({ id: outboundGateway.id });
+
+    return updateResult.length > 0;
+  }
+
+  async unclaimDeferredTrace(tenantId: string, schemaName: string, traceId: string, routeId: string): Promise<boolean> {
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
+    const { outboundGateway } = buildTenantSchema(schemaName);
+
+    const updateResult = await tenantDb
+      .update(outboundGateway)
+      .set({ status: "DEFERRED_DEPENDENCY", updatedAt: sql`NOW()` })
+      .where(
+        and(
+          eq(outboundGateway.traceId, traceId),
+          eq(outboundGateway.routeId, routeId),
+          eq(outboundGateway.status, "PENDING"),
         ),
       )
       .returning({ id: outboundGateway.id });

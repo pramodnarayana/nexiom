@@ -553,11 +553,13 @@ export class SqlDatabaseManager {
             trace_id       UUID        NOT NULL,
             route_id       UUID        NOT NULL,
             data_source_id UUID        NOT NULL,
+            src_data_source_id UUID,
             payload        JSONB       NOT NULL,
             response       JSONB,
             status_code   INTEGER,
+            dest_vendor_id VARCHAR(255),
             status        TEXT        NOT NULL DEFAULT 'PENDING'
-                          CONSTRAINT ck_outbound_status CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING','DISMISSED')),
+                          CONSTRAINT ck_outbound_status CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING','DISMISSED','DEFERRED_DEPENDENCY')),
             attempts      INTEGER     NOT NULL DEFAULT 0,
             error_message    TEXT,
             next_retry_at TIMESTAMPTZ,
@@ -583,6 +585,8 @@ export class SqlDatabaseManager {
         await this.db.$client.query(`
         DO $$ BEGIN
             ALTER TABLE "${schemaName}".outbound_gateway DROP CONSTRAINT IF EXISTS outbound_gateway_status_check;
+            ALTER TABLE "${schemaName}".outbound_gateway ADD COLUMN IF NOT EXISTS src_data_source_id UUID;
+            ALTER TABLE "${schemaName}".outbound_gateway ADD COLUMN IF NOT EXISTS dest_vendor_id VARCHAR(255);
         EXCEPTION WHEN undefined_object THEN NULL;
         END $$;
         `);
@@ -602,7 +606,7 @@ export class SqlDatabaseManager {
                   AND conrelid = '"${schemaName}".outbound_gateway'::regclass
             ) THEN
                 ALTER TABLE "${schemaName}".outbound_gateway
-                    ADD CONSTRAINT ck_outbound_status CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING','DISMISSED'));
+                    ADD CONSTRAINT ck_outbound_status CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING','DISMISSED','DEFERRED_DEPENDENCY'));
             END IF;
         END $$;
         `);

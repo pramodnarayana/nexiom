@@ -190,10 +190,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         .normalize(connectionAppName, appProfile, {
           entityType: replica.entityType,
           data: replica.data as Record<string, unknown>,
-        })
-        .catch((err: any) => {
-          throw err;
-        }); // shard may not exist yet — fall through to piece.normalize
+        });
 
       if (normalizedFromShard) {
         canonicalType = normalizedFromShard.canonicalType;
@@ -208,6 +205,8 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           canonicalData = normalized.data;
         }
       }
+
+      let parentTraceIdsForQueue: string[] = [];
 
       await this.transactionManager.runInTenantTransaction(tenantId, schemaName, async (tx) => {
         // ── Idempotent upsert of normalizedEntity ────────────────────────────
@@ -260,21 +259,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             });
 
             for (const pTraceId of parentTraceIds) {
-              // Re-queue the parent so L4 FanOut will process it again
-              // now that the required child dependency has been written.
-              await this.queueService.send(QueueName.NormalizedQueue, {
-                traceId: pTraceId,
-                dataSourceId,
-              });
-              this.logger.debug(
-                {
-                  event: "l3.reverse_lookup.requeued",
-                  traceId: pTraceId,
-                  childEntityId: replica.entityId,
-                  layer: "L3",
-                },
-                `Re-queued parent traceId ${pTraceId} from reverse lookup of ${canonicalType}`,
-              );
+              parentTraceIdsForQueue.push(pTraceId);
             }
           } catch (hookErr) {
             // Log but do not fail the pipeline — the generic normalized_entity
@@ -308,6 +293,25 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           );
         }
       });
+
+      // ── Re-queue parent traces from reverse lookup ──────────────────────────
+      for (const pTraceId of parentTraceIdsForQueue) {
+        // Re-queue the parent so L4 FanOut will process it again
+        // now that the required child dependency has been written.
+        await this.queueService.send(QueueName.NormalizedQueue, {
+          traceId: pTraceId,
+          dataSourceId,
+        });
+        this.logger.debug(
+          {
+            event: "l3.reverse_lookup.requeued",
+            traceId: pTraceId,
+            childEntityId: replica.entityId,
+            layer: "L3",
+          },
+          `Re-queued parent traceId ${pTraceId} from reverse lookup of ${canonicalType}`,
+        );
+      }
 
       // ── L3→L4 event-driven handoff ────────────────────────────────────────
       // Attempt immediate publish to NormalizedQueue after the transaction

@@ -54,16 +54,16 @@ async function run() {
   });
 
   try {
-    // Find a Salesforce connection with Revenova profile
+    // Find any active connection for testing
     const res = await pool.query(`
             SELECT id, workspace_id, app_name, metadata 
             FROM app_connection 
-            WHERE app_name = 'salesforce' AND status = 'ACTIVE'
+            WHERE status = 'ACTIVE'
             LIMIT 1
         `);
 
     if (res.rows.length === 0) {
-      console.log('❌ No active Salesforce connections found to test.');
+      console.log('❌ No active connections found to test.');
       return;
     }
 
@@ -72,12 +72,12 @@ async function run() {
       `✅ Using Connection ID: ${conn.id} (Workspace: ${conn.workspace_id})`,
     );
 
-    // Ensure Revenova profile is set
-    if (!conn.metadata || conn.metadata.appProfile !== 'revenova') {
+    // Ensure test profile is set if needed by the specific piece
+    if (!conn.metadata || !conn.metadata.appProfile) {
       console.log(
-        '⚠️ Warning: Connection metadata missing "appProfile: revenova". Updating it for the test...',
+        '⚠️ Warning: Connection metadata missing "appProfile". Setting a default test profile...',
       );
-      const newMetadata = { ...conn.metadata, appProfile: 'revenova' };
+      const newMetadata = { ...conn.metadata, appProfile: 'standard' };
       await pool.query(
         `UPDATE app_connection SET metadata = $1 WHERE id = $2`,
         [JSON.stringify(newMetadata), conn.id],

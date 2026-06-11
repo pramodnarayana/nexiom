@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, Mocked } from 'vitest';
 import { RegistryOAuthRefreshClient } from './registry-token-refresh.service.js';
 import { PieceRegistryService } from '@soopa/piece-registry';
 import { PropertyType } from '@soopa/piece-framework';
 
 describe('RegistryOAuthRefreshClient', () => {
-  let pieceRegistry: vi.Mocked<PieceRegistryService>;
+  let pieceRegistry: Mocked<PieceRegistryService>;
   let db: any;
   let crypto: any;
   let client: RegistryOAuthRefreshClient;

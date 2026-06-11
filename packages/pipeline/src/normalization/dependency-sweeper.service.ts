@@ -77,20 +77,21 @@ export class DependencySweeperService {
                   `DependencySweeperService: Found ${staleRecords.length} stale DEFERRED_DEPENDENCY records in schema ${schemaName}`,
                 );
 
-                // Deduplicate by traceId to avoid enqueueing the same trace multiple times
-                const uniqueTraceIds = Array.from(
-                  new Set(staleRecords.map((record) => record.traceId)),
-                ).filter((traceId) => !processedTraceIds.has(traceId));
+                // Deduplicate by traceId + routeId to avoid enqueueing the same trace/route multiple times
+                const uniqueTraceRoutes = Array.from(
+                  new Set(staleRecords.map((record) => `${record.traceId}|${record.routeId}`)),
+                ).filter((traceRoute) => !processedTraceIds.has(traceRoute));
 
-                if (uniqueTraceIds.length === 0) {
+                if (uniqueTraceRoutes.length === 0) {
                   this.logger.debug(
                     `DependencySweeperService: All traces in schema ${schemaName} already processed by previous connection, skipping`,
                   );
                   continue;
                 }
 
+                const traceIdsForReplica = Array.from(new Set(staleRecords.map((record) => record.traceId)));
                 // Batch-fetch all replica rows in one query to avoid N+1 problem
-                const replicaRows = await this.sweeperRepo.getReplicaDataSources(tenant.tenantId, schemaName, uniqueTraceIds);
+                const replicaRows = await this.sweeperRepo.getReplicaDataSources(tenant.tenantId, schemaName, traceIdsForReplica);
 
                 // Build a map from traceId -> replica row
                 const replicaMap = new Map<string, { dataSourceId: string }>();
@@ -103,26 +104,38 @@ export class DependencySweeperService {
                 }
 
                 // Process each trace with per-trace error handling
-                for (const traceId of uniqueTraceIds) {
+                for (const traceRoute of uniqueTraceRoutes) {
+                  const [traceId, routeId] = traceRoute.split('|');
                   try {
                     const replicaRow = replicaMap.get(traceId);
 
                     if (replicaRow) {
                       // First perform the DB claim/update and ensure it affected rows
-                      const claimed = await this.sweeperRepo.claimDeferredTrace(tenant.tenantId, schemaName, traceId);
+                      const claimed = await this.sweeperRepo.claimDeferredTrace(tenant.tenantId, schemaName, traceId, routeId);
 
                       // Only send to queue if the update affected rows
                       if (claimed) {
-                        await this.queueService.send(
-                          QueueName.NormalizedQueue,
-                          {
-                            traceId: traceId,
-                            dataSourceId: replicaRow.dataSourceId,
-                          },
-                        );
+                        try {
+                          await this.queueService.send(
+                            QueueName.NormalizedQueue,
+                            {
+                              traceId: traceId,
+                              dataSourceId: replicaRow.dataSourceId,
+                            },
+                          );
 
-                        // Mark as processed globally to prevent re-enqueueing in subsequent connections
-                        processedTraceIds.add(traceId);
+                          // Mark as processed globally to prevent re-enqueueing in subsequent connections
+                          processedTraceIds.add(traceRoute);
+                        } catch (sendErr) {
+                          this.logger.error(
+                            `DependencySweeperService: Failed to enqueue traceId ${traceId} (routeId ${routeId}) after claiming. Reverting claim.`,
+                            sendErr instanceof Error ? sendErr.stack : String(sendErr)
+                          );
+                          if (this.sweeperRepo.unclaimDeferredTrace) {
+                            await this.sweeperRepo.unclaimDeferredTrace(tenant.tenantId, schemaName, traceId, routeId);
+                          }
+                          throw sendErr; // rethrow to be caught by the per-trace error handler
+                        }
                       }
                     } else {
                       this.logger.warn(

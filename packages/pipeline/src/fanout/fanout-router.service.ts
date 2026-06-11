@@ -1,4 +1,5 @@
 import { StorageResolverService } from "../storage-resolver/storage-resolver.service.js";
+import { sql } from "drizzle-orm";
 import { Injectable, Inject, OnModuleInit, Logger } from "@nestjs/common";
 import { QueueService, QueueName } from "@soopa/queue";
 import { buildTenantSchema } from "@soopa/database";
@@ -85,6 +86,26 @@ export class FanoutRouterService implements OnModuleInit {
       let srcVendorId: string | undefined;
 
       const fanoutResult = await this.txManager.runInTenantTransaction(tenantId, schemaName, async (tx) => {
+        const entityId = await this.stateRepo.getReplicaSourceVendorId(traceId, schemaName, tx);
+        if (!entityId) {
+          throw new Error(
+            `Replica record not found for GEM threading (traceId=${traceId})`,
+          );
+        }
+        srcVendorId = entityId;
+
+        await tx.execute(sql`
+          INSERT INTO ${sql.raw('"' + schemaName + '"')}.active_sync_locks (data_source_id, entity_id)
+          VALUES (${dataSourceId}, ${entityId})
+          ON CONFLICT (data_source_id, entity_id) DO NOTHING
+        `);
+
+        await tx.execute(sql`
+          SELECT 1 FROM ${sql.raw('"' + schemaName + '"')}.active_sync_locks
+          WHERE data_source_id = ${dataSourceId} AND entity_id = ${entityId}
+          FOR UPDATE
+        `);
+
         const evaluation = await this.routingDecisionEngine.evaluateSuperseded(
           traceId,
           schemaName,
@@ -104,14 +125,6 @@ export class FanoutRouterService implements OnModuleInit {
 
         normalizedData = normalizedObj.data;
         canonicalType = normalizedObj.canonicalType;
-
-        const entityId = await this.stateRepo.getReplicaSourceVendorId(traceId, schemaName, tx);
-        if (!entityId) {
-          throw new Error(
-            `Replica record not found for GEM threading (traceId=${traceId})`,
-          );
-        }
-        srcVendorId = entityId;
 
         return { kind: "found" as const };
       });
@@ -154,10 +167,6 @@ export class FanoutRouterService implements OnModuleInit {
 
       lockRefCount.count = stitches.length;
 
-      // Temporary until batch processor is fully refactored
-      const tenantDb = await this.dbManager.getTenantDb(tenantId);
-      const { syncLog } = buildTenantSchema(schemaName);
-
       try {
         const stitchResults = await processInChunks(stitches, 5, (stitch) =>
           this.batchProcessor.processSingleStitch(
@@ -172,8 +181,6 @@ export class FanoutRouterService implements OnModuleInit {
             normalizedData,
             stitch,
             start,
-            syncLog,
-            tenantDb,
             lockRefCount,
           ),
         );

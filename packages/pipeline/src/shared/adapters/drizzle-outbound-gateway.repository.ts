@@ -37,7 +37,7 @@ export class DrizzleOutboundGatewayRepositoryAdapter implements OutboundGatewayR
           status = 'PENDING',
           attempts = 0,
           updated_at = NOW()
-        WHERE outbound_gateway.status IN ('DEFERRED_DEPENDENCY', 'FAILED')
+        WHERE outbound_gateway.status IN ('DEFERRED_DEPENDENCY', 'FAILED', 'PENDING')
           OR outbound_gateway.status IS NULL
         RETURNING status, (xmax = 0) as was_insert
       `);

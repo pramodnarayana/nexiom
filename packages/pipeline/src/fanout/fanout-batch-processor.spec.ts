@@ -72,7 +72,7 @@ describe("FanoutBatchProcessor", () => {
 
     const lockCount = { count: 1 };
     await processor.processSingleStitch(
-      "ws_123", "tr-1", "ds-1", "src-app", "prof", "t-1", "ven-1", "Contact", {}, stitch, Date.now(), null, null, lockCount
+      "ws_123", "tr-1", "ds-1", "src-app", "prof", "t-1", "ven-1", "Contact", {}, stitch, Date.now(), lockCount
     );
 
     expect(targetBuilder.buildPayload).toHaveBeenCalled();
@@ -89,7 +89,7 @@ describe("FanoutBatchProcessor", () => {
     const lockCount = { count: 1 };
     
     await processor.processSingleStitch(
-      "ws_123", "tr-1", "ds-1", "src-app", "prof", "t-1", "ven-1", "Contact", {}, { syncCondition: [] } as any, Date.now(), null, null, lockCount
+      "ws_123", "tr-1", "ds-1", "src-app", "prof", "t-1", "ven-1", "Contact", {}, { syncCondition: [] } as any, Date.now(), lockCount
     );
 
     expect(targetBuilder.buildPayload).not.toHaveBeenCalled();
@@ -103,7 +103,7 @@ describe("FanoutBatchProcessor", () => {
     const lockCount = { count: 1 };
     
     await processor.processSingleStitch(
-      "ws_123", "tr-1", "ds-1", "src-app", "prof", "t-1", "ven-1", "Contact", { status: "INACTIVE" }, stitch, Date.now(), null, null, lockCount
+      "ws_123", "tr-1", "ds-1", "src-app", "prof", "t-1", "ven-1", "Contact", { status: "INACTIVE" }, stitch, Date.now(), lockCount
     );
 
     expect(syncLogRepo.writeSyncLog).toHaveBeenCalledWith(
@@ -119,7 +119,7 @@ describe("FanoutBatchProcessor", () => {
     const lockCount = { count: 1 };
     
     await processor.processSingleStitch(
-      "ws_123", "tr-1", "ds-1", "src-app", "prof", "t-1", "ven-1", "Contact", {}, { id: "st-1", destDataSourceId: "ds-2", syncCondition: [] } as any, Date.now(), null, null, lockCount
+      "ws_123", "tr-1", "ds-1", "src-app", "prof", "t-1", "ven-1", "Contact", {}, { id: "st-1", destDataSourceId: "ds-2", syncCondition: [] } as any, Date.now(), lockCount
     );
 
     expect(syncLogRepo.writeSyncLog).toHaveBeenCalledWith(
@@ -133,7 +133,7 @@ describe("FanoutBatchProcessor", () => {
     const lockCount = { count: 1 };
     
     await processor.processSingleStitch(
-      "ws_123", "tr-1", "ds-1", "src-app", "prof", "t-1", "ven-1", "Contact", {}, { id: "st-1", destDataSourceId: "ds-2", syncCondition: [] } as any, Date.now(), null, null, lockCount
+      "ws_123", "tr-1", "ds-1", "src-app", "prof", "t-1", "ven-1", "Contact", {}, { id: "st-1", destDataSourceId: "ds-2", syncCondition: [] } as any, Date.now(), lockCount
     );
 
     expect(syncLogRepo.writeSyncLog).toHaveBeenCalledWith(
@@ -149,7 +149,7 @@ describe("FanoutBatchProcessor", () => {
     const lockCount = { count: 1 };
     
     await processor.processSingleStitch(
-      "ws_123", "tr-1", "ds-1", "src-app", "prof", "t-1", "ven-1", "Contact", {}, { id: "st-1", destDataSourceId: "ds-2", syncCondition: [] } as any, Date.now(), null, null, lockCount
+      "ws_123", "tr-1", "ds-1", "src-app", "prof", "t-1", "ven-1", "Contact", {}, { id: "st-1", destDataSourceId: "ds-2", syncCondition: [] } as any, Date.now(), lockCount
     );
 
     expect(queueService.send).not.toHaveBeenCalled();
@@ -168,7 +168,7 @@ describe("FanoutBatchProcessor", () => {
     const lockCount = { count: 1 };
     
     await processor.processSingleStitch(
-      "ws_123", "tr-1", "ds-1", "src-app", "prof", "t-1", "ven-1", "Contact", {}, { id: "st-1", destDataSourceId: "ds-2", syncCondition: [] } as any, Date.now(), null, null, lockCount
+      "ws_123", "tr-1", "ds-1", "src-app", "prof", "t-1", "ven-1", "Contact", {}, { id: "st-1", destDataSourceId: "ds-2", syncCondition: [] } as any, Date.now(), lockCount
     );
 
     expect(stateRepo.getDestinationEntityState).toHaveBeenCalled();

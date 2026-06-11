@@ -1,4 +1,4 @@
-import { BaseOutboxPoller, OutboxTable } from "./base-outbox.poller.js";
+import { BaseOutboxPoller, type OutboxTable } from "./base-outbox.poller.js";
 import { processInChunks } from "@soopa/pipeline";
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";

@@ -43,7 +43,7 @@ import type { MappingInput, MappingResult } from './mapping.types.js';
 
 // ─── Path Utilities (proto-safe) ─────────────────────────────────────────────
 // Inlined locally until T055 Phase 1 moves packages/engine → engine/platform/core/path-utils.
-// FIXME(T055-P1): replace with import from '@soopa/platform/path-utils'
+// FIXME(T055-P1): replace with import from '@soopa/utils/path-utils'
 
 function isSafeSegment(segment: string): boolean {
   return (

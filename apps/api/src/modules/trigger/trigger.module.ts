@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { DbModule } from '../../db/db.module.js';
+import { DatabaseModule } from '@soopa/database';
 import { REDIS_CLIENT } from '@soopa/cache';
 import type { Redis } from '@soopa/cache';
 
@@ -24,7 +24,7 @@ import { RedisTriggerDlqService } from './infrastructure/redis-trigger-dlq.servi
  * ScheduleModule is registered globally in AppModule via ScheduleModule.forRoot().
  */
 @Module({
-  imports: [DbModule, StorageResolverModule],
+  imports: [DatabaseModule, StorageResolverModule],
   providers: [
     {
       provide: IDistributedLockService,

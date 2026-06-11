@@ -64,4 +64,13 @@ export class TestDatabaseManager {
             }
         }
     }
+
+    /**
+     * Creates a PostgreSQL schema with the given name if it doesn't already exist.
+     * Useful in integration tests that spin up tenant schemas on the fly.
+     */
+    async createSchema(schemaName: string): Promise<void> {
+        if (!this.db) throw new Error('TestDatabaseManager not started. Call start() first.');
+        await this.db.execute({ sql: `CREATE SCHEMA IF NOT EXISTS "${schemaName}"`, params: [] } as any);
+    }
 }

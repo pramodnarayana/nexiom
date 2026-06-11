@@ -23,6 +23,17 @@ import { FIELD_MAPPING_REPOSITORY_PORT, FieldMappingRepositoryPort } from "../sh
 import { SYNC_LOG_REPOSITORY_PORT, SyncLogRepositoryPort } from "../shared/ports/sync-log.repository.port.js";
 import { OUTBOUND_GATEWAY_REPOSITORY_PORT, OutboundGatewayRepositoryPort } from "../shared/ports/outbound-gateway.repository.port.js";
 
+function extractSyncTokenFromState(state: Record<string, unknown>): string | undefined {
+  if (state.SyncToken) return String(state.SyncToken);
+  const entityKey = Object.keys(state).find(
+    (k) => k !== "time" && typeof state[k] === "object" && state[k] !== null,
+  );
+  if (entityKey) {
+    return (state[entityKey] as { SyncToken?: string })?.SyncToken;
+  }
+  return undefined;
+}
+
 @Injectable()
 export class FanoutBatchProcessor {
   private readonly logger = new Logger(FanoutBatchProcessor.name);
@@ -55,8 +66,6 @@ export class FanoutBatchProcessor {
     normalizedData: Record<string, unknown>,
     stitch: ActiveStitch,
     start: number,
-    syncLogObj: any, // kept for signature compatibility from caller if needed, or we just ignore it
-    tenantDbObj: any, // kept for signature compatibility
     lockRefCount: { count: number },
   ): Promise<void> {
     try {
@@ -175,18 +184,7 @@ export class FanoutBatchProcessor {
 
             if (state) {
               destState = state;
-              let debugSyncToken = (state as { SyncToken?: string })?.SyncToken;
-              if (!debugSyncToken) {
-                const entityKey = Object.keys(state).find(
-                  (k) =>
-                    k !== "time" &&
-                    typeof state[k] === "object" &&
-                    state[k] !== null,
-                );
-                if (entityKey)
-                  debugSyncToken = (state[entityKey] as { SyncToken?: string })
-                    ?.SyncToken;
-              }
+              const debugSyncToken = extractSyncTokenFromState(state as Record<string, unknown>);
               this.logger.log(
                 {
                   event: "l4.debug.dest_state_found",
@@ -279,11 +277,14 @@ export class FanoutBatchProcessor {
             `Failed best-effort MQ publish: ${sanitizeError(sendErr)}`,
           );
 
-          await this.outboxRepo.markOutboundGatewayFailed(
+          await this.outboxRepo.upsertPendingOutboundGateway(
             srcTenantId,
             destSchemaName,
             traceId,
-            stitch.id
+            stitch.id,
+            stitch.destDataSourceId,
+            dataSourceId,
+            hydratedPayload
           );
 
           throw sendErr;

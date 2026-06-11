@@ -16,7 +16,7 @@ import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { vi } from 'vitest';
 
-import * as schema from './../src/db/schema.js';
+import * as schema from '@soopa/database';
 
 describe('Invitation Flow (e2e)', () => {
   let app: INestApplication;

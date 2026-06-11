@@ -178,10 +178,10 @@ export class ClaimDeliveryUseCase {
     // ── Check if delivery already succeeded AND source-side finalized ─────
     if (currentStatus === "SUCCESS") {
       sourceFinalized = await this.retryService.isSourceFinalized(
+        tenantId,
         srcSchemaName,
         traceId,
         routeId,
-        tenantId,
       );
       if (sourceFinalized) {
         this.logger.debug(
@@ -240,10 +240,10 @@ export class ClaimDeliveryUseCase {
     // ── Check if delivery already failed AND source-side finalized ─────
     if (currentStatus === "FAIL") {
       sourceFinalized = await this.retryService.isSourceFinalized(
+        tenantId,
         srcSchemaName,
         traceId,
         routeId,
-        tenantId,
       );
       if (sourceFinalized) {
         this.logger.debug(

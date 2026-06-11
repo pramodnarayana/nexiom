@@ -38,6 +38,7 @@ describe("DependencySweeperService (Unit)", () => {
       tenantId,
       schemaName,
       traceId,
+      routeId: 'rt-1',
       timestamp: Date.now() - 6 * 60 * 1000,
       claimed: false,
     });
@@ -83,6 +84,7 @@ describe("DependencySweeperService (Unit)", () => {
       tenantId,
       schemaName,
       traceId,
+      routeId: 'rt-1',
       timestamp: Date.now() - 6 * 60 * 1000,
       claimed: false,
     });
@@ -114,6 +116,7 @@ describe("DependencySweeperService (Unit)", () => {
       tenantId,
       schemaName,
       traceId,
+      routeId: 'rt-1',
       timestamp: Date.now() - 6 * 60 * 1000,
       claimed: true, // Already claimed by another worker!
     });
@@ -148,6 +151,7 @@ describe("DependencySweeperService (Unit)", () => {
       tenantId,
       schemaName,
       traceId,
+      routeId: 'rt-1',
       timestamp: Date.now() - 2 * 60 * 1000, // Only 2 mins old
       claimed: false,
     });
@@ -176,8 +180,8 @@ describe("DependencySweeperService (Unit)", () => {
     // Both schemas return the same traceId
     const traceId = 'trace-1';
     repo.deferredTraces.push(
-      { tenantId: 'tenant-1', schemaName: 'ws_conn1', traceId, timestamp: Date.now() - 6 * 60 * 1000, claimed: false },
-      { tenantId: 'tenant-1', schemaName: 'ws_conn2', traceId, timestamp: Date.now() - 6 * 60 * 1000, claimed: false }
+      { tenantId: 'tenant-1', schemaName: 'ws_conn1', traceId, routeId: 'rt-1', timestamp: Date.now() - 6 * 60 * 1000, claimed: false },
+      { tenantId: 'tenant-1', schemaName: 'ws_conn2', traceId, routeId: 'rt-1', timestamp: Date.now() - 6 * 60 * 1000, claimed: false }
     );
     
     repo.replicaDataSources.push(
@@ -205,8 +209,8 @@ describe("DependencySweeperService (Unit)", () => {
     );
 
     repo.deferredTraces.push(
-      { tenantId: 'tenant-1', schemaName: 'ws_conn1', traceId: 'trace-good', timestamp: Date.now() - 6 * 60 * 1000, claimed: false },
-      { tenantId: 'tenant-1', schemaName: 'ws_conn1', traceId: 'trace-bad', timestamp: Date.now() - 6 * 60 * 1000, claimed: false }
+      { tenantId: 'tenant-1', schemaName: 'ws_conn1', traceId: 'trace-good', routeId: 'rt-1', timestamp: Date.now() - 6 * 60 * 1000, claimed: false },
+      { tenantId: 'tenant-1', schemaName: 'ws_conn1', traceId: 'trace-bad', routeId: 'rt-2', timestamp: Date.now() - 6 * 60 * 1000, claimed: false }
     );
     
     repo.replicaDataSources.push(
@@ -215,7 +219,7 @@ describe("DependencySweeperService (Unit)", () => {
     );
 
     // Make claim fail for trace-bad
-    vi.spyOn(repo, 'claimDeferredTrace').mockImplementation(async (tenantId, schema, traceId) => {
+    vi.spyOn(repo, 'claimDeferredTrace').mockImplementation(async (tenantId, schema, traceId, routeId) => {
       if (traceId === 'trace-bad') throw new Error('Simulated trace error');
       return true;
     });
@@ -237,7 +241,7 @@ describe("DependencySweeperService (Unit)", () => {
     // Make getDeferredTraces fail for ws_bad
     vi.spyOn(repo, 'getDeferredTraces').mockImplementation(async (tenantId, schema, olderThan) => {
       if (schema === 'ws_bad') throw new Error('Simulated conn error');
-      return [{ traceId: 'trace-1' }];
+      return [{ traceId: 'trace-1', routeId: 'rt-1' }];
     });
 
     repo.replicaDataSources.push({ tenantId: 'tenant-1', schemaName: 'ws_good', traceId: 'trace-1', dataSourceId: 'ds-1' });
@@ -247,7 +251,7 @@ describe("DependencySweeperService (Unit)", () => {
     await service.sweepDeferredDependencies();
 
     // Good connection should still process
-    expect(repo.claimDeferredTrace).toHaveBeenCalledWith('tenant-1', 'ws_good', 'trace-1');
+    expect(repo.claimDeferredTrace).toHaveBeenCalledWith('tenant-1', 'ws_good', 'trace-1', 'rt-1');
     expect(queueService.send).toHaveBeenCalledTimes(1);
   });
 
@@ -264,7 +268,7 @@ describe("DependencySweeperService (Unit)", () => {
 
     vi.spyOn(repo, 'getDeferredTraces').mockImplementation(async (tenantId, schema, older) => {
        if (tenantId === 'tenant-bad') throw new Error('Simulated tenant error');
-       return [{ traceId: 'trace-good' }];
+       return [{ traceId: 'trace-good', routeId: 'rt-1' }];
     });
     
     repo.replicaDataSources.push({ tenantId: 'tenant-good', schemaName: 'ws_good', traceId: 'trace-good', dataSourceId: 'ds-good' });

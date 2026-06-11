@@ -15,7 +15,7 @@ export class GitopsSyncWorker implements OnModuleInit {
   private readonly logger = new Logger(GitopsSyncWorker.name);
   private readonly SHARD_BASE_PATH =
     process.env.SHARD_APPLICATION_PATH ||
-    path.resolve(process.cwd(), "../../engine/sync/application");
+    path.resolve(process.cwd(), "../../sync/application");
   private readonly DEFAULT_BRANCH = process.env.DEFAULT_BRANCH || "main";
   private isSyncRunning = false;
 

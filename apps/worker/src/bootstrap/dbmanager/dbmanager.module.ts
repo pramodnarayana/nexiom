@@ -106,15 +106,15 @@ function buildCredentialResolver(): CredentialResolver {
             });
 
             pool.on("error", (err) => {
-              let dbName = connectionString;
+              let dbName = "<redacted-connection>";
               try {
                 const url = new URL(connectionString);
                 dbName =
                   url.pathname.replace(/^\/+/, "") ||
                   url.searchParams.get("dbname") ||
-                  connectionString;
+                  url.hostname;
               } catch {
-                // Fall back to original connectionString if URL parsing fails
+                // Fall back to <redacted-connection> if URL parsing fails
               }
               console.error(
                 `Unexpected error on idle tenant DB client [${dbName}]`,
