@@ -20,3 +20,5 @@ export * from './constants.js';
 export * from './database.module.js';
 export * from './savepoint/index.js';
 export * from './repository/base.repository.js';
+export * from './test-db.js';
+
