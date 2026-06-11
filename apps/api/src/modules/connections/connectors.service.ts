@@ -26,7 +26,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { getWorkspaceSchemaName } from '@soopa/dbmanager';
 import type { DatabaseManager } from '@soopa/dbmanager';
 import { DB_MANAGER } from '@soopa/dbmanager';
-import { StorageResolverService } from '@soopa/engine';
+import { StorageResolverService } from '@soopa/pipeline';
 import { PieceRegistryService } from '@soopa/piece-registry';
 import { extractPgError, PG_UNIQUE_VIOLATION } from '../../shared/db.utils.js';
 

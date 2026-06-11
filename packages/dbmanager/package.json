@@ -8,7 +8,9 @@
 	"types": "dist/index.d.ts",
 	"scripts": {
 		"build": "tsc",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"test:cov": "vitest run --coverage"
 	},
 	"dependencies": {
 		"@soopa/database": "workspace:*",

@@ -45,6 +45,8 @@ export function getDb(): DrizzleDb {
         max: 20,
         idleTimeoutMillis: 30_000,
         connectionTimeoutMillis: 5_000,
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 10_000,
     });
 
     dbInstance = drizzle({ client: pool, schema: schemaBundle });

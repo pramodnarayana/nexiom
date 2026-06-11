@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '@soopa/auth';
-import { DbModule } from '../../db/db.module.js';
-import { StorageResolverModule } from '@soopa/engine';
+import { DatabaseModule } from '@soopa/database';
+import { StorageResolverModule } from '@soopa/pipeline';
 import { ObservabilityModule } from '../observability/observability.module.js';
 import { ExceptionService } from './exception.service.js';
 import { IDeliveryQueueDispatcher } from './interfaces/delivery-queue-dispatcher.interface.js';
@@ -9,7 +9,12 @@ import { SoopaDeliveryQueueDispatcherService } from './infrastructure/soopa-deli
 import { ExceptionController } from './exception.controller.js';
 
 @Module({
-  imports: [DbModule, AuthModule, StorageResolverModule, ObservabilityModule],
+  imports: [
+    DatabaseModule,
+    AuthModule,
+    StorageResolverModule,
+    ObservabilityModule,
+  ],
   controllers: [ExceptionController],
   providers: [
     ExceptionService,

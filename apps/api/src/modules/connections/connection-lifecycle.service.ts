@@ -27,7 +27,7 @@ import { ConnectionPausedEvent } from './events/connection-paused.event.js';
 import { SchemaPlan } from '@soopa/dbmanager';
 import type { DatabaseManager } from '@soopa/dbmanager';
 import { DB_MANAGER } from '@soopa/dbmanager';
-import { StorageResolverService } from '@soopa/engine';
+import { StorageResolverService } from '@soopa/pipeline';
 
 export interface ProvisionInfo {
   schemaName: string;

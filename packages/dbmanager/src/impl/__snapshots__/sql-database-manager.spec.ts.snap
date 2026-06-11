@@ -4,6 +4,6 @@ exports[`SqlDatabaseManager > GATEWAY_ACTIVE calls CREATE SCHEMA + gateway DDL >
 
 exports[`SqlDatabaseManager > NORMALIZE_ACTIVE calls schema + gateway + replica + normalize DDL > NORMALIZE_ACTIVE DDL count 1`] = `47`;
 
-exports[`SqlDatabaseManager > OUTBOUND_ACTIVE calls all five provisioning stages > OUTBOUND_ACTIVE DDL count 1`] = `61`;
+exports[`SqlDatabaseManager > OUTBOUND_ACTIVE calls all five provisioning stages > OUTBOUND_ACTIVE DDL count 1`] = `60`;
 
 exports[`SqlDatabaseManager > REPLICA_ACTIVE calls schema + gateway + replica DDL > REPLICA_ACTIVE DDL count 1`] = `36`;

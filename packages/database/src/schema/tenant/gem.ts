@@ -5,6 +5,7 @@ import {
     timestamp,
     index,
     uniqueIndex,
+    unique,
 } from 'drizzle-orm/pg-core';
 import { integrationStitches } from '../global/stitches.js';
 import { dataSources } from '../global/data-sources.js';
@@ -58,7 +59,7 @@ export const globalEntityMap = pgTable('global_entity_map', {
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
     // One mapping per (source record, destination app+type) pair per route
-    uniqueIndex('gem_unique_mapping_idx').on(
+    unique('gem_unique_mapping_idx').on(
         table.stitchId,
         table.sourceDataSourceId,
         table.sourceEntityId,

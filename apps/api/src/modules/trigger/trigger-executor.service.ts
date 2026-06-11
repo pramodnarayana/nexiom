@@ -11,7 +11,7 @@ import { sql, eq } from 'drizzle-orm';
 import { SchemaPlan } from '@soopa/dbmanager';
 import type { DatabaseManager } from '@soopa/dbmanager';
 import { DB_MANAGER } from '@soopa/dbmanager';
-import { StorageResolverService } from '@soopa/engine';
+import { StorageResolverService } from '@soopa/pipeline';
 import { randomUUID } from 'node:crypto';
 import { IDistributedLockService } from './interfaces/distributed-lock.interface.js';
 import { KeyValueTriggerStore } from './key-value-trigger-store.js';

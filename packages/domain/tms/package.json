@@ -16,7 +16,9 @@
 		"build": "tsc -p tsconfig.lib.json",
 		"dev": "tsc -p tsconfig.lib.json --watch --preserveWatchOutput",
 		"clean": "rm -rf dist",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"test:cov": "vitest run --coverage"
 	},
 	"dependencies": {
 		"@soopa/metadata-engine": "workspace:*",

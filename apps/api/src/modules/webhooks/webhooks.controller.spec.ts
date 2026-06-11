@@ -7,7 +7,7 @@ import { getLoggerToken } from 'nestjs-pino';
 import { WebhooksController } from './webhooks.controller.js';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';
-import { StorageResolverService } from '@soopa/engine';
+import { StorageResolverService } from '@soopa/pipeline';
 import { executeAppWebhookResponses } from '@soopa/piece-framework';
 
 vi.mock('@soopa/piece-framework', () => ({

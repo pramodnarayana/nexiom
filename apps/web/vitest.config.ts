@@ -15,13 +15,15 @@ export default defineConfig({
             "@": path.resolve(__dirname, "./src"),
         },
     },
-    test: {
+    test: { name: 'web',
         globals: true,
         fileParallelism: true,
-        pool: 'forks',
-        environment: './src/test/environments/jsdom-msw',
+        environment: 'jsdom',
         testTimeout: 10000,
-        setupFiles: ['./src/test/setup-env.ts', './src/test/setup.ts'],
+        setupFiles: [
+            path.resolve(__dirname, './src/test/setup-env.ts'),
+            path.resolve(__dirname, './src/test/setup.ts')
+        ],
         exclude: ['e2e/**', 'node_modules/**'],
         coverage: {
             thresholds: {

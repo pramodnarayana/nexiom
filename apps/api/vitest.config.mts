@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default defineConfig({
+    esbuild: false,
     test: {
         setupFiles: ['./vitest.setup.ts'],
         globals: true,
@@ -84,6 +85,7 @@ export default defineConfig({
         // @ts-expect-error - Type mismatch between vitest/config vite version and local vite plugin version
         swc.vite({
             module: { type: 'es6' },
+            tsconfigFile: path.resolve(__dirname, 'tsconfig.json'),
             jsc: {
                 parser: {
                     syntax: 'typescript',

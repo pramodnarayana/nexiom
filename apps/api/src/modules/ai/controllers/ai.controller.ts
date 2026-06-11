@@ -18,7 +18,7 @@ import {
   OrchestratorService,
   ChatRequest,
   ChatPersistenceService,
-} from '@soopa/ai-engine';
+} from '@soopa/ai';
 import { QueueName, QUEUE_SERVICE } from '@soopa/queue';
 import type { IQueueService } from '@soopa/queue';
 import { PinoLogger } from 'nestjs-pino';

@@ -9,6 +9,7 @@ const __dirname = path.dirname(__filename);
 export default defineConfig({
     root: path.resolve(__dirname),
     test: {
+        exclude: ['**/dist/**', '**/node_modules/**'],
         setupFiles: ['./vitest.setup.ts'],
         globals: true,
         environment: 'node',
@@ -68,6 +69,7 @@ export default defineConfig({
         // @ts-expect-error - Type mismatch between vitest/config vite version and local vite plugin version
         swc.vite({
             module: { type: 'es6' },
+            tsconfigFile: path.resolve(__dirname, 'tsconfig.json'),
             jsc: {
                 parser: {
                     syntax: 'typescript',

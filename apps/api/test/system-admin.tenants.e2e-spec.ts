@@ -5,8 +5,8 @@ import { Server } from 'node:http';
 import { AppModule } from './../src/app/app.module.js';
 import { SystemAdminGuard } from './../src/modules/identity/auth/system-admin.guard.js';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import * as schema from './../src/db/schema.js';
-import { eq } from 'drizzle-orm';
+import * as schema from '@soopa/database';
+import { eq, like } from 'drizzle-orm';
 
 interface TenantResponse {
   id: string;
@@ -39,9 +39,10 @@ describe('SystemAdminController (e2e)', () => {
 
     // Preemptive Cleanup: Ensure no E2E test tenants exist from a previous crash
     const db = app.get<NodePgDatabase<typeof schema>>('DRIZZLE_DB');
-    const staleTenants = await db.query.organization.findMany({
-      where: (org, { like }) => like(org.slug, 'e2e-%'),
-    });
+    const staleTenants = await db
+      .select()
+      .from(schema.organization)
+      .where(like(schema.organization.slug, 'e2e-%'));
 
     for (const tenant of staleTenants) {
       await db

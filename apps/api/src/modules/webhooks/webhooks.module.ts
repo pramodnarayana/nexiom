@@ -2,8 +2,8 @@ import { Module } from '@nestjs/common';
 import { WebhooksController } from './webhooks.controller.js';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';
-import { DbModule } from '../../db/db.module.js';
-import { StorageResolverModule } from '@soopa/engine';
+import { DatabaseModule } from '@soopa/database';
+import { StorageResolverModule } from '@soopa/pipeline';
 import { PiecesModule } from '@soopa/piece-registry';
 import { ObservabilityModule } from '../observability/observability.module.js';
 
@@ -12,7 +12,12 @@ import { ObservabilityModule } from '../observability/observability.module.js';
 // for this injection to resolve. If CacheModule is ever made non-global,
 // add `CacheModule` to the imports array here.
 @Module({
-  imports: [DbModule, StorageResolverModule, PiecesModule, ObservabilityModule],
+  imports: [
+    DatabaseModule,
+    StorageResolverModule,
+    PiecesModule,
+    ObservabilityModule,
+  ],
   controllers: [WebhooksController],
   providers: [WebhookSignatureGuard, TenantRateLimitGuard],
 })

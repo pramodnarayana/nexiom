@@ -1,4 +1,4 @@
-import type { StreamResult } from '@soopa/engine';
+import type { StreamResult } from '@soopa/pipeline';
 
 /**
  * SyncResult — outcome of a single connection sync execution attempt.

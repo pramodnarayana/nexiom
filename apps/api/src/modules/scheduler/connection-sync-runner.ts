@@ -25,7 +25,7 @@ import {
   type SyncStateDocument,
   type StreamDescriptor,
   type StreamResult,
-} from '@soopa/engine';
+} from '@soopa/pipeline';
 import { PieceRegistryService } from '@soopa/piece-registry';
 import type { SyncResult } from './sync-runner.js';
 import { pollLockKey } from './lock-keys.js';

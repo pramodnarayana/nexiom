@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ExceptionService } from './exception.service.js';
 import { DATABASE_CONNECTION } from '@soopa/database';
-import { StorageResolverService } from '@soopa/engine';
+import { StorageResolverService } from '@soopa/pipeline';
 import { IDeliveryQueueDispatcher } from './interfaces/delivery-queue-dispatcher.interface.js';
 import { PinoLogger } from 'nestjs-pino';
 

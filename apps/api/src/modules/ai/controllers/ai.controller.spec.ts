@@ -3,7 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthGuard } from '@soopa/auth';
 import { AiRateLimitGuard } from '../interceptors/ai-ratelimit.guard.js';
 import { AiController } from './ai.controller.js';
-import { OrchestratorService, ChatPersistenceService } from '@soopa/ai-engine';
+import { OrchestratorService, ChatPersistenceService } from '@soopa/ai';
 import { PinoLogger } from 'nestjs-pino';
 import { QUEUE_SERVICE, QueueName } from '@soopa/queue';
 

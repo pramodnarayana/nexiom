@@ -25,7 +25,7 @@ import {
 } from '@soopa/database';
 import type { DrizzleDb } from '@soopa/database';
 import { QueueService, QueueName } from '@soopa/queue';
-import { StorageResolverService } from '@soopa/engine';
+import { StorageResolverService } from '@soopa/pipeline';
 import { DB_MANAGER, type TenantDatabaseManager } from '@soopa/dbmanager';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';

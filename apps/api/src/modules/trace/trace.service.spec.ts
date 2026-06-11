@@ -4,7 +4,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { TraceService } from './trace.service.js';
 import { DATABASE_CONNECTION } from '@soopa/database';
 import { getTableName } from 'drizzle-orm';
-import { StorageResolverService } from '@soopa/engine';
+import { StorageResolverService } from '@soopa/pipeline';
 import { PinoLogger } from 'nestjs-pino';
 import { DB_MANAGER } from '@soopa/dbmanager';
 

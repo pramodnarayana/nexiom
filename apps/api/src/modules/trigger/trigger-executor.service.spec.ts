@@ -7,7 +7,7 @@ import { TriggerStrategy } from '@soopa/piece-framework';
 import type { Trigger } from '@soopa/piece-framework';
 import type { DrizzleDb } from '@soopa/database';
 import type { DatabaseManager } from '@soopa/dbmanager';
-import type { StorageResolverService } from '@soopa/engine';
+import type { StorageResolverService } from '@soopa/pipeline';
 import type { IKeyValueStore } from '@soopa/cache';
 import type { IDistributedLockService } from './interfaces/distributed-lock.interface.js';
 import type { ITriggerDlqService } from './interfaces/trigger-dlq.interface.js';

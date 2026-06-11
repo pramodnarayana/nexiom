@@ -90,7 +90,7 @@ describe('SqlDatabaseManager', () => {
     });
 
     it('OUTBOUND_ACTIVE calls all five provisioning stages', async () => {
-        await manager.applyPlan('ws_test', SchemaPlan.OUTBOUND_ACTIVE);
+        await manager.applyPlan('ws_test', SchemaPlan.OUTBOUND_ACTIVE, { appName: 'test', appProfile: 'test' });
 
         const allSql = db._queryMock.mock.calls.map((c: any[]) => String(c[0])).join('\n');
 

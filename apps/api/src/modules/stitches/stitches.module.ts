@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '@soopa/auth';
 import { CacheModule } from '@soopa/cache';
 import { EncryptionService, AesEncryptionService } from '@soopa/credentials';
-import { DbModule } from '../../db/db.module.js';
+import { DatabaseModule } from '@soopa/database';
 import { ConnectionsModule } from '../connections/connections.module.js';
 import { StitchesController } from './stitches.controller.js';
 import { StitchesMetadataController } from './stitches-metadata.controller.js';
@@ -13,7 +13,7 @@ import { MetadataModule } from '@soopa/piece-registry';
 
 @Module({
   imports: [
-    DbModule,
+    DatabaseModule,
     AuthModule,
     CacheModule,
     ConnectionsModule,
