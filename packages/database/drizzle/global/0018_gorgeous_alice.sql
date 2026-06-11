@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_pieces" ADD CONSTRAINT "ux_workspace_pieces_workspaceId_pieceId" UNIQUE("workspace_id","piece_id");

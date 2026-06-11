@@ -1,0 +1,23 @@
+{
+  "name": "@soopa/observability",
+  "version": "1.0.0",
+  "description": "Shared Pino logger configuration for Nexiom",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.4.1",
+    "@nestjs/config": "^3.2.3",
+    "nestjs-pino": "^4.1.0",
+    "pino": "^9.4.0",
+    "pino-http": "^10.3.0",
+    "pino-pretty": "^11.2.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}
