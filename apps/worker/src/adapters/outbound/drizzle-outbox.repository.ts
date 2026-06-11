@@ -53,7 +53,7 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
         .where(
           sql`(${this.table.id}) IN (
             SELECT id FROM ${sql.identifier(schemaName)}.${sql.identifier(tableName)}
-            WHERE status = 'PENDING'
+            WHERE (status = 'PENDING' AND (next_retry_at IS NULL OR next_retry_at <= NOW()))
                OR (status = 'RETRY' AND next_retry_at <= NOW())
                OR (status = 'PROCESSING' AND next_retry_at <= NOW())
             ORDER BY next_retry_at ASC

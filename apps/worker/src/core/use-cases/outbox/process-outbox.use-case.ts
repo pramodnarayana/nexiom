@@ -50,12 +50,12 @@ export class ProcessOutboxUseCase {
     schemaName: string,
     row: OutboxRow,
   ): Promise<void> {
-    const payload = this.config.payloadMapper
-      ? this.config.payloadMapper(row)
-      : row.payload;
-
     let published = false;
     try {
+      const payload = this.config.payloadMapper
+        ? this.config.payloadMapper(row)
+        : row.payload;
+
       await this.queuePublisher.send(this.config.queueName, payload);
       published = true;
     } catch (err) {
