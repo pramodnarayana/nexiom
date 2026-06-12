@@ -71,5 +71,6 @@ describe("Identity Package", () => {
 
     // Exceptions
     expect((IdentityPackage as any).UserNotFoundError).toBeDefined();
+    expect((IdentityPackage as any).TenantNotFoundError).toBeDefined();
   });
 });

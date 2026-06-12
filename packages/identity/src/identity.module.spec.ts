@@ -8,6 +8,11 @@ import {
   ROLE_REPOSITORY,
   IDENTITY_OPTIONS,
 } from "./constants.js";
+import { BetterAuthAdapter } from "./adapters/outbound/better-auth.adapter.js";
+import { DrizzleUserRepositoryAdapter } from "./adapters/outbound/drizzle-user.repository.js";
+import { DrizzleTenantRepositoryAdapter } from "./adapters/outbound/drizzle-tenant.repository.js";
+import { DrizzlePermissionRepositoryAdapter } from "./adapters/outbound/drizzle-permission.repository.js";
+import { DrizzleRoleRepositoryAdapter } from "./adapters/outbound/drizzle-role.repository.js";
 
 import type {
   DynamicModule,
@@ -94,25 +99,25 @@ describe("IdentityModule.register", () => {
 
     // Verify providers use correct classes with safe type narrowing
     const authProv = assertClassProvider(AUTH_PROVIDER, "AUTH_PROVIDER");
-    expect(authProv.useClass).toBeDefined();
+    expect(authProv.useClass).toBe(BetterAuthAdapter);
 
     const userProv = assertClassProvider(USER_REPOSITORY, "USER_REPOSITORY");
-    expect(userProv.useClass).toBeDefined();
+    expect(userProv.useClass).toBe(DrizzleUserRepositoryAdapter);
 
     const tenantProv = assertClassProvider(
       TENANT_REPOSITORY,
       "TENANT_REPOSITORY",
     );
-    expect(tenantProv.useClass).toBeDefined();
+    expect(tenantProv.useClass).toBe(DrizzleTenantRepositoryAdapter);
 
     const permProv = assertClassProvider(
       PERMISSION_REPOSITORY,
       "PERMISSION_REPOSITORY",
     );
-    expect(permProv.useClass).toBeDefined();
+    expect(permProv.useClass).toBe(DrizzlePermissionRepositoryAdapter);
 
     const roleProv = assertClassProvider(ROLE_REPOSITORY, "ROLE_REPOSITORY");
-    expect(roleProv.useClass).toBeDefined();
+    expect(roleProv.useClass).toBe(DrizzleRoleRepositoryAdapter);
   });
 
   it("registerAsync wires providers correctly", () => {

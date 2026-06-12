@@ -278,6 +278,7 @@ describe("DrizzleUserRepositoryAdapter", () => {
       membership: any[],
       adminCount: any[],
       remainingMemberships: any[],
+      tenantExists: boolean = true,
     ) => {
       mockSelect.mockReset();
 
@@ -299,6 +300,7 @@ describe("DrizzleUserRepositoryAdapter", () => {
 
           // 1. Lock
           if (columns?.id && !columns.memberId) {
+            chain.for.mockResolvedValue(tenantExists ? [{ id: "org" }] : []);
             return chain;
           }
 
@@ -344,6 +346,12 @@ describe("DrizzleUserRepositoryAdapter", () => {
         },
       );
     };
+
+    // Scenario 0: Tenant not found
+    setupMocks([], [], [], false);
+    await expect(adapter.deleteIfNotLastAdmin("u1", "o1")).rejects.toThrow(
+      "Organization not found",
+    );
 
     // Scenario 1: User not member
     setupMocks([], [], []);

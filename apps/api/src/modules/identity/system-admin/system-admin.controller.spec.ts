@@ -223,6 +223,7 @@ describe('SystemAdminController', () => {
       });
 
       expect(result).toEqual(mockUser);
+      expect(mockRoleProvider.findById).toHaveBeenCalledWith('member');
       expect(mockUserProvider.create).toHaveBeenCalledWith({
         name: 'Test',
         email: 'new@example.com',

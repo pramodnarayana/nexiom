@@ -7,6 +7,7 @@ import {
   User as UserInterface,
   IAuthProvider,
   UserNotFoundError,
+  TenantNotFoundError,
 } from "../../core/ports/outbound/index.js";
 import type { CreateUserInput } from "../../core/ports/outbound/index.js";
 import * as schema from "../../schema.js";
@@ -275,11 +276,15 @@ export class DrizzleUserRepositoryAdapter implements IUserRepository {
 
     return await this.db.transaction(async (tx) => {
       // 0. Acquire lock on organization row to prevent write-skew (concurrent admin deletions)
-      await tx
+      const orgLock = await tx
         .select({ id: schema.organization.id })
         .from(schema.organization)
         .where(eq(schema.organization.id, tenantId))
         .for("update");
+
+      if (!orgLock.length) {
+        throw new TenantNotFoundError("Organization not found");
+      }
 
       // 1. Verify user exists and is a member of the tenant, and get their role
       const membershipWithRole = await tx

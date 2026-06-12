@@ -37,6 +37,11 @@ describe("GetUserByIdUseCase", () => {
     await expect(useCase.execute("user1", "tenant1")).rejects.toThrow(
       NotFoundException,
     );
+    expect(userRepository.findById).toHaveBeenCalledWith("user1");
+    expect(tenantRepository.findOneForUser).toHaveBeenCalledWith(
+      "user1",
+      "tenant1",
+    );
   });
 
   it("should return user if member of tenant", async () => {
@@ -46,5 +51,10 @@ describe("GetUserByIdUseCase", () => {
 
     const result = await useCase.execute("user1", "tenant1");
     expect(result).toEqual(user);
+    expect(userRepository.findById).toHaveBeenCalledWith("user1");
+    expect(tenantRepository.findOneForUser).toHaveBeenCalledWith(
+      "user1",
+      "tenant1",
+    );
   });
 });
