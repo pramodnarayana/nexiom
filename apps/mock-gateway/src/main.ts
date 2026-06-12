@@ -21,10 +21,9 @@ const pathToThisFileDir = dirname(__filename);
 
 const candidatePaths = [
   // Primary: 3 levels up from src/ reaches the monorepo root
-  join(pathToThisFileDir, '../../../engine/application/pieces'),
-  // Fallbacks for alternative monorepo layouts / build output locations
-  join(pathToThisFileDir, '../../engine/application/pieces'),
-  join(pathToThisFileDir, '../engine/application/pieces'),
+  join(pathToThisFileDir, '../../../plugins'),
+  join(pathToThisFileDir, '../../plugins'),
+  join(pathToThisFileDir, '../plugins'),
 ];
 
 const piecesDir = candidatePaths.find(p => existsSync(p));

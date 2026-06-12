@@ -22,8 +22,8 @@ RUN addgroup -S mockgateway && adduser -S mockgateway -G mockgateway
 ENV NODE_ENV=production
 ENV PORT=4000
 
-# We MUST copy engine/application/pieces because main.js scans for openapi.json dynamically!
-COPY --chown=mockgateway:mockgateway engine/application/pieces ./engine/application/pieces
+# We MUST copy plugins because main.js scans for openapi.json dynamically!
+COPY --chown=mockgateway:mockgateway plugins ./plugins
 
 # Copy the completely isolated, pre-installed deployment bundle from builder
 COPY --chown=mockgateway:mockgateway --from=builder /app/deploy ./apps/mock-gateway

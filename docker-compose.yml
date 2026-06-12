@@ -1,3 +1,4 @@
+name: platform
 version: '3.8'
 
 # Top-level variables — resolved by Compose at parse time from .env or the
