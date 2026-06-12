@@ -11,21 +11,9 @@ import {
   Logger,
   Inject,
 } from '@nestjs/common';
-import type { DrizzleDb } from '@soopa/database';
-import { DATABASE_CONNECTION } from '@soopa/database';
+import { RunWebhookUseCase } from './core/use-cases/run-webhook.use-case.js';
+import type { TriggerAppConnectionRepositoryPort } from './core/ports/outbound/trigger-app-connection-repository.port.js';
 import { PieceRegistryService } from '@soopa/piece-registry';
-import { TriggerExecutorService } from './trigger-executor.service.js';
-
-interface ConnectionRow {
-  workspace_id: string;
-  tenant_id: string;
-  app_name: string;
-  trigger_name: string;
-  object_type: string | null;
-  auth: unknown;
-  props_value: Record<string, unknown>;
-  webhook_secret: string | null;
-}
 
 /**
  * Receives inbound webhook pushes from source applications.
@@ -43,9 +31,10 @@ export class WebhooksController {
   private readonly logger = new Logger(WebhooksController.name);
 
   constructor(
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    @Inject('TRIGGER_APP_CONNECTION_REPOSITORY_PORT')
+    private readonly connectionRepo: TriggerAppConnectionRepositoryPort,
     private readonly pieceRegistry: PieceRegistryService,
-    private readonly executor: TriggerExecutorService,
+    private readonly runWebhookUseCase: RunWebhookUseCase,
   ) {}
 
   @Post(':dataSourceId')
@@ -55,75 +44,49 @@ export class WebhooksController {
     @Headers() headers: Record<string, string>,
     @RawBody() rawBody: Buffer,
   ): Promise<{ received: true }> {
-    // 1. Resolve connection
-    const conn = await this.resolveConnection(dataSourceId);
+    const conn = await this.connectionRepo.findActiveConnection(dataSourceId);
     if (!conn) {
       throw new NotFoundException(
         `No active webhook connection found for id: ${dataSourceId}`,
       );
     }
 
-    // 2. Resolve trigger
     const trigger = this.pieceRegistry.getTrigger(
-      conn.app_name,
-      conn.trigger_name,
+      conn.appName,
+      conn.triggerName,
     );
     if (!trigger || trigger.type !== 'WEBHOOK') {
       throw new NotFoundException(
-        `No webhook trigger '${conn.trigger_name}' registered for app '${conn.app_name}'`,
+        `No webhook trigger '${conn.triggerName}' registered for app '${conn.appName}'`,
       );
     }
 
-    // 3. Signature verification (throws on failure → 401)
     try {
-      await this.executor.runWebhook({
+      await this.runWebhookUseCase.execute({
         trigger,
-        appName: conn.app_name,
-        triggerName: conn.trigger_name,
-        objectType: conn.object_type ?? undefined,
+        appName: conn.appName,
+        triggerName: conn.triggerName,
+        objectType: conn.objectType,
         auth: conn.auth,
-        propsValue: conn.props_value,
-        tenantId: conn.tenant_id,
-        workspaceId: conn.workspace_id,
+        propsValue: conn.propsValue,
+        tenantId: conn.tenantId,
+        workspaceId: conn.workspaceId,
         dataSourceId,
         headers,
         rawBody,
-        secret: conn.webhook_secret ?? undefined,
+        secret: conn.webhookSecret,
       });
     } catch (err) {
-      // Re-throw signature errors as 401; anything else surfaces as 500
       if (err instanceof UnauthorizedException) throw err;
       this.logger.error('Webhook processing failed', {
         dataSourceId,
-        appName: conn.app_name,
-        triggerName: conn.trigger_name,
+        appName: conn.appName,
+        triggerName: conn.triggerName,
         error: err instanceof Error ? err.message : String(err),
       });
       throw err;
     }
 
     return { received: true };
-  }
-
-  private async resolveConnection(
-    dataSourceId: string,
-  ): Promise<ConnectionRow | null> {
-    const result = await this.db.$client.query<ConnectionRow>(
-      `SELECT
-                ac.workspace_id,
-                ac.tenant_id,
-                ac.app_name,
-                ac.trigger_name,
-                ac.object_type,
-                ac.encrypted_credentials AS auth,
-                ac.props_value,
-                ac.webhook_secret
-             FROM app_credential ac
-             WHERE ac.id = $1
-               AND ac.status = 'active'
-             LIMIT 1`,
-      [dataSourceId],
-    );
-    return result.rows[0] ?? null;
   }
 }

@@ -5,7 +5,7 @@ import { StitchRepositoryPort, ActiveStitch } from "../../shared/ports/stitch.re
 import { DB_MANAGER, type DatabaseManager } from "@soopa/dbmanager";
 
 @Injectable()
-export class DrizzleStitchRepositoryAdapter implements StitchRepositoryPort {
+export class DrizzleSharedStitchRepositoryAdapter implements StitchRepositoryPort {
   constructor(
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {}

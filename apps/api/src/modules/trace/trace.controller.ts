@@ -6,18 +6,19 @@ import {
   ParseUUIDPipe,
   ParseIntPipe,
   UseGuards,
-  Inject,
   BadRequestException,
   DefaultValuePipe,
 } from '@nestjs/common';
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@soopa/auth';
-import { TraceService } from './trace.service.js';
+import { ListTracesUseCase } from './core/use-cases/trace/list-traces.use-case.js';
+import { GetTraceUseCase } from './core/use-cases/trace/get-trace.use-case.js';
 
 @Controller('stitches/:stitchId/traces')
 @UseGuards(AuthGuard)
 export class TraceController {
   constructor(
-    @Inject(TraceService) private readonly traceService: TraceService,
+    private readonly listTracesUseCase: ListTracesUseCase,
+    private readonly getTraceUseCase: GetTraceUseCase,
   ) {}
 
   /**
@@ -39,7 +40,7 @@ export class TraceController {
       throw new BadRequestException('Organization context is missing');
     }
 
-    return this.traceService.listTraces(
+    return this.listTracesUseCase.execute(
       orgId,
       stitchId,
       workspaceId,
@@ -66,6 +67,6 @@ export class TraceController {
       throw new BadRequestException('Organization context is missing');
     }
 
-    return this.traceService.getTrace(orgId, stitchId, traceId, workspaceId);
+    return this.getTraceUseCase.execute(orgId, stitchId, traceId, workspaceId);
   }
 }

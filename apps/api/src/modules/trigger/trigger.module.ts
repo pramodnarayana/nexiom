@@ -1,15 +1,13 @@
 import { Module } from '@nestjs/common';
-import { DatabaseModule } from '@soopa/database';
+import { DatabaseModule, DATABASE_CONNECTION } from '@soopa/database';
 import { REDIS_CLIENT } from '@soopa/cache';
 import type { Redis } from '@soopa/cache';
 
 import { PieceRegistryService } from '@soopa/piece-registry';
-import { TriggerExecutorService } from './trigger-executor.service.js';
 import { PollerService } from './poller.service.js';
 import { DlqProcessorService } from './dlq-processor.service.js';
 import { TriggerPayloadTransformer } from './trigger-payload-transformer.js';
 import { TriggerRetryPolicyService } from './trigger-retry-policy.service.js';
-import { DATABASE_CONNECTION } from '@soopa/database';
 import type { DrizzleDb } from '@soopa/database';
 import { StorageResolverModule } from '@soopa/pipeline';
 import { IDistributedLockService } from './interfaces/distributed-lock.interface.js';
@@ -17,12 +15,18 @@ import { ITriggerDlqService } from './interfaces/trigger-dlq.interface.js';
 import { RedisDistributedLockService } from './infrastructure/redis-distributed-lock.service.js';
 import { RedisTriggerDlqService } from './infrastructure/redis-trigger-dlq.service.js';
 
-/**
- * Wires all trigger-related services.
- *
- * Redis is provided globally by CacheModule (imported in AppModule).
- * ScheduleModule is registered globally in AppModule via ScheduleModule.forRoot().
- */
+// --- Adapters ---
+import { DrizzleTriggerGatewayRepositoryAdapter } from './adapters/outbound/drizzle-trigger-gateway.repository.js';
+import { DrizzleTriggerAppConnectionAdapter } from './adapters/outbound/drizzle-trigger-app-connection.repository.js';
+import { PipelineDatabaseProvisionerAdapter } from './adapters/outbound/pipeline-database-provisioner.adapter.js';
+import { PipelineTriggerStorageResolverAdapter } from './adapters/outbound/pipeline-trigger-storage-resolver.adapter.js';
+
+// --- Use Cases ---
+import { RunWebhookUseCase } from './core/use-cases/run-webhook.use-case.js';
+import { RunPollUseCase } from './core/use-cases/run-poll.use-case.js';
+import { EnableTriggerUseCase } from './core/use-cases/enable-trigger.use-case.js';
+import { DisableTriggerUseCase } from './core/use-cases/disable-trigger.use-case.js';
+
 @Module({
   imports: [DatabaseModule, StorageResolverModule],
   providers: [
@@ -41,34 +45,55 @@ import { RedisTriggerDlqService } from './infrastructure/redis-trigger-dlq.servi
     },
     TriggerPayloadTransformer,
     TriggerRetryPolicyService,
-    TriggerExecutorService,
+
+    // Adapters
+    {
+      provide: 'TRIGGER_GATEWAY_REPOSITORY_PORT',
+      useClass: DrizzleTriggerGatewayRepositoryAdapter,
+    },
+    {
+      provide: 'TRIGGER_APP_CONNECTION_REPOSITORY_PORT',
+      useClass: DrizzleTriggerAppConnectionAdapter,
+    },
+    {
+      provide: 'DATABASE_PROVISIONER_PORT',
+      useClass: PipelineDatabaseProvisionerAdapter,
+    },
+    {
+      provide: 'TRIGGER_STORAGE_RESOLVER_PORT',
+      useClass: PipelineTriggerStorageResolverAdapter,
+    },
+
+    // Use Cases
+    RunWebhookUseCase,
+    RunPollUseCase,
+    EnableTriggerUseCase,
+    DisableTriggerUseCase,
+
     {
       provide: PollerService,
       useFactory: (
         db: DrizzleDb,
-        executor: TriggerExecutorService,
+        runPollUseCase: RunPollUseCase,
         registry: PieceRegistryService,
-      ) => new PollerService(db, executor, registry),
-      inject: [
-        DATABASE_CONNECTION,
-        TriggerExecutorService,
-        PieceRegistryService,
-      ],
+      ) => new PollerService(db, runPollUseCase, registry),
+      inject: [DATABASE_CONNECTION, RunPollUseCase, PieceRegistryService],
     },
     {
       provide: DlqProcessorService,
       useFactory: (
         dlqService: ITriggerDlqService,
-        executor: TriggerExecutorService,
+        runPollUseCase: RunPollUseCase,
         registry: PieceRegistryService,
-      ) => new DlqProcessorService(dlqService, executor, registry),
-      inject: [
-        ITriggerDlqService,
-        TriggerExecutorService,
-        PieceRegistryService,
-      ],
+      ) => new DlqProcessorService(dlqService, runPollUseCase, registry),
+      inject: [ITriggerDlqService, RunPollUseCase, PieceRegistryService],
     },
   ],
-  exports: [TriggerExecutorService],
+  exports: [
+    RunWebhookUseCase,
+    RunPollUseCase,
+    EnableTriggerUseCase,
+    DisableTriggerUseCase,
+  ],
 })
 export class TriggerModule {}

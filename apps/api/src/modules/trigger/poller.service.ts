@@ -2,7 +2,7 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { DrizzleDb } from '@soopa/database';
 import { DATABASE_CONNECTION } from '@soopa/database';
-import { TriggerExecutorService } from './trigger-executor.service.js';
+import { RunPollUseCase } from './core/use-cases/run-poll.use-case.js';
 import { PieceRegistryService } from '@soopa/piece-registry';
 
 interface ActiveConnection {
@@ -39,7 +39,7 @@ export class PollerService {
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
-    private readonly executor: TriggerExecutorService,
+    private readonly runPollUseCase: RunPollUseCase,
     private readonly pieceRegistry: PieceRegistryService,
   ) {}
 
@@ -121,17 +121,20 @@ export class PollerService {
     );
     if (!trigger || trigger.type !== 'POLLING') return;
 
-    const executed = await this.executor.runPoll({
-      trigger,
-      appName: conn.app_name,
-      triggerName: conn.trigger_name,
-      objectType: conn.object_type ?? undefined,
-      auth: conn.auth,
-      propsValue: conn.props_value,
-      tenantId: conn.tenant_id,
-      workspaceId: conn.workspace_id,
-      dataSourceId: conn.data_source_id,
-    });
+    const executed = await this.runPollUseCase.execute(
+      {
+        trigger,
+        appName: conn.app_name,
+        triggerName: conn.trigger_name,
+        objectType: conn.object_type ?? undefined,
+        auth: conn.auth,
+        propsValue: conn.props_value,
+        tenantId: conn.tenant_id,
+        workspaceId: conn.workspace_id,
+        dataSourceId: conn.data_source_id,
+      },
+      false,
+    );
 
     if (!executed) {
       // Lock was held by another pod — emit observable telemetry so SRE can

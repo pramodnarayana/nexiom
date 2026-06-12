@@ -8,7 +8,7 @@ import { DrizzleFieldMappingRepositoryAdapter } from "./drizzle-field-mapping.re
 import { DrizzleGlobalEntityMapRepositoryAdapter } from "./drizzle-global-entity-map.repository.js";
 import { DrizzleOutboundGatewayRepositoryAdapter } from "./drizzle-outbound-gateway.repository.js";
 import { DrizzlePipelineStateRepositoryAdapter } from "./drizzle-pipeline-state.repository.js";
-import { DrizzleStitchRepositoryAdapter } from "./drizzle-stitch.repository.js";
+import { DrizzleSharedStitchRepositoryAdapter } from "./drizzle-stitch.repository.js";
 import { DrizzleSyncLogRepositoryAdapter } from "./drizzle-sync-log.repository.js";
 import { DrizzleTransactionManagerAdapter } from "./drizzle-transaction-manager.adapter.js";
 import { sql } from "drizzle-orm";
@@ -24,7 +24,7 @@ describe("Fanout Drizzle Adapters", () => {
   let gemAdapter: DrizzleGlobalEntityMapRepositoryAdapter;
   let outboxAdapter: DrizzleOutboundGatewayRepositoryAdapter;
   let stateAdapter: DrizzlePipelineStateRepositoryAdapter;
-  let stitchAdapter: DrizzleStitchRepositoryAdapter;
+  let stitchAdapter: DrizzleSharedStitchRepositoryAdapter;
   let syncLogAdapter: DrizzleSyncLogRepositoryAdapter;
   let txManagerAdapter: DrizzleTransactionManagerAdapter;
 
@@ -70,7 +70,7 @@ describe("Fanout Drizzle Adapters", () => {
     gemAdapter = new DrizzleGlobalEntityMapRepositoryAdapter(testDbManager.db!, mockDbManager);
     outboxAdapter = new DrizzleOutboundGatewayRepositoryAdapter(mockDbManager);
     stateAdapter = new DrizzlePipelineStateRepositoryAdapter(mockDbManager);
-    stitchAdapter = new DrizzleStitchRepositoryAdapter(mockDbManager);
+    stitchAdapter = new DrizzleSharedStitchRepositoryAdapter(mockDbManager);
     syncLogAdapter = new DrizzleSyncLogRepositoryAdapter(mockDbManager);
     txManagerAdapter = new DrizzleTransactionManagerAdapter(mockDbManager);
   }, 60000);

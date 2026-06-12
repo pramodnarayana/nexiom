@@ -19,8 +19,8 @@ import { EncryptionService } from '@soopa/credentials';
 import { PieceRegistryService } from '@soopa/piece-registry';
 import { ConnectionRepository } from '../repositories/connection.repository.js';
 import type { AnyProperty } from '@soopa/piece-framework';
-import { CredentialLinkingService } from '../services/credential-linking.service.js';
-import type { ConnectionValueBlob } from '../connectors.service.js';
+import { DeleteConnectionUseCase } from '../core/use-cases/delete-connection.use-case.js';
+import type { ConnectionValueBlob } from '../core/types/connection.types.js';
 
 function parseConnectionCredentials(decrypted: string): {
   clientId: string;
@@ -61,7 +61,7 @@ export class CredentialController {
   constructor(
     private readonly connectionRepository: ConnectionRepository,
     private readonly pieceRegistry: PieceRegistryService,
-    private readonly credentialLinking: CredentialLinkingService,
+    private readonly deleteConnectionUseCase: DeleteConnectionUseCase,
     private readonly crypto: EncryptionService,
   ) {}
 
@@ -300,7 +300,7 @@ export class CredentialController {
 
     try {
       await this.assertAdminOrOwner(ctx.user.id, tenantId);
-      await this.credentialLinking.deleteConnection(tenantId, dataSourceId);
+      await this.deleteConnectionUseCase.execute(tenantId, dataSourceId);
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;

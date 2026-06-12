@@ -20,9 +20,10 @@ import { PieceRegistryService } from '@soopa/piece-registry';
 import { AppCredentialError } from '@soopa/credentials';
 import { ConnectionRepository } from '../repositories/connection.repository.js';
 
-import { OAuthOrchestrationService } from '../services/oauth-orchestration.service.js';
-import { CredentialLinkingService } from '../services/credential-linking.service.js';
 import { OauthStateService } from '../oauth-state.service.js';
+import { StoreOAuthConnectionUseCase } from '../core/use-cases/store-oauth-connection.use-case.js';
+import { GetAuthorizationUrlUseCase } from '../core/use-cases/get-authorization-url.use-case.js';
+import { ExchangeOAuthTokenUseCase } from '../core/use-cases/exchange-oauth-token.use-case.js';
 import { CreateOAuthSession } from '../validation/create-oauth-session.js';
 import { ExchangeOAuthCode } from '../validation/exchange-oauth-code.js';
 import { VALID_PROVIDER_NAME_REGEX } from '../validation/constants.js';
@@ -190,13 +191,14 @@ export class OAuthController {
   constructor(
     private readonly connectionRepository: ConnectionRepository,
     private readonly pieceRegistry: PieceRegistryService,
-    private readonly oauthOrchestration: OAuthOrchestrationService,
-    private readonly credentialLinking: CredentialLinkingService,
     private readonly oauthStateService: OauthStateService,
+    private readonly getAuthorizationUrlUseCase: GetAuthorizationUrlUseCase,
+    private readonly exchangeOAuthTokenUseCase: ExchangeOAuthTokenUseCase,
+    private readonly storeOAuthConnectionUseCase: StoreOAuthConnectionUseCase,
   ) {}
 
   private resolveVendorParams(
-    providerDef: ReturnType<OAuthOrchestrationService['getProviderDefinition']>,
+    providerDef: ReturnType<PieceRegistryService['getPiece']>,
     rawParams: Record<string, string | number | boolean> | undefined,
   ): Record<string, string> {
     if (!rawParams) return {};
@@ -269,8 +271,7 @@ export class OAuthController {
       }
     }
 
-    const providerDef =
-      this.oauthOrchestration.getProviderDefinition(providerName);
+    const providerDef = this.pieceRegistry.getPiece(providerName);
     if (!providerDef) {
       throw new BadRequestException(`Unknown provider: ${providerName}`);
     }
@@ -360,7 +361,7 @@ export class OAuthController {
         vendorParams,
         metadata,
       );
-      authorizeUrl = this.oauthOrchestration.getAuthorizationUrl(
+      authorizeUrl = this.getAuthorizationUrlUseCase.execute(
         providerName,
         jwtState,
         clientId,
@@ -475,13 +476,44 @@ export class OAuthController {
 
     const { vendorParams, metadata } = statePayload;
 
-    const tokens = await this.oauthOrchestration.exchangeCodeForTokens(
-      body.providerName,
-      body.code,
-      body.clientId ?? '',
-      body.clientSecret ?? '',
-      vendorParams,
-    );
+    let tokens: Record<string, unknown>;
+    try {
+      tokens = await this.exchangeOAuthTokenUseCase.execute(
+        body.providerName,
+        body.code,
+        body.clientId ?? '',
+        body.clientSecret ?? '',
+        vendorParams,
+      );
+    } catch (err: unknown) {
+      let status = 500;
+      let message = 'Unexpected error during token exchange';
+
+      if (err instanceof Error) {
+        message = err.message;
+        if (
+          'status' in err &&
+          typeof (err as { status?: unknown }).status === 'number'
+        ) {
+          status = (err as { status: number }).status;
+        }
+      }
+
+      if (status === 400)
+        throw new BadRequestException(
+          `Failed to exchange code with ${body.providerName}`,
+        );
+      if (status === 401)
+        throw new UnauthorizedException(
+          `Failed to exchange code with ${body.providerName}`,
+        );
+      if (status >= 400 && status < 500)
+        throw new HttpException(
+          `Failed to exchange code with ${body.providerName}`,
+          status,
+        );
+      throw new InternalServerErrorException(message);
+    }
 
     const expiresInSeconds = parseExpiresIn(tokens.expires_in);
     const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
@@ -510,7 +542,7 @@ export class OAuthController {
     const envType = deriveEnvType(vendorParams);
 
     const stringifiedValue = JSON.stringify(valueBlob);
-    await this.credentialLinking.storeOAuthConnection({
+    await this.storeOAuthConnectionUseCase.execute({
       id: body.dataSourceId,
       tenantId,
       providerName: body.providerName,

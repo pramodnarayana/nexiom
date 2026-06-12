@@ -26,7 +26,7 @@ import { DrizzleRoutingRepositoryAdapter } from "./shared/adapters/drizzle-routi
 import { CONNECTION_REPOSITORY_PORT } from "./shared/ports/connection.repository.port.js";
 import { DrizzleConnectionRepositoryAdapter } from "./shared/adapters/drizzle-connection.repository.js";
 import { STITCH_REPOSITORY_PORT } from "./shared/ports/stitch.repository.port.js";
-import { DrizzleStitchRepositoryAdapter } from "./shared/adapters/drizzle-stitch.repository.js";
+import { DrizzleSharedStitchRepositoryAdapter } from "./shared/adapters/drizzle-stitch.repository.js";
 import { PIPELINE_STATE_REPOSITORY_PORT } from "./shared/ports/pipeline-state.repository.port.js";
 import { DrizzlePipelineStateRepositoryAdapter } from "./shared/adapters/drizzle-pipeline-state.repository.js";
 import { GLOBAL_ENTITY_MAP_REPOSITORY_PORT } from "./shared/ports/global-entity-map.repository.port.js";
@@ -78,7 +78,7 @@ import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-ca
     },
     {
       provide: STITCH_REPOSITORY_PORT,
-      useClass: DrizzleStitchRepositoryAdapter,
+      useClass: DrizzleSharedStitchRepositoryAdapter,
     },
     {
       provide: PIPELINE_STATE_REPOSITORY_PORT,
