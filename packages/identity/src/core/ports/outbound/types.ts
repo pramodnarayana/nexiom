@@ -63,7 +63,7 @@ export type UserListItem =
       kind: "invitation";
       id: string;
       email: string;
-      name: string;
+      name?: string;
       role: string;
       status: "pending";
       emailVerified: boolean;

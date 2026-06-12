@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NotFoundException } from "@nestjs/common";
 import { GetUserProfileUseCase } from "./get-user-profile.use-case.js";
 import type { IUserRepository } from "../../ports/outbound/user-repository.port.js";
 
@@ -21,5 +22,14 @@ describe("GetUserProfileUseCase", () => {
 
     expect(result).toEqual(expectedUser);
     expect(userRepository.findById).toHaveBeenCalledWith("user1");
+  });
+
+  it("should throw NotFoundException when user is not found", async () => {
+    userRepository.findById.mockResolvedValue(null);
+
+    await expect(useCase.execute("user-id")).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(userRepository.findById).toHaveBeenCalledWith("user-id");
   });
 });

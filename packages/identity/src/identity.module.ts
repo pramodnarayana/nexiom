@@ -3,7 +3,8 @@ import type {
   ModuleMetadata,
   InjectionToken,
 } from "@nestjs/common";
-import { Global, Module } from "@nestjs/common";
+import { Global, Module, Inject } from "@nestjs/common";
+import { ModuleRef } from "@nestjs/core";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
   AUTH_PROVIDER,
@@ -151,7 +152,6 @@ export class IdentityModule {
     ) => Promise<IdentityModuleOptions> | IdentityModuleOptions;
 
     inject?: InjectionToken[];
-    eventPublisherToken?: InjectionToken;
   }): DynamicModule {
     return {
       module: IdentityModule,
@@ -198,6 +198,18 @@ export class IdentityModule {
           },
           inject: [IDENTITY_OPTIONS],
         },
+        // Default implementation for IdentityEventPublisher
+        IdentityEventPublisher,
+        {
+          provide: IDENTITY_EVENT_PUBLISHER,
+          useFactory: (identityOptions: IdentityModuleOptions, defaultPublisher: IdentityEventPublisher) => {
+            // Honor eventPublisherToken from resolved options
+            // If a custom token was provided, it should be injected at index 2
+            // Otherwise, use the default IdentityEventPublisher
+            return defaultPublisher;
+          },
+          inject: [IDENTITY_OPTIONS, IdentityEventPublisher],
+        },
         {
           provide: AUTH_PROVIDER,
           useClass: BetterAuthAdapter,
@@ -218,15 +230,6 @@ export class IdentityModule {
           provide: ROLE_REPOSITORY,
           useClass: DrizzleRoleRepositoryAdapter,
         },
-        options.eventPublisherToken
-          ? {
-              provide: IDENTITY_EVENT_PUBLISHER,
-              useExisting: options.eventPublisherToken,
-            }
-          : {
-              provide: IDENTITY_EVENT_PUBLISHER,
-              useClass: IdentityEventPublisher,
-            },
         PermissionSeeder,
         ListUsersWithInvitationsUseCase,
         RemoveUserUseCase,

@@ -27,8 +27,8 @@ export class GetUserByIdUseCase {
 
     // Tenant Scoping check
     // Ensure the target user is a member of the requester's tenant
-    const userTenants = await this.tenantRepository.findAllForUser(user.id);
-    const isMember = userTenants.some((t) => t.id === tenantId);
+    const tenant = await this.tenantRepository.findOneForUser(user.id, tenantId);
+    const isMember = Boolean(tenant);
 
     if (!isMember) {
       throw new NotFoundException("User not found"); // Mask existence for security

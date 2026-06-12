@@ -59,6 +59,7 @@ import { NestCacheInvalidatorAdapter } from "./adapters/outbound/nest-cache-inva
         encryptionKey: cfg.get("ENCRYPTION_KEY"),
         kmsKeyId: cfg.get("KMS_KEY_ID"),
         kmsEndpoint: cfg.get("KMS_ENDPOINT"),
+        region: cfg.get("KMS_REGION"),
       }),
     }),
     PiecesModule.forRoot(),

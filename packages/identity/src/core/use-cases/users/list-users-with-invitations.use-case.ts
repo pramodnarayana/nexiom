@@ -43,7 +43,7 @@ export class ListUsersWithInvitationsUseCase {
         isInvitation: true,
         permissions: undefined,
         image: undefined,
-        banned: false,
+        banned: undefined,
       }),
     );
 

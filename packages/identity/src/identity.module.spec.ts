@@ -5,6 +5,7 @@ import {
   USER_REPOSITORY,
   TENANT_REPOSITORY,
   PERMISSION_REPOSITORY,
+  ROLE_REPOSITORY,
   IDENTITY_OPTIONS,
 } from "./constants.js";
 
@@ -69,12 +70,14 @@ describe("IdentityModule.register", () => {
     expect(tokens).toContain(USER_REPOSITORY);
     expect(tokens).toContain(TENANT_REPOSITORY);
     expect(tokens).toContain(PERMISSION_REPOSITORY);
+    expect(tokens).toContain(ROLE_REPOSITORY);
 
     // exports contain tokens
     expect(mod.exports).toContain(AUTH_PROVIDER);
     expect(mod.exports).toContain(USER_REPOSITORY);
     expect(mod.exports).toContain(TENANT_REPOSITORY);
     expect(mod.exports).toContain(PERMISSION_REPOSITORY);
+    expect(mod.exports).toContain(ROLE_REPOSITORY);
 
     // factories inject requested tokens
     // Verify providers use correct classes
@@ -107,6 +110,12 @@ describe("IdentityModule.register", () => {
       "PERMISSION_REPOSITORY",
     );
     expect(permProv.useClass).toBeDefined();
+
+    const roleProv = assertClassProvider(
+      ROLE_REPOSITORY,
+      "ROLE_REPOSITORY",
+    );
+    expect(roleProv.useClass).toBeDefined();
   });
 
   it("registerAsync wires providers correctly", () => {

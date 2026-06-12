@@ -57,6 +57,7 @@ import { PluginsModule } from '../modules/plugins/plugins.module.js';
         encryptionKey: cfg.get('ENCRYPTION_KEY'),
         kmsKeyId: cfg.get('KMS_KEY_ID'),
         kmsEndpoint: cfg.get('KMS_ENDPOINT'),
+        region: cfg.get('KMS_REGION'),
       }),
     }),
     // Global Redis client — available to all modules via REDIS_CLIENT token
