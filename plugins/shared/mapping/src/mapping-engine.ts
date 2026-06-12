@@ -115,7 +115,7 @@ function cloneMappedValue(val: unknown): unknown {
 type CompiledExpression = ReturnType<typeof jsonata>;
 
 /**
- * Compile a JSONata expression string and bind Nexiom extensions.
+ * Compile a JSONata expression string and bind Soopa extensions.
  * Throws if the expression has a syntax error (fail-fast at compile time).
  */
 function compile(src: string): CompiledExpression {

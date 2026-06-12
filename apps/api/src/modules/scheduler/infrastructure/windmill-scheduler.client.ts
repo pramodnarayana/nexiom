@@ -8,7 +8,7 @@ const UUID_RE =
 
 /**
  * Windmill schedule path for a given connection.
- * All connection schedules live under f/connections/ in the nexiom workspace.
+ * All connection schedules live under f/connections/ in the soopa workspace.
  * Validates that connectionId is a UUID to prevent path traversal in the Windmill API URL.
  */
 export function schedulePathFor(connectionId: string): string {
@@ -80,7 +80,7 @@ export class WindmillSchedulerClient implements ISchedulerClient {
       path: CONNECTION_RUNNER_PATH,
       summary: 'Connection Runner',
       description:
-        'Shared Windmill script that triggers a Nexiom connection sync via the internal scheduler API.',
+        'Shared Windmill script that triggers a Soopa connection sync via the internal scheduler API.',
       content: CONNECTION_RUNNER_CONTENT(this.callbackUrl, this.internalSecret),
       language: 'deno',
       schema: {

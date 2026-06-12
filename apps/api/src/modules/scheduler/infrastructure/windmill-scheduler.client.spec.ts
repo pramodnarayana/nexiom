@@ -5,7 +5,7 @@ import { WindmillSchedulerClient } from './windmill-scheduler.client.js';
 import { IHttpClient } from '../interfaces/http-client.interface.js';
 
 const BASE_URL = 'https://windmill.example.com';
-const WORKSPACE = 'nexiom';
+const WORKSPACE = 'platform';
 const TOKEN = 'test-token';
 const STITCH_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 

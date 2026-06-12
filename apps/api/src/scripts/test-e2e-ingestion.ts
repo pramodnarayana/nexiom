@@ -27,7 +27,7 @@ async function run() {
 
   const databaseUrl =
     process.env.DATABASE_URL ||
-    'postgres://postgres:postgres@localhost:5432/nexiom_local';
+    'postgres://postgres:postgres@localhost:5432/platform_local';
 
   // Sanitize DATABASE_URL for logging
   let sanitizedUrl = databaseUrl;

@@ -1,6 +1,6 @@
 # CrowdSec vs FingerprintJS - Bot Protection Comparison
 
-**Decision:** Bot protection strategy for Nexiom API  
+**Decision:** Bot protection strategy for Soopa API  
 **Date:** 2026-01-22  
 **Requirement:** 100% open source, production-grade bot protection
 
@@ -8,7 +8,7 @@
 
 ## TL;DR: CrowdSec Wins for Backend APIs ⭐
 
-**Recommendation:** Use **CrowdSec** for Nexiom
+**Recommendation:** Use **CrowdSec** for Soopa
 
 **Why:**
 
@@ -287,15 +287,15 @@ async signup(@Body() dto: SignupDto) {
 
 ---
 
-## Use Case: Nexiom Platform
+## Use Case: Soopa Platform
 
-### Why CrowdSec is Better for Nexiom
+### Why CrowdSec is Better for Soopa
 
-**Nexiom's Requirements:**
+**Soopa's Requirements:**
 
 1. ✅ Protect **API endpoints** (not just browser UI)
 2. ✅ Support **mobile apps** (future)
-3. ✅ Protect **webhook endpoints** (source apps → Nexiom)
+3. ✅ Protect **webhook endpoints** (source apps → Soopa)
 4. ✅ Detect **brute force** on login/signup
 5. ✅ Block **known bad actors** (botnets, proxies)
 6. ✅ **Self-hostable** (open source requirement)
@@ -326,7 +326,7 @@ FingerprintJS:
 
 ---
 
-## Recommendation for Nexiom
+## Recommendation for Soopa
 
 ### **Use CrowdSec** ⭐
 

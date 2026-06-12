@@ -183,7 +183,7 @@ export class BetterAuthAdapter implements IAuthProvider {
             console.log("SENDING EMAIL NOW");
             await this.emailService.sendEmail({
               to: user.email,
-              subject: "Verify your email for Nexiom",
+              subject: "Verify your email for Soopa",
               text: `Please verify your email by clicking the following link: ${verificationUrl}`,
               html: `<p>Please verify your email by clicking the following link: <a href="${verificationUrl}">${verificationUrl}</a></p>`,
             });

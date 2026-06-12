@@ -73,7 +73,7 @@ describe('Invitation Flow (e2e)', () => {
     await db.insert(schema.user).values({
       id: 'mock-user-id',
       name: 'Admin User',
-      email: 'admin@nexiom.com',
+      email: 'admin@soopa.com',
       emailVerified: true,
       createdAt: new Date(),
       updatedAt: new Date(),

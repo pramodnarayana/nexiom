@@ -221,7 +221,7 @@ export interface Piece {
      */
     describeStreams?(credentials: Record<string, unknown>): Promise<StreamDescriptor[]>;
     /**
-     * Converts a raw vendor record (from L2 replica) to Nexiom's canonical model.
+     * Converts a raw vendor record (from L2 replica) to Soopa's canonical model.
      * Called by NormalizationService (L3) for each entity in the replica store.
      * Returns null if this piece does not normalize the given objectType
      * (e.g. a trigger-only piece without a canonical mapping).

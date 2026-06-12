@@ -13,7 +13,7 @@ Windmill decides **when** to poll. CursorManagerService decides **where to start
 
 **Why Windmill over DolphinScheduler:**
 
-- **No JVM / Zookeeper overhead** — Windmill is written in Go and Rust; the only backing store is PostgreSQL (shared with the existing Nexiom instance, separate database).
+- **No JVM / Zookeeper overhead** — Windmill is written in Go and Rust; the only backing store is PostgreSQL (shared with the existing Soopa instance, separate database).
 - **Native TypeScript workers** — the execution script runs in a Deno runtime inside a Windmill worker; no HTTP-task abstraction layer.
 - **Simpler tenancy** — schedules are addressed by path (`f/stitches/{stitchId}`); no per-org "project code" needs to be stored.
 - **One fewer backing service** — no Zookeeper, no separate cluster registry.
@@ -37,7 +37,7 @@ Windmill is deployed as a sidecar alongside the NestJS API. It acts as the sole 
 
 **Conceptual mapping:**
 
-| Windmill Concept | Nexiom Mapping |
+| Windmill Concept | Soopa Mapping |
 | --- | --- |
 | Workspace | `NEXIOM` — one shared workspace for all tenants |
 | Script | Stitch runner — one shared `f/stitch-runner/main` TypeScript script |
@@ -202,17 +202,17 @@ NestJS  SchedulerWorker
 
 Every stitch create/update/delete operation is mirrored to Windmill via the `WindmillClient`. The stitch-runner script (`f/stitch-runner/main`) is provisioned once during service init (`WindmillClient.ensureConnectionScript()`) and shared across all stitches.
 
-**No per-org project concept:** Each stitch's schedule is addressed directly by path. The org-to-stitch relationship is enforced by Nexiom's own DB (via `integration_stitch.orgId`), not by Windmill workspace partitioning.
+**No per-org project concept:** Each stitch's schedule is addressed directly by path. The org-to-stitch relationship is enforced by Soopa's own DB (via `integration_stitch.orgId`), not by Windmill workspace partitioning.
 
 | Stitch Action | Windmill Action |
 | --- | --- |
-| `POST /stitches` (`scheduleEnabled=true`) | `POST /api/w/nexiom/schedules` → create schedule at `f/stitches/{stitchId}` with cron + args `{ stitchId }` |
+| `POST /stitches` (`scheduleEnabled=true`) | `POST /api/w/soopa/schedules` → create schedule at `f/stitches/{stitchId}` with cron + args `{ stitchId }` |
 | `POST /stitches` (`scheduleEnabled=false`) | Create schedule with `enabled: false` |
-| `PATCH /stitches/:id/schedule` (update interval) | `POST /api/w/nexiom/schedules/update/f/stitches/{stitchId}` → new cron |
-| `PATCH /stitches/:id/schedule` (`scheduleEnabled=false`) | `POST /api/w/nexiom/schedules/setenabled/f/stitches/{stitchId}` → `{ enabled: false }` |
-| `PATCH /stitches/:id/schedule` (`scheduleEnabled=true`) | `POST /api/w/nexiom/schedules/setenabled/f/stitches/{stitchId}` → `{ enabled: true }` |
-| `POST /stitches/:id/schedule/trigger` | `POST /api/w/nexiom/jobs/run/p/f/stitch-runner/main` → `{ args: { stitchId } }` |
-| `DELETE /stitches/:id` | `DELETE /api/w/nexiom/schedules/delete/f/stitches/{stitchId}` |
+| `PATCH /stitches/:id/schedule` (update interval) | `POST /api/w/soopa/schedules/update/f/stitches/{stitchId}` → new cron |
+| `PATCH /stitches/:id/schedule` (`scheduleEnabled=false`) | `POST /api/w/soopa/schedules/setenabled/f/stitches/{stitchId}` → `{ enabled: false }` |
+| `PATCH /stitches/:id/schedule` (`scheduleEnabled=true`) | `POST /api/w/soopa/schedules/setenabled/f/stitches/{stitchId}` → `{ enabled: true }` |
+| `POST /stitches/:id/schedule/trigger` | `POST /api/w/soopa/jobs/run/p/f/stitch-runner/main` → `{ args: { stitchId } }` |
+| `DELETE /stitches/:id` | `DELETE /api/w/soopa/schedules/delete/f/stitches/{stitchId}` |
 | `DELETE /organization/:id` | Delete all schedules for the org: NestJS queries `integration_stitch` for all `stitchId`s belonging to the org, then calls `WindmillClient.deleteSchedule(stitchId)` for each — which targets `f/stitches/{stitchId}` directly. No orgId-based prefix filtering is used because schedule paths encode only `stitchId`. |
 
 **No `ds_project_code` analogue is needed.** Schedule paths (`f/stitches/{stitchId}`) are derived deterministically from `stitchId` alone. The `organization.ds_project_code` column has already been removed — see §12.
@@ -504,15 +504,15 @@ export abstract class WindmillClient {
 
 | Operation | HTTP Call |
 | --- | --- |
-| Create schedule | `POST /api/w/nexiom/schedules` |
-| Update cron | `POST /api/w/nexiom/schedules/update/f/stitches/{stitchId}` |
-| Enable/disable | `POST /api/w/nexiom/schedules/setenabled/f/stitches/{stitchId}` |
-| Delete schedule | `DELETE /api/w/nexiom/schedules/delete/f/stitches/{stitchId}` |
-| Trigger once (async) | `POST /api/w/nexiom/jobs/run/p/f/stitch-runner/main` |
-| Create/update script | `POST /api/w/nexiom/scripts/create` |
-| List schedules | `GET /api/w/nexiom/schedules/list` |
+| Create schedule | `POST /api/w/soopa/schedules` |
+| Update cron | `POST /api/w/soopa/schedules/update/f/stitches/{stitchId}` |
+| Enable/disable | `POST /api/w/soopa/schedules/setenabled/f/stitches/{stitchId}` |
+| Delete schedule | `DELETE /api/w/soopa/schedules/delete/f/stitches/{stitchId}` |
+| Trigger once (async) | `POST /api/w/soopa/jobs/run/p/f/stitch-runner/main` |
+| Create/update script | `POST /api/w/soopa/scripts/create` |
+| List schedules | `GET /api/w/soopa/schedules/list` |
 
-All calls use `Authorization: Bearer <WINDMILL_TOKEN>` where `WINDMILL_TOKEN` is a Windmill API token with admin rights to the `nexiom` workspace.
+All calls use `Authorization: Bearer <WINDMILL_TOKEN>` where `WINDMILL_TOKEN` is a Windmill API token with admin rights to the `soopa` workspace.
 
 **`StubWindmillClient`** (for tests / non-production environments): implements `WindmillClient` with in-memory state. Injected when `WINDMILL_ENABLED=false`. This allows stitch CRUD to work without a live Windmill instance during local development or unit tests.
 
@@ -561,7 +561,7 @@ If `sync_cursors.updated_at` age exceeds `2 × syncIntervalMinutes`, the cursor 
 
 `DELETE /admin/stitches/:id/cursor/:streamName` removes the `sync_cursors` row. The next Windmill-triggered run detects no bookmark and falls back to the epoch lower bound.
 
-Manual trigger via `POST /stitches/:id/schedule/trigger` → `WindmillClient.triggerOnce()` → `POST /api/w/nexiom/jobs/run/p/f/stitch-runner/main` with `{ stitchId }`.
+Manual trigger via `POST /stitches/:id/schedule/trigger` → `WindmillClient.triggerOnce()` → `POST /api/w/soopa/jobs/run/p/f/stitch-runner/main` with `{ stitchId }`.
 
 ### 10.6 Windmill Failure → Retry Policy
 
@@ -597,7 +597,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - nexiom-network
+      - app-network
 
   # ----- Windmill Server (stateless API + UI) -----
   windmill_server:
@@ -621,7 +621,7 @@ services:
       retries: 10
       start_period: 120s
     networks:
-      - nexiom-network
+      - app-network
 
   # ----- Windmill Worker (executes stitch-runner scripts) -----
   windmill_worker:
@@ -641,7 +641,7 @@ services:
       windmill_server:
         condition: service_healthy
     networks:
-      - nexiom-network
+      - app-network
 ```
 
 **Postgres init script** (`scripts/create-windmill-db.sh`) — mounts into postgres `/docker-entrypoint-initdb.d/`:
@@ -664,7 +664,7 @@ api:
   environment:
     WINDMILL_BASE_URL: http://windmill_server:8000
     WINDMILL_TOKEN: ${WINDMILL_TOKEN}
-    WINDMILL_WORKSPACE: nexiom
+    WINDMILL_WORKSPACE: platform
     WINDMILL_INTERNAL_SECRET: ${WINDMILL_INTERNAL_SECRET}
     WINDMILL_ENABLED: "true"
   depends_on:
@@ -677,8 +677,8 @@ api:
 | Variable | Description |
 | --- | --- |
 | `WINDMILL_BASE_URL` | Windmill server URL (e.g. `http://windmill_server:8000`) |
-| `WINDMILL_TOKEN` | Windmill API token — admin rights on the `nexiom` workspace |
-| `WINDMILL_WORKSPACE` | Windmill workspace name (default: `nexiom`) |
+| `WINDMILL_TOKEN` | Windmill API token — admin rights on the `soopa` workspace |
+| `WINDMILL_WORKSPACE` | Windmill workspace name (default: `soopa`) |
 | `WINDMILL_INTERNAL_SECRET` | Shared secret injected by stitch-runner into every `execute-stitch` call. Min 32 bytes, randomly generated per deployment. |
 | `WINDMILL_ENABLED` | Set `false` to use `StubWindmillClient` (local dev without Windmill) |
 

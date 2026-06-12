@@ -60,7 +60,7 @@ export class CapacityManagerService {
       for (let i = 0; i < deficit; i++) {
         const poolSlotId = uuidv4();
         const event: ProvisionDatabaseEvent = { poolSlotId, hostUrl };
-        const dbName = `nexiom_tenant_${poolSlotId.replace(/-/g, '_')}`;
+        const dbName = `tenant_${poolSlotId.replace(/-/g, '_')}`;
 
         // 1. Dispatch the job first (if this fails, we don't create orphaned rows)
         await this.queueService.send(QueueName.TenantProvisionQueue, event);

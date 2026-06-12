@@ -41,7 +41,7 @@ This document tracks known technical debt items that should be addressed in futu
 
 **Recommended Solution**:
 
-- **Update Publication**: Modify `trigger-executor.service.ts` to dynamically include `normalized_outbox` alongside `inbound_outbox` and `replica_outbox` in the `ALTER PUBLICATION nexiom_cdc ADD TABLE...` script.
+- **Update Publication**: Modify `trigger-executor.service.ts` to dynamically include `normalized_outbox` alongside `inbound_outbox` and `replica_outbox` in the `ALTER PUBLICATION platform_cdc ADD TABLE...` script.
 - **Relay Controller**: Add an `else if (__table === 'normalized_outbox')` routing branch in `apps/api/src/modules/pipeline/cdc-relay.controller.ts` to push those CDC payloads to the L4 FanOut SQS Queue.
 - **Cleanup**: Delete the legacy cron-polling `NormalizedOutboxWorker` entirely.
 
@@ -486,7 +486,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 - **Note on Terminology**:
   - **Connecting**: Tenants browse the "Marketplace Catalog" in their UI and click "Connect" to authorize a piece (e.g., Salesforce). This creates an `app_connection`. This requires zero platform changes.
   - **Installing**: Adding a *brand new, never-before-seen* integration to the catalog itself (e.g., adding Zendesk tomorrow).
-- To allow the Nexiom platform administration team to **install** new integrations to the global catalog on the fly without requiring a code deployment or Node.js server restart, the system must dynamically `npm install` packages at runtime.
+- To allow the Soopa platform administration team to **install** new integrations to the global catalog on the fly without requiring a code deployment or Node.js server restart, the system must dynamically `npm install` packages at runtime.
 
 **Recommended Solution**:
 

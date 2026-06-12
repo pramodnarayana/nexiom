@@ -405,7 +405,7 @@ export const quickbooks = createPiece({
     }
     const url = `${baseUrl}/${objectType.toLowerCase()}`;
 
-    // Strip internal Nexiom pipeline metadata before any API call.
+    // Strip internal Soopa pipeline metadata before any API call.
     // Keys prefixed with `_` (e.g. `_routingEnvelope`) are never valid QB fields and
     // QB rejects them with ValidationFault code 2010 ("unsupported property").
     // This is a platform-level guarantee — independent of the application shard.

@@ -6,7 +6,7 @@
 
 ## 1. Executive Summary
 
-Nexiom utilizes a **Policy-Based Access Control (PBAC)** model. Unlike traditional Role-Based Access Control (RBAC) where code checks for specific role names (e.g., `is_admin`), PBAC checks for specific **capabilities** (e.g., `can_manage_users`).
+Soopa utilizes a **Policy-Based Access Control (PBAC)** model. Unlike traditional Role-Based Access Control (RBAC) where code checks for specific role names (e.g., `is_admin`), PBAC checks for specific **capabilities** (e.g., `can_manage_users`).
 
 This decoupling allows us to create custom roles and modify permissions without changing a single line of application code.
 

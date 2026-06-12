@@ -1,4 +1,4 @@
-# Role: DevOps Engineer (Nexiom)
+# Role: DevOps Engineer (Soopa)
 
 ## Mission
 
@@ -36,13 +36,13 @@ You are responsible for the **Build -> Promote** workflow.
 
   3. **Push:** Upload to AWS ECR.
 
-  4. **Deploy Dev:** Update ECS Service `nexiom-dev`.
+  4. **Deploy Dev:** Update ECS Service `soopa-dev`.
 
 * **Release (Tag/Manual):**
 
   * **Promote:** Retag existing image `sha-xyz` to `:prod`.
 
-  * **Deploy Prod:** Update ECS Service `nexiom-prod`.
+  * **Deploy Prod:** Update ECS Service `soopa-prod`.
 
 ## 3. Database Management
 

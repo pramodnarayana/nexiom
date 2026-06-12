@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "private": true,
-  "description": "Nexiom Standard Execution Engine — builds target JSON from Mapping Config + Stitch Config",
+  "description": "Soopa Standard Execution Engine — builds target JSON from Mapping Config + Stitch Config",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {

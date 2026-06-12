@@ -1,6 +1,6 @@
-# Nexiom Security Stack - Plain English Guide
+# Soopa Security Stack - Plain English Guide
 
-**What This Document Explains:** How to protect Nexiom from attackers, bots, and spam  
+**What This Document Explains:** How to protect Soopa from attackers, bots, and spam  
 **For:** Developers implementing security features  
 **Date:** 2026-01-22
 

@@ -1,4 +1,4 @@
-# Vector — log shipping sidecar for Nexiom API
+# Vector — log shipping sidecar for Soopa API
 #
 # Reads structured JSON from the `api` container's stdout via the Docker
 # logs source and ships to OpenObserve's HTTP bulk-ingest endpoint.

@@ -97,10 +97,10 @@ export const upsertTMSObject: NormalizerFn = async (replica) => {
 
 ## 4. Why This Architecture Scales (Phase 3)
 
-Deploying JSONata *now* unlocks a massive enterprise feature for the future (Phase 3 of the Nexiom Roadmap): **Dynamic Integration Builder UI**.
+Deploying JSONata *now* unlocks a massive enterprise feature for the future (Phase 3 of the Soopa Roadmap): **Dynamic Integration Builder UI**.
 
 1. **Database Storage**: The `mappingExpr` strings move from local `index.ts` files into a Postgres `field_mapping` table.
-2. **Zero-Deploy Customization**: Customers or admins can write a custom JSONata expression in the Nexiom UI ("Custom Field Mapper").
+2. **Zero-Deploy Customization**: Customers or admins can write a custom JSONata expression in the Soopa UI ("Custom Field Mapper").
 3. **Instant Rollout**: The UI saves the new JSONata string to Postgres. The `NormalizationWorker` cache invalidates, pulls the new string, recompiles the AST, and immediately begins transforming new events.
 
-By adopting this strategy locally now, the underlying CDC pipeline and Normalize worker will never need to be rewritten when Nexiom launches dynamic mapping in the UI.
+By adopting this strategy locally now, the underlying CDC pipeline and Normalize worker will never need to be rewritten when Soopa launches dynamic mapping in the UI.

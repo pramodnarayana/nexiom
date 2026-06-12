@@ -1,7 +1,7 @@
-# Nexiom Product Roadmap
+# Soopa Product Roadmap
 
 ## 1. Product Vision
-**Nexiom** is a **B2B Integration & Data Platform (iPaaS)** designed for small-to-medium businesses.
+**Soopa** is a **B2B Integration & Data Platform (iPaaS)** designed for small-to-medium businesses.
 It separates the **Platform Infrastructure** (The Engine) from the **Integration Logic** (The Connectors).
 
 ---

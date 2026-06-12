@@ -2,7 +2,7 @@
 	"name": "tenant-provisioner",
 	"version": "0.0.1",
 	"type": "module",
-	"description": "Nexiom Tenant Provisioner — isolates DDL-level database provisioning from the API control plane.",
+	"description": "Soopa Tenant Provisioner — isolates DDL-level database provisioning from the API control plane.",
 	"author": "",
 	"private": true,
 	"license": "UNLICENSED",

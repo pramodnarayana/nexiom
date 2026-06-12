@@ -14,7 +14,7 @@ Standardize the frontend (`apps/web`) on a modern, accessible component stack us
   - Run `npx shadcn@latest init` in `apps/web`.
   - Options: Default style, Slate color (will be overridden), CSS variables: Yes.
 - [ ] **Install Tweakcn Theme:**
-  - Use Tweakcn to generate a "Nexiom Enterprise" theme (Deep Blue/Indigo primary, distinct radius).
+  - Use Tweakcn to generate a "Soopa Enterprise" theme (Deep Blue/Indigo primary, distinct radius).
   - Copy the generated CSS variables into `apps/web/src/globals.css`.
 
 ## 2. Refine Enforcement (CRUD Views)

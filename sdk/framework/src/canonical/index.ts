@@ -1,5 +1,5 @@
 /**
- * Discriminator for Nexiom's normalized entity model.
+ * Discriminator for Soopa's normalized entity model.
  * Used as the routing key in the normalization pipeline:
  *   NormalizationService → typed tms_* / crm_* / accounting_* tables
  *
@@ -25,7 +25,7 @@ export type NormalizedEntityType =
 /** @deprecated Use NormalizedEntityType instead */
 export type CanonicalType = NormalizedEntityType;
 
-/** Output of the NormalizerFn — a record in Nexiom's normalized entity model. */
+/** Output of the NormalizerFn — a record in Soopa's normalized entity model. */
 export interface NormalizedRecord {
   /** Discriminates the entity — aligns with tms_*, crm_*, accounting_* table routing. */
   canonicalType: NormalizedEntityType;

@@ -105,7 +105,7 @@ Examples of what to record:
 
 ## Persistent Agent Memory
 
-You have a persistent Persistent Agent Memory directory at `/Users/apple/engineering/nexiom/.claude/agent-memory/senior-tester/`. Its contents persist across conversations.
+You have a persistent Persistent Agent Memory directory at `/Users/apple/engineering/soopa/.claude/agent-memory/senior-tester/`. Its contents persist across conversations.
 
 As you work, consult your memory files to build on previous experience. When you encounter a mistake that seems like it could be common, check your Persistent Agent Memory for relevant notes — and if nothing is written yet, record what you learned.
 

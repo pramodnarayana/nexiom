@@ -1,7 +1,7 @@
-# Nexiom Realtime UX & Progress Streaming Architecture (v2)
+# Soopa Realtime UX & Progress Streaming Architecture (v2)
 
 ## Overview
-This document defines how Nexiom provides realtime execution visibility to users while AI queries are being processed. It ensures a responsive UX without impacting core system performance or increasing token usage.
+This document defines how Soopa provides realtime execution visibility to users while AI queries are being processed. It ensures a responsive UX without impacting core system performance or increasing token usage.
 
 ---
 

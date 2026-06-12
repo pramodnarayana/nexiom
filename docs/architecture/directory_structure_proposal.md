@@ -1,6 +1,6 @@
-# Nexiom Repository Directory Structure (Option 2 - App Shell Pattern)
+# Soopa Repository Directory Structure (Option 2 - App Shell Pattern)
 
-This document outlines the proposed full unified structure for the Nexiom monorepo. It aligns with the **Application Shell** pattern for frontend and a standard modular monolith for backend, ensuring strict separation of core infrastructure from pluggable SaaS modules.
+This document outlines the proposed full unified structure for the Soopa monorepo. It aligns with the **Application Shell** pattern for frontend and a standard modular monolith for backend, ensuring strict separation of core infrastructure from pluggable SaaS modules.
 
 ## Full Directory Structure
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document details the end-to-end design of the Email Verification feature in Nexiom. It implements an **Enterprise Pattern** that ensures security, seamless user experience (no "flash" of content), and robust session handling.
+This document details the end-to-end design of the Email Verification feature in Soopa. It implements an **Enterprise Pattern** that ensures security, seamless user experience (no "flash" of content), and robust session handling.
 
 ## Component Interaction
 
@@ -40,7 +40,7 @@ sequenceDiagram
     API->>API: Generate Verification Token
     
     Note right of API: URL Construction
-    API->>API: Construct Link: https://api.nexiom.com/api/auth/verify-email?token=...&callbackURL=...
+    API->>API: Construct Link: https://api.soopa.com/api/auth/verify-email?token=...&callbackURL=...
     
     API->>Email: Send Verification Email
     API-->>FE: Return Success

@@ -6,7 +6,7 @@
 set -e
 
 # Configurable tenant database name with fallback
-TENANT_DB_NAME="${TENANT_DB_NAME:-nexiom_tenant_9d8efd73_3cf1_4e71_b4b0_a47dc08e1a53}"
+TENANT_DB_NAME="${TENANT_DB_NAME:-tenant_9d8efd73_3cf1_4e71_b4b0_a47dc08e1a53}"
 
 psql -v ON_ERROR_STOP=1 -v tenant_db="$TENANT_DB_NAME" --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
     SELECT 'CREATE DATABASE windmill'
@@ -14,9 +14,9 @@ psql -v ON_ERROR_STOP=1 -v tenant_db="$TENANT_DB_NAME" --username "$POSTGRES_USE
         SELECT FROM pg_database WHERE datname = 'windmill'
     )\gexec
 
-    SELECT 'CREATE DATABASE nexiom_global'
+    SELECT 'CREATE DATABASE platform_global'
     WHERE NOT EXISTS (
-        SELECT FROM pg_database WHERE datname = 'nexiom_global'
+        SELECT FROM pg_database WHERE datname = 'platform_global'
     )\gexec
 
     SELECT format('CREATE DATABASE %I', :'tenant_db')

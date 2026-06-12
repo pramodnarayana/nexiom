@@ -1,5 +1,5 @@
 /**
- * JSONata Extensions — custom function bindings for Nexiom-specific operations.
+ * JSONata Extensions — custom function bindings for Soopa-specific operations.
  *
  * JSONata's standard library already provides 70+ built-in functions covering:
  *   - String:  $uppercase, $lowercase, $trim, $substring, $join, $split, $replace, ...
@@ -10,7 +10,7 @@
  *   - Boolean: $boolean, $not, $exists, ...
  *
  * This file registers ADDITIONAL functions beyond Jsonata's standard library —
- * Nexiom domain-specific operations that cannot be expressed with existing builtins.
+ * Soopa domain-specific operations that cannot be expressed with existing builtins.
  *
  * Usage in a mapping expression (examples using standard Jsonata builtins):
  *   Date format:  $fromMillis($toMillis(invoiceDate), '[D01]/[M01]/[Y0001]')
@@ -20,7 +20,7 @@
  *   Conditional:  status = 'active' ? 'Y' : 'N'
  *   Array map:    LineItems.{ 'desc': description, 'qty': quantity }
  *
- * Adding a new Nexiom extension:
+ * Adding a new Soopa extension:
  *   1. Implement the function below.
  *   2. Call expression.registerFunction(name, fn, signature?) inside bindExtensions().
  *   3. Document it in the Formula Library section of sync_strategy.md.
@@ -31,7 +31,7 @@ import type jsonata from 'jsonata';
 type JsonataExpression = ReturnType<typeof jsonata>;
 
 /**
- * bindExtensions — registers all Nexiom custom functions on a compiled JSONata expression.
+ * bindExtensions — registers all Soopa custom functions on a compiled JSONata expression.
  * Called once per expression during compilation in MappingEngine.
  *
  * @param expression  A compiled JSONata expression returned by jsonata(src)
@@ -42,7 +42,7 @@ export function bindExtensions(expression: JsonataExpression): void {
   // Example (do not uncomment until needed):
   //
   // expression.registerFunction(
-  //   'nexiomConvert',
+  //   'soopaConvert',
   //   (value: number, from: string, to: string) => { ... },
   //   '<nss>',   // JSONata type signature: number, string, string
   // );

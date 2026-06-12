@@ -1,7 +1,7 @@
-# Nexiom Performance & Scalability Layer
+# Soopa Performance & Scalability Layer
 
 ## Overview
-This document defines key system components required to ensure performance, scalability, and cost control for Nexiom's AI platform at enterprise scale (millions of messages).
+This document defines key system components required to ensure performance, scalability, and cost control for Soopa's AI platform at enterprise scale (millions of messages).
 
 ---
 
@@ -147,7 +147,7 @@ transform(category, app, raw, version)
 | Ordering | Yes | Yes | Limited |
 | Use Case | App-level | Event streaming | SaaS async jobs |
 
-**Recommendation:** SQS for Nexiom (managed + scalable)
+**Recommendation:** SQS for Soopa (managed + scalable)
 
 ---
 

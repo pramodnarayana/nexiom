@@ -1,4 +1,4 @@
-# Comprehensive Architecture Review: Nexiom Platform
+# Comprehensive Architecture Review: Soopa Platform
 
 **Date**: February 2026
 **Overall Grade**: B+
@@ -8,7 +8,7 @@
 **Architecture Style**: Turborepo monorepo with two applications and one shared library package.
 
 ```text
-nexiom-monorepo/
+soopa-monorepo/
   apps/
     api/          NestJS backend (Control Plane / API Gateway)
     web/          React+Vite frontend (Dashboard / Admin Desk)

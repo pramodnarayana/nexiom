@@ -1,4 +1,4 @@
-# Nexiom Architecture Memory
+# Soopa Architecture Memory
 
 ## Project Overview
 

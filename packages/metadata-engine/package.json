@@ -3,7 +3,7 @@
 	"version": "0.0.1",
 	"private": true,
 	"type": "module",
-	"description": "Unified Metadata-Driven Engine for Nexiom",
+	"description": "Unified Metadata-Driven Engine for Soopa",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"scripts": {

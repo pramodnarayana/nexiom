@@ -24,7 +24,7 @@ export async function setup() {
 
   // Start Postgres
   pgContainer = await new PostgreSqlContainer('postgres:16-alpine')
-    .withDatabase('nexiom_test')
+    .withDatabase('platform_test')
     .withUsername('postgres')
     .withPassword('postgres')
     .start();

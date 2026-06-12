@@ -5,7 +5,7 @@
  * Postgres identifier limits.
  *
  * Rules:
- *  - Must match /^ws_[a-z0-9_]+$/ — the Nexiom tenant schema convention
+ *  - Must match /^ws_[a-z0-9_]+$/ — the Soopa tenant schema convention
  *  - Must not exceed 63 characters (Postgres NAMEDATALEN - 1)
  *
  * Mirrors the SAFE_SCHEMA_NAME_RE guard in SqlDatabaseManager so domain

@@ -3,6 +3,6 @@ import { LoggerModule } from "@soopa/observability";
 
 @Global()
 @Module({
-  imports: [LoggerModule.forRoot("nexiom-worker") as any],
+  imports: [LoggerModule.forRoot("app-worker") as any],
 })
 export class ObservabilityModule {}

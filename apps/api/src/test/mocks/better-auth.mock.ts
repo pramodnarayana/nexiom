@@ -103,7 +103,7 @@ export const betterAuth = (_options: unknown) => {
           },
           user: {
             id: 'mock-user-id',
-            email: 'admin@nexiom.com', // default mocking admin for simplicity
+            email: 'admin@soopa.com', // default mocking admin for simplicity
             name: 'Admin User',
             role: 'admin',
           },

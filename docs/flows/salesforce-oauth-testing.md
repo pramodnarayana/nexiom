@@ -32,7 +32,7 @@ This document outlines the end-to-end testing procedure for the Bring Your Own A
 ### 3. Handle the External OAuth Popup
 
 1. Upon submitting the BYOA form, the frontend will trigger a `window.open` popup navigating to the external Salesforce login authorize screen. The URL will dynamically inject the `client_id` you provided.
-2. Log in with your Salesforce credentials within the popup and authorize the Nexiom application.
+2. Log in with your Salesforce credentials within the popup and authorize the Soopa application.
 3. Once authorized, Salesforce will redirect the popup back to the backend `OAuthCallbackController` (`/api/connect/callback...`).
 4. The backend controller validates the state parameter and returns a self-closing HTML page.
 5. This HTML page executes `window.opener.postMessage(...)` to send the authorization `code` directly to your main frontend window, and then automatically calls `window.close()`.

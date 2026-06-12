@@ -29,7 +29,7 @@ export class OAuthUrlBuilder {
    * Builds the OAuth2 redirect URI from a base URL.
    * Strips trailing slashes before appending the callback path.
    *
-   * @param baseUrl  The API base URL (e.g. 'https://api.nexiom.io')
+   * @param baseUrl  The API base URL (e.g. 'https://api.soopa.com')
    * @returns        Fully qualified redirect URI
    */
   buildRedirectUri(baseUrl: string): string {

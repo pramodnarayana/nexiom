@@ -47,7 +47,7 @@ export class PermissionSeeder implements OnModuleInit {
           .insert(schema.organization)
           .values({
             id: systemTenantId,
-            name: "Nexiom Platform",
+            name: "Soopa Platform",
             slug: "system",
             isSystem: true,
             status: "active",

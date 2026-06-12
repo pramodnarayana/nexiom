@@ -2,10 +2,10 @@ Analysis: Open Source SaaS Metadata & Relationship Discovery
 This document evaluates existing open-source frameworks that can replace or augment our custom "Deep Schema Inspection" logic for fetching related objects.
 
 1. Option A: Nango (The B2B Metadata Specialist)
-Nango is perhaps the closest open-source relative to Nexiom. While they offer a cloud service, their core engine and metadata logic are open-source.
+Nango is perhaps the closest open-source relative to Soopa. While they offer a cloud service, their core engine and metadata logic are open-source.
 How it solves "Related Objects":
 Nango has a specialized metadata feature. For Salesforce, it doesn't just return a list of fields; it returns the relationshipName and referenceTo metadata from the Salesforce Describe API.
-Nexiom Implementation: We can "borrow" the Nango Salesforce metadata adapter and wrap it in our IDiscoveryAdapter.
+Soopa Implementation: We can "borrow" the Nango Salesforce metadata adapter and wrap it in our IDiscoveryAdapter.
 Benefit: You get 100% accurate relationship discovery for the "Big 5" (Salesforce, HubSpot, NetSuite, Dynamics, Zendesk) instantly.
 2. Option B: Singer.io "Catalogs" (The Data Standard)
 Singer is the protocol that powers tools like Stitch and Meltano. Every Singer "Tap" (Source) has a discover mode.
@@ -24,7 +24,7 @@ When you run a Tap (e.g., tap-salesforce --discover), it outputs a Catalog JSON.
 }
 
 
-Nexiom Implementation: We don't need to run the Python code. We can use the community-maintained Catalog definitions as a "Static Brain" for our AI, while using our native connectors to do the actual fetching.
+Soopa Implementation: We don't need to run the Python code. We can use the community-maintained Catalog definitions as a "Static Brain" for our AI, while using our native connectors to do the actual fetching.
 
 3. Option C: Airbyte's "Discover" Protocol
 Airbyte is the most well-funded open-source integration project. Their connectors are highly sophisticated.

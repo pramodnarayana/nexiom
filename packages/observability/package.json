@@ -1,7 +1,7 @@
 {
   "name": "@soopa/observability",
   "version": "1.0.0",
-  "description": "Shared Pino logger configuration for Nexiom",
+  "description": "Shared Pino logger configuration for Soopa",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

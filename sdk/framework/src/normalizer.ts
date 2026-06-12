@@ -29,7 +29,7 @@ export function getReplicaExtractor(appName: string, appProfile: string | undefi
 
 /**
  * Registers an application-layer normalizer designed to map the structured
- * vendor Domain Object into the Nexiom Standard Canonical Entity (L2 -> L3).
+ * vendor Domain Object into the Soopa Standard Canonical Entity (L2 -> L3).
  */
 export function registerNormalizer(appName: string, appProfile: string, fn: NormalizerFn) {
     if (!normalizerRegistry.has(appName)) {

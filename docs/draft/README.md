@@ -1,4 +1,4 @@
-# Nexiom Platform - Architecture Documentation Index
+# Soopa Platform - Architecture Documentation Index
 
 **Status:** DRAFT  
 **Last Updated:** 2026-01-22  
@@ -8,7 +8,7 @@
 
 ## 📐 Overview
 
-This directory contains comprehensive architecture documentation for the Nexiom Platform, a B2B Integration Platform (iPaaS) with visual diagrams, technical specifications, and implementation guides.
+This directory contains comprehensive architecture documentation for the Soopa Platform, a B2B Integration Platform (iPaaS) with visual diagrams, technical specifications, and implementation guides.
 
 ---
 

@@ -1,6 +1,6 @@
 # Development Cheatsheet & Workflow
 
-## 1. The "Nexiom Flow" (Git Workflow)
+## 1. The "Soopa Flow" (Git Workflow)
 
 We follow a structured branching model to ensure stability.
 

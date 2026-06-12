@@ -1,10 +1,10 @@
 # Command History Log
 
-This document tracks the terminal commands executed during the setup of the Nexiom project.
+This document tracks the terminal commands executed during the setup of the Soopa project.
 
 ## 1. Documentation Migration
 ```bash
-cp -r /Users/apple/fluxnex/docs /Users/apple/engineering/nexiom/docs
+cp -r /Users/apple/fluxnex/docs /Users/apple/engineering/soopa/docs
 ```
 
 ## 2. Authentication Setup
@@ -19,7 +19,7 @@ git init
 echo ".env" >> .gitignore
 git add .
 git commit -m "Initial commit..."
-git remote add origin https://github.com/pramodnarayana/nexiom.git
+git remote add origin https://github.com/pramodnarayana/soopa.git
 git push -u origin master
 ```
 

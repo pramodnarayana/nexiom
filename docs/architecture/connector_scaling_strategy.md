@@ -1,20 +1,20 @@
 # Connector Scaling Strategy: Reaching 500+ Integrations
 
-To scale Nexiom to 500+ integrations, we must understand the difference between **Authentication** (getting the token) and **Integration** (making the API calls).
+To scale Soopa to 500+ integrations, we must understand the difference between **Authentication** (getting the token) and **Integration** (making the API calls).
 
 * **Grant.js** handles *Authentication*. Its 200+ native providers are just presets. You can add *any* OAuth2 provider to Grant by passing a custom configuration (Auth URL, Token URL).
 
 * **Activepieces** and **n8n** handle *Integration* (Credentials, API mapping, Webhooks).
 
-Here is exactly what we can learn from the industry leaders to scale Nexiom rapidly.
+Here is exactly what we can learn from the industry leaders to scale Soopa rapidly.
 
 ## 1. Activepieces (~200+ Apps)
 
-Activepieces is written in modern TypeScript and is the **best architectural reference for Nexiom**. While they don't have 500+ apps yet, their *foundation* is built to scale infinitely.
+Activepieces is written in modern TypeScript and is the **best architectural reference for Soopa**. While they don't have 500+ apps yet, their *foundation* is built to scale infinitely.
 
 ### What to "Steal" (Study) from Activepieces
 
-* **The "Piece" Architecture:** Look at their `packages/pieces` folder on GitHub. Every integration is a strict, isolated TypeScript module with its own `package.json`. This means the QuickBooks code never accidentally breaks the HubSpot code. Nexiom should copy this exact folder structure for `packages/integrations`.
+* **The "Piece" Architecture:** Look at their `packages/pieces` folder on GitHub. Every integration is a strict, isolated TypeScript module with its own `package.json`. This means the QuickBooks code never accidentally breaks the HubSpot code. Soopa should copy this exact folder structure for `packages/integrations`.
 
 * **Dynamic UI Generation:** Activepieces doesn't hardcode React forms for every app. The backend sends a JSON schema (e.g., `[{"name": "api_key", "type": "SecretText"}]`), and the frontend renders it dynamically. This is how you build 500 apps without touching the frontend code.
 

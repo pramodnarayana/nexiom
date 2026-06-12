@@ -86,7 +86,7 @@ Configuration is injected **only when the container starts**.
 | Environment | Who injects it? | Value Injected |
 | :--- | :--- | :--- |
 | **Local Docker** | `docker-compose.yml` | `http://localhost:3001` |
-| **AWS Prod** | **AWS ECS Service** | `https://api.nexiom.com` |
+| **AWS Prod** | **AWS ECS Service** | `https://api.soopa.com` |
 
 **Conclusion:**
 You can deploy the **EXACT SAME IMAGE** to both your laptop and AWS.

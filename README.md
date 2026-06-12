@@ -1,9 +1,9 @@
-# Nexiom Platform
+# Soopa Platform
 
 > **B2B Integration & Data Platform (iPaaS)**
 > *The Engine for Modern Business Connectivity*
 
-Nexiom separates the **Platform Infrastructure** (The Engine) from the **Integration Logic** (The Connectors), allowing for scalable, secure, and maintainable B2B integrations.
+Soopa separates the **Platform Infrastructure** (The Engine) from the **Integration Logic** (The Connectors), allowing for scalable, secure, and maintainable B2B integrations.
 
 ---
 

@@ -1,7 +1,7 @@
-# Nexiom End-to-End Flow (AWS)
+# Soopa End-to-End Flow (AWS)
 
 ## Overview
-This document describes the complete end-to-end execution flow of Nexiom running on AWS, from user request to final response, optimized for scalability, performance, and cost.
+This document describes the complete end-to-end execution flow of Soopa running on AWS, from user request to final response, optimized for scalability, performance, and cost.
 
 ---
 

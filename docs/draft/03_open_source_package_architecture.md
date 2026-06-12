@@ -1,4 +1,4 @@
-# Nexiom Open Source Package Architecture
+# Soopa Open Source Package Architecture
 
 **Vision:** SaaS-in-a-Box - Build SaaS products in hours, not months  
 **Status:** Architecture Design  
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Nexiom provides **three open-source packages** that solve the boring, repetitive parts of building a SaaS product:
+Soopa provides **three open-source packages** that solve the boring, repetitive parts of building a SaaS product:
 
 1. **@soopa/identity** - Authentication, Users, Multi-Tenancy
 2. **@soopa/notifications** - Email, SMS, In-App, Push Notifications
@@ -22,7 +22,7 @@ Nexiom provides **three open-source packages** that solve the boring, repetitive
 
 ## The Problem We Solve
 
-### Before Nexiom (6 Months of Boring Work)
+### Before Soopa (6 Months of Boring Work)
 
 Every SaaS founder rebuilds the same infrastructure:
 
@@ -57,7 +57,7 @@ Weeks 17-20: Admin dashboard
 Week 21+:    FINALLY build your actual product
 ```
 
-### With Nexiom (1 Day)
+### With Soopa (1 Day)
 
 ```bash
 npm install @soopa/identity @soopa/notifications @soopa/billing
@@ -77,7 +77,7 @@ graph TB
         APP[Your Core Business Logic]
     end
     
-    subgraph "Nexiom Packages"
+    subgraph "Soopa Packages"
         IDENTITY[@soopa/identity<br/>Auth + Users + Tenants]
         NOTIF[@soopa/notifications<br/>Email + SMS + In-App]
         BILLING[@soopa/billing<br/>Subscriptions + Invoices]
@@ -782,7 +782,7 @@ const usage = await this.billing.getUsage('sub-123', {
 ### Monorepo Organization
 
 ```
-nexiom/
+soopa/
 ├── packages/
 │   ├── identity/
 │   │   ├── src/
@@ -919,10 +919,10 @@ nexiom/
 npm install @soopa/identity @soopa/notifications @soopa/billing
 
 # Generate config
-npx nexiom init
+npx soopa init
 
 # Run migrations
-npx nexiom migrate
+npx soopa migrate
 
 # Start your app
 npm run dev
@@ -931,7 +931,7 @@ npm run dev
 ### Configuration File
 
 ```typescript
-// nexiom.config.ts
+// soopa.config.ts
 export default {
   identity: {
     provider: 'better-auth',
@@ -956,20 +956,20 @@ export default {
 ### CLI Tool
 
 ```bash
-# Initialize Nexiom in existing project
-npx nexiom init
+# Initialize Soopa in existing project
+npx soopa init
 
 # Run database migrations
-npx nexiom migrate
+npx soopa migrate
 
 # Generate API documentation
-npx nexiom docs
+npx soopa docs
 
 # Create new tenant (development)
-npx nexiom tenant create --name="Acme Corp"
+npx soopa tenant create --name="Acme Corp"
 
 # Seed demo data
-npx nexiom seed
+npx soopa seed
 ```
 
 ---
@@ -1000,10 +1000,10 @@ npx nexiom seed
 
 **Paid Offerings:**
 
-- **Nexiom Cloud** - Hosted version with managed infrastructure
+- **Soopa Cloud** - Hosted version with managed infrastructure
 - **Enterprise Support** - SLA, priority bug fixes, private Slack
 - **Custom Development** - Build custom providers for enterprise customers
-- **Training & Consulting** - Help teams implement Nexiom
+- **Training & Consulting** - Help teams implement Soopa
 
 ---
 

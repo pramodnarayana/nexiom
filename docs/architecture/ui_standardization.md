@@ -17,7 +17,7 @@ We are standarizing the `apps/web` frontend on a modern, accessible, and enterpr
 
 ## 2. Design System & Theming
 
-### 2.1 The "Nexiom Enterprise" Theme
+### 2.1 The "Soopa Enterprise" Theme
 
 We will move away from generic "Zinc/Slate" defaults to a curated palette.
 
@@ -37,7 +37,7 @@ We do not install an NPM library. We own the code in `src/components/ui`.
 
 ### 2.3 Dynamic Theme Switching (Tweakcn)
 
-Nexiom supports runtime theme switching, but it is restricted to **Admins only**.
+Soopa supports runtime theme switching, but it is restricted to **Admins only**.
 
 * **Component:** `ThemeSwitcher.tsx`
 * **Security:** Wrapped in `<CanAccess resource="settings" action="manage">`.

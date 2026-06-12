@@ -6,7 +6,7 @@
 
 ## 1. Executive Summary
 
-We are moving Nexiom from a Role-Based Access Control (RBAC) model to a **Policy-Based Access Control (PBAC)** model.
+We are moving Soopa from a Role-Based Access Control (RBAC) model to a **Policy-Based Access Control (PBAC)** model.
 
 * **Old Way:** "Is this user an Admin?" (Fragile, hard to change).
 * **New Way:** "Can this user `update` the `billing` resource?" (Flexible, scalable).

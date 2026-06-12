@@ -28,7 +28,7 @@ describe("App Installer Use Cases", () => {
 
     it("should install a piece and mark it installed in the workspace", async () => {
       await useCase.execute({
-        packageName: "@nexiom/salesforce",
+        packageName: "@soopa/salesforce",
         version: "1.0.0",
         workspaceId: "ws-1",
         pieceId: "piece-1",
@@ -36,7 +36,7 @@ describe("App Installer Use Cases", () => {
 
       expect(registry.installed).toHaveLength(1);
       expect(registry.installed[0]).toEqual({
-        packageName: "@nexiom/salesforce",
+        packageName: "@soopa/salesforce",
         version: "1.0.0",
       });
 
@@ -50,12 +50,12 @@ describe("App Installer Use Cases", () => {
 
       await expect(
         useCase.execute({
-          packageName: "@nexiom/salesforce",
+          packageName: "@soopa/salesforce",
           version: "1.0.0",
           workspaceId: "ws-1",
           pieceId: "piece-1",
         }),
-      ).rejects.toThrow("Failed to install @nexiom/salesforce");
+      ).rejects.toThrow("Failed to install @soopa/salesforce");
 
       const dbStatus = repository.pieces.get("ws-1:piece-1");
       expect(dbStatus?.status).toBe("FAILED");
@@ -72,12 +72,12 @@ describe("App Installer Use Cases", () => {
 
       await expect(
         useCase.execute({
-          packageName: "@nexiom/salesforce",
+          packageName: "@soopa/salesforce",
           version: "1.0.0",
           workspaceId: "ws-1",
           pieceId: "piece-1",
         }),
-      ).rejects.toThrow("Failed to install @nexiom/salesforce");
+      ).rejects.toThrow("Failed to install @soopa/salesforce");
     });
   });
 
@@ -97,19 +97,19 @@ describe("App Installer Use Cases", () => {
         {
           workspaceId: "ws-1",
           pieceId: "piece-1",
-          packageName: "@nexiom/salesforce",
+          packageName: "@soopa/salesforce",
           currentVersion: "1.0.0",
         },
         {
           workspaceId: "ws-2",
           pieceId: "piece-2",
-          packageName: "@nexiom/github",
+          packageName: "@soopa/github",
           currentVersion: "2.5.0",
         },
       ];
 
-      registry.latestVersions.set("@nexiom/salesforce", "1.1.0");
-      registry.latestVersions.set("@nexiom/github", "2.5.0"); // Same version
+      registry.latestVersions.set("@soopa/salesforce", "1.1.0");
+      registry.latestVersions.set("@soopa/github", "2.5.0"); // Same version
 
       await useCase.execute();
 
@@ -120,7 +120,7 @@ describe("App Installer Use Cases", () => {
 
       const payload = queuePublisher.messages[0]
         .payload as import("@soopa/queue").PluginInstallEvent;
-      expect(payload.packageName).toBe("@nexiom/salesforce");
+      expect(payload.packageName).toBe("@soopa/salesforce");
       expect(payload.version).toBe("1.1.0");
       expect(payload.workspaceId).toBe("ws-1");
     });
@@ -130,7 +130,7 @@ describe("App Installer Use Cases", () => {
         {
           workspaceId: "ws-1",
           pieceId: "piece-1",
-          packageName: "@nexiom/salesforce",
+          packageName: "@soopa/salesforce",
           currentVersion: "1.0.0",
         },
       ];
@@ -146,19 +146,19 @@ describe("App Installer Use Cases", () => {
         {
           workspaceId: "ws-1",
           pieceId: "piece-1",
-          packageName: "@nexiom/salesforce",
+          packageName: "@soopa/salesforce",
           currentVersion: "1.0.0",
         },
         {
           workspaceId: "ws-2",
           pieceId: "piece-2",
-          packageName: "@nexiom/github",
+          packageName: "@soopa/github",
           currentVersion: "2.0.0",
         },
       ];
 
-      registry.latestVersions.set("@nexiom/salesforce", "1.1.0");
-      registry.latestVersions.set("@nexiom/github", "2.1.0");
+      registry.latestVersions.set("@soopa/salesforce", "1.1.0");
+      registry.latestVersions.set("@soopa/github", "2.1.0");
       queuePublisher.shouldFail = true;
 
       await expect(useCase.execute()).resolves.not.toThrow();
@@ -169,12 +169,12 @@ describe("App Installer Use Cases", () => {
         {
           workspaceId: "ws-1",
           pieceId: "piece-1",
-          packageName: "@nexiom/salesforce",
+          packageName: "@soopa/salesforce",
           currentVersion: "not-a-version",
         },
       ];
 
-      registry.latestVersions.set("@nexiom/salesforce", "still-not-a-version");
+      registry.latestVersions.set("@soopa/salesforce", "still-not-a-version");
 
       await useCase.execute();
 

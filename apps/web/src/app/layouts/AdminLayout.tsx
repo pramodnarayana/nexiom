@@ -65,7 +65,7 @@ export function AdminLayout() {
                 <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-lg shadow-sm">
                     N
                 </div>
-                <span className="text-xl font-bold text-foreground tracking-tight">Nexiom</span>
+                <span className="text-xl font-bold text-foreground tracking-tight">Soopa</span>
             </div>
             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider ml-1">Admin Console</p>
         </>

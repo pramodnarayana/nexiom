@@ -57,7 +57,7 @@ This file is the "Manager" that hires the workers.
     *   **postgres & redis**: We use official images (we don't build these).
     *   **api & web**: We build these using the Dockerfiles above.
 *   **`depends_on`**: ensures the Database wakes up *before* the API tries to connect.
-*   **`networks`**: Creates a private Wifi (`nexiom-network`) connecting these 4 computers.
+*   **`networks`**: Creates a private Wifi (`app-network`) connecting these 4 computers.
     *   *Note*: The `web` container can talk to `api` via the hostname `http://api:3000` because they are on this network.
 *   **`volumes`**:
     *   `postgres_data:/var/lib/postgresql/data`
@@ -90,8 +90,8 @@ In AWS, we don't run `docker-compose`. We replace each piece with a Cloud Servic
 | Local Concept (Docker) | AWS Production Service | How it works |
 | :--- | :--- | :--- |
 | **`docker-compose.yml`** | **ECS Task Definition** | Defines "Run this Image with 1GB RAM". |
-| **`ports: "3001:3000"`** | **Application Load Balancer (ALB)** | The ALB listens on `https://api.nexiom.com` (Port 443) and forwards traffic to the Container's `Port 3000` inside the VPC. |
-| **`networks: nexiom-net`** | **VPC (Virtual Private Cloud)** | A private network where containers talk securely. |
+| **`ports: "3001:3000"`** | **Application Load Balancer (ALB)** | The ALB listens on `https://api.soopa.com` (Port 443) and forwards traffic to the Container's `Port 3000` inside the VPC. |
+| **`networks: soopa-net`** | **VPC (Virtual Private Cloud)** | A private network where containers talk securely. |
 | **`postgres` container** | **AWS Aurora (RDS)** | Managed Database (Backups, Scaling). |
 | **`redis` container** | **AWS ElastiCache** | Managed Redis Cluster. |
 

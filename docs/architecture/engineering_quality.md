@@ -6,7 +6,7 @@
 
 ## 1. Executive Summary
 
-To ensure long-term maintainability and stability as we scale Nexiom, we are unifying our testing infrastructure.
+To ensure long-term maintainability and stability as we scale Soopa, we are unifying our testing infrastructure.
 
 * **Unified Runner:** **Vitest** for both Frontend (`apps/web`) and Backend (`apps/api`).
 * **Performance:** leveraging `swc` for instant test execution.

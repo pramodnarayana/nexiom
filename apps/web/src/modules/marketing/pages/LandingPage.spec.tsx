@@ -32,7 +32,7 @@ describe('LandingPage', () => {
     it('renders landing page content', async () => {
         render(<LandingPage />);
         await waitFor(() => {
-            expect(screen.getByRole('heading', { name: 'Nexiom' })).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Soopa' })).toBeInTheDocument();
         });
         expect(screen.getByRole('button', { name: 'Login' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Sign Up' })).toBeInTheDocument();

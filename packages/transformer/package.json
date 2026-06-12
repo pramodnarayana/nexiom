@@ -3,7 +3,7 @@
 	"version": "1.0.0",
 	"type": "module",
 	"private": true,
-	"description": "Nexiom Pure AI Transformer library",
+	"description": "Soopa Pure AI Transformer library",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"exports": {
