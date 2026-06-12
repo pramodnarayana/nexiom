@@ -12,7 +12,7 @@ import {
 } from "../index.js";
 import { DependenciesMissingError } from "@soopa/piece-framework";
 import { sanitizeErrorObject } from "../utils.js";
-import type { IReplicaStatePort } from "@soopa/domain-core";
+import type { IReplicaStatePort } from "../shared/domain.js";
 import { CONNECTION_REPOSITORY_PORT, type ConnectionRepositoryPort } from "../shared/ports/connection.repository.port.js";
 
 @Injectable()

@@ -1,5 +1,6 @@
 import { RegistryOAuthRefreshClient } from './registry-token-refresh.service.js';
-import { EncryptionService, OAuthRefreshError } from '@soopa/credentials';
+import { type IEncryptionService } from '@soopa/security';
+import { OAuthRefreshError } from '@soopa/credentials';
 import { PieceRegistryService } from '@soopa/piece-registry';
 import type { Piece } from '@soopa/piece-framework';
 import {
@@ -72,7 +73,7 @@ describe('RegistryOAuthRefreshClient', () => {
     client = new RegistryOAuthRefreshClient(
       mockPieceRegistry as PieceRegistryService,
       mockDb as unknown as import('@soopa/database').DrizzleDb,
-      mockEncryptionService as unknown as EncryptionService,
+      mockEncryptionService as unknown as IEncryptionService,
     );
 
     vi.stubGlobal('fetch', vi.fn());

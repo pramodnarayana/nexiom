@@ -1,5 +1,6 @@
 import { Injectable, Inject, Optional } from "@nestjs/common";
-import { BaseOAuthRefreshClient, EncryptionService } from "@soopa/credentials";
+import { BaseOAuthRefreshClient } from "@soopa/credentials";
+import { IEncryptionService, ENCRYPTION_SERVICE } from '@soopa/security';
 import { PropertyType } from "@soopa/piece-framework";
 import { DATABASE_CONNECTION, type DrizzleDb } from "@soopa/database";
 import { PieceRegistryService } from "@soopa/piece-registry";
@@ -9,7 +10,7 @@ export class RegistryOAuthRefreshClient extends BaseOAuthRefreshClient {
   constructor(
     @Inject(PieceRegistryService) private readonly pieceRegistry: PieceRegistryService,
     @Inject(DATABASE_CONNECTION) db: DrizzleDb,
-    @Inject(EncryptionService) crypto: EncryptionService,
+    @Inject(ENCRYPTION_SERVICE) crypto: IEncryptionService,
     @Optional() @Inject('DUMMY') dummy?: any,
   ) {
     super(db, crypto);

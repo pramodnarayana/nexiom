@@ -57,6 +57,7 @@
     "@soopa/piece-salesforce": "workspace:*",
     "@soopa/pipeline": "workspace:*",
     "@soopa/queue": "workspace:*",
+    "@soopa/security": "workspace:*",
     "ai": "^6.0.146",
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.4.10",

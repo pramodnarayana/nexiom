@@ -131,6 +131,9 @@ importers:
       '@soopa/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@soopa/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       ai:
         specifier: ^6.0.146
         version: 6.0.146(zod@4.3.5)
@@ -687,9 +690,6 @@ importers:
       '@soopa/dbmanager':
         specifier: workspace:*
         version: link:../../packages/dbmanager
-      '@soopa/domain-core':
-        specifier: workspace:*
-        version: link:../../packages/domain/core
       '@soopa/identity':
         specifier: workspace:*
         version: link:../../packages/identity
@@ -1030,6 +1030,12 @@ importers:
       '@soopa/piece-framework':
         specifier: workspace:*
         version: link:../../sdk/framework
+      '@soopa/security':
+        specifier: workspace:*
+        version: link:../security
+      '@soopa/utils':
+        specifier: workspace:*
+        version: link:../utils
       drizzle-orm:
         specifier: 0.45.1
         version: 0.45.1(@opentelemetry/api@1.9.0)(@types/pg@8.16.0)(kysely@0.28.9)(pg@8.16.3)
@@ -1089,19 +1095,6 @@ importers:
       drizzle-orm:
         specifier: 0.45.1
         version: 0.45.1(@opentelemetry/api@1.9.0)(@types/pg@8.16.0)(kysely@0.28.9)(pg@8.16.3)
-    devDependencies:
-      '@types/node':
-        specifier: ^20.14.9
-        version: 20.19.28
-      typescript:
-        specifier: ^5.7.3
-        version: 5.9.3
-
-  packages/domain/core:
-    dependencies:
-      zod:
-        specifier: ^3.23.8
-        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^20.14.9
@@ -1219,58 +1212,6 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.28)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@20.19.28)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  packages/infra:
-    dependencies:
-      '@aws-sdk/client-kms':
-        specifier: ^3.750.0
-        version: 3.1010.0
-    devDependencies:
-      '@eslint/js':
-        specifier: ^9.39.1
-        version: 9.39.2
-      '@nestjs/common':
-        specifier: ^11.1.11
-        version: 11.1.11(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/core':
-        specifier: ^11.1.11
-        version: 11.1.11(@nestjs/common@11.1.11(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.11)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@types/node':
-        specifier: ^20.14.9
-        version: 20.19.28
-      '@vitest/coverage-v8':
-        specifier: ^4.0.18
-        version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.28)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@20.19.28)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
-      eslint:
-        specifier: ^9.39.1
-        version: 9.39.2(jiti@2.6.1)
-      eslint-config-prettier:
-        specifier: ^10.0.1
-        version: 10.1.8(eslint@9.39.2(jiti@2.6.1))
-      eslint-plugin-prettier:
-        specifier: ^5.2.3
-        version: 5.5.4(@types/eslint@9.6.1)(eslint-config-prettier@10.1.8(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1))(prettier@3.7.4)
-      globals:
-        specifier: ^16.5.0
-        version: 16.5.0
-      prettier:
-        specifier: ^3.7.4
-        version: 3.7.4
-      rxjs:
-        specifier: ^7.8.1
-        version: 7.8.2
-      typescript:
-        specifier: ^5.7.3
-        version: 5.9.3
-      typescript-eslint:
-        specifier: ^8.46.4
-        version: 8.52.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
-      unplugin-swc:
-        specifier: ^1.5.9
-        version: 1.5.9(@swc/core@1.15.11)(rollup@4.55.1)
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.28)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@20.19.28)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-
   packages/mcp:
     dependencies:
       '@nestjs/common':
@@ -1345,12 +1286,12 @@ importers:
       '@soopa/dbmanager':
         specifier: workspace:*
         version: link:../dbmanager
-      '@soopa/domain-core':
-        specifier: workspace:*
-        version: link:../domain/core
       '@soopa/mapping':
         specifier: workspace:*
         version: link:../../plugins/shared/mapping
+      '@soopa/observability':
+        specifier: workspace:*
+        version: link:../observability
       '@soopa/piece-framework':
         specifier: workspace:*
         version: link:../../sdk/framework
@@ -1360,6 +1301,9 @@ importers:
       '@soopa/queue':
         specifier: workspace:*
         version: link:../queue
+      '@soopa/security':
+        specifier: workspace:*
+        version: link:../security
       ai:
         specifier: ^6.0.146
         version: 6.0.146(zod@4.3.5)
@@ -1410,6 +1354,58 @@ importers:
       '@nestjs/testing':
         specifier: ^11.1.11
         version: 11.1.11(@nestjs/common@11.1.11(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.11)(@nestjs/platform-express@11.1.11)
+      '@types/node':
+        specifier: ^20.14.9
+        version: 20.19.28
+      '@vitest/coverage-v8':
+        specifier: ^4.0.18
+        version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.28)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@20.19.28)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+      eslint:
+        specifier: ^9.39.1
+        version: 9.39.2(jiti@2.6.1)
+      eslint-config-prettier:
+        specifier: ^10.0.1
+        version: 10.1.8(eslint@9.39.2(jiti@2.6.1))
+      eslint-plugin-prettier:
+        specifier: ^5.2.3
+        version: 5.5.4(@types/eslint@9.6.1)(eslint-config-prettier@10.1.8(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1))(prettier@3.7.4)
+      globals:
+        specifier: ^16.5.0
+        version: 16.5.0
+      prettier:
+        specifier: ^3.7.4
+        version: 3.7.4
+      rxjs:
+        specifier: ^7.8.1
+        version: 7.8.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.46.4
+        version: 8.52.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
+      unplugin-swc:
+        specifier: ^1.5.9
+        version: 1.5.9(@swc/core@1.15.11)(rollup@4.55.1)
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.28)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@20.19.28)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/security:
+    dependencies:
+      '@aws-sdk/client-kms':
+        specifier: ^3.750.0
+        version: 3.1010.0
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.39.1
+        version: 9.39.2
+      '@nestjs/common':
+        specifier: ^11.1.11
+        version: 11.1.11(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: ^11.1.11
+        version: 11.1.11(@nestjs/common@11.1.11(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.11)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@types/node':
         specifier: ^20.14.9
         version: 20.19.28
@@ -11702,9 +11698,6 @@ packages:
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
-
   zod@4.3.5:
     resolution: {integrity: sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g==}
 
@@ -12030,31 +12023,31 @@ snapshots:
       '@aws-sdk/util-endpoints': 3.965.0
       '@aws-sdk/util-user-agent-browser': 3.965.0
       '@aws-sdk/util-user-agent-node': 3.965.0
-      '@smithy/config-resolver': 4.4.5
-      '@smithy/core': 3.20.1
-      '@smithy/fetch-http-handler': 5.3.8
-      '@smithy/hash-node': 4.2.7
-      '@smithy/invalid-dependency': 4.2.7
-      '@smithy/middleware-content-length': 4.2.7
-      '@smithy/middleware-endpoint': 4.4.2
-      '@smithy/middleware-retry': 4.4.18
-      '@smithy/middleware-serde': 4.2.8
-      '@smithy/middleware-stack': 4.2.7
-      '@smithy/node-config-provider': 4.3.7
-      '@smithy/node-http-handler': 4.4.7
-      '@smithy/protocol-http': 5.3.7
-      '@smithy/smithy-client': 4.10.3
-      '@smithy/types': 4.11.0
-      '@smithy/url-parser': 4.2.7
-      '@smithy/util-base64': 4.3.0
-      '@smithy/util-body-length-browser': 4.2.0
-      '@smithy/util-body-length-node': 4.2.1
-      '@smithy/util-defaults-mode-browser': 4.3.17
-      '@smithy/util-defaults-mode-node': 4.2.20
-      '@smithy/util-endpoints': 3.2.7
-      '@smithy/util-middleware': 4.2.7
-      '@smithy/util-retry': 4.2.7
-      '@smithy/util-utf8': 4.2.0
+      '@smithy/config-resolver': 4.4.11
+      '@smithy/core': 3.23.12
+      '@smithy/fetch-http-handler': 5.3.15
+      '@smithy/hash-node': 4.2.12
+      '@smithy/invalid-dependency': 4.2.12
+      '@smithy/middleware-content-length': 4.2.12
+      '@smithy/middleware-endpoint': 4.4.26
+      '@smithy/middleware-retry': 4.4.43
+      '@smithy/middleware-serde': 4.2.15
+      '@smithy/middleware-stack': 4.2.12
+      '@smithy/node-config-provider': 4.3.12
+      '@smithy/node-http-handler': 4.5.0
+      '@smithy/protocol-http': 5.3.12
+      '@smithy/smithy-client': 4.12.6
+      '@smithy/types': 4.13.1
+      '@smithy/url-parser': 4.2.12
+      '@smithy/util-base64': 4.3.2
+      '@smithy/util-body-length-browser': 4.2.2
+      '@smithy/util-body-length-node': 4.2.3
+      '@smithy/util-defaults-mode-browser': 4.3.42
+      '@smithy/util-defaults-mode-node': 4.2.45
+      '@smithy/util-endpoints': 3.3.3
+      '@smithy/util-middleware': 4.2.12
+      '@smithy/util-retry': 4.2.12
+      '@smithy/util-utf8': 4.2.2
       tslib: 2.8.1
     transitivePeerDependencies:
       - aws-crt
@@ -12096,7 +12089,7 @@ snapshots:
       '@aws-sdk/core': 3.965.0
       '@aws-sdk/types': 3.965.0
       '@smithy/property-provider': 4.2.7
-      '@smithy/types': 4.11.0
+      '@smithy/types': 4.13.1
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-env@3.972.18':
@@ -12111,12 +12104,12 @@ snapshots:
     dependencies:
       '@aws-sdk/core': 3.965.0
       '@aws-sdk/types': 3.965.0
-      '@smithy/fetch-http-handler': 5.3.8
-      '@smithy/node-http-handler': 4.4.7
+      '@smithy/fetch-http-handler': 5.3.15
+      '@smithy/node-http-handler': 4.5.0
       '@smithy/property-provider': 4.2.7
-      '@smithy/protocol-http': 5.3.7
-      '@smithy/smithy-client': 4.10.3
-      '@smithy/types': 4.11.0
+      '@smithy/protocol-http': 5.3.12
+      '@smithy/smithy-client': 4.12.6
+      '@smithy/types': 4.13.1
       '@smithy/util-stream': 4.5.8
       tslib: 2.8.1
 
@@ -12147,7 +12140,7 @@ snapshots:
       '@smithy/credential-provider-imds': 4.2.7
       '@smithy/property-provider': 4.2.7
       '@smithy/shared-ini-file-loader': 4.4.2
-      '@smithy/types': 4.11.0
+      '@smithy/types': 4.13.1
       tslib: 2.8.1
     transitivePeerDependencies:
       - aws-crt
@@ -12177,9 +12170,9 @@ snapshots:
       '@aws-sdk/nested-clients': 3.965.0
       '@aws-sdk/types': 3.965.0
       '@smithy/property-provider': 4.2.7
-      '@smithy/protocol-http': 5.3.7
+      '@smithy/protocol-http': 5.3.12
       '@smithy/shared-ini-file-loader': 4.4.2
-      '@smithy/types': 4.11.0
+      '@smithy/types': 4.13.1
       tslib: 2.8.1
     transitivePeerDependencies:
       - aws-crt
@@ -12237,7 +12230,7 @@ snapshots:
       '@aws-sdk/types': 3.965.0
       '@smithy/property-provider': 4.2.7
       '@smithy/shared-ini-file-loader': 4.4.2
-      '@smithy/types': 4.11.0
+      '@smithy/types': 4.13.1
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-process@3.972.18':
@@ -12257,7 +12250,7 @@ snapshots:
       '@aws-sdk/types': 3.965.0
       '@smithy/property-provider': 4.2.7
       '@smithy/shared-ini-file-loader': 4.4.2
-      '@smithy/types': 4.11.0
+      '@smithy/types': 4.13.1
       tslib: 2.8.1
     transitivePeerDependencies:
       - aws-crt
@@ -12282,7 +12275,7 @@ snapshots:
       '@aws-sdk/types': 3.965.0
       '@smithy/property-provider': 4.2.7
       '@smithy/shared-ini-file-loader': 4.4.2
-      '@smithy/types': 4.11.0
+      '@smithy/types': 4.13.1
       tslib: 2.8.1
     transitivePeerDependencies:
       - aws-crt
@@ -12346,16 +12339,16 @@ snapshots:
       '@aws-sdk/core': 3.965.0
       '@aws-sdk/types': 3.965.0
       '@aws-sdk/util-arn-parser': 3.965.0
-      '@smithy/core': 3.20.1
-      '@smithy/node-config-provider': 4.3.7
-      '@smithy/protocol-http': 5.3.7
+      '@smithy/core': 3.23.12
+      '@smithy/node-config-provider': 4.3.12
+      '@smithy/protocol-http': 5.3.12
       '@smithy/signature-v4': 5.3.7
-      '@smithy/smithy-client': 4.10.3
-      '@smithy/types': 4.11.0
+      '@smithy/smithy-client': 4.12.6
+      '@smithy/types': 4.13.1
       '@smithy/util-config-provider': 4.2.0
-      '@smithy/util-middleware': 4.2.7
+      '@smithy/util-middleware': 4.2.12
       '@smithy/util-stream': 4.5.8
-      '@smithy/util-utf8': 4.2.0
+      '@smithy/util-utf8': 4.2.2
       tslib: 2.8.1
 
   '@aws-sdk/middleware-sdk-sqs@3.972.15':
@@ -12402,31 +12395,31 @@ snapshots:
       '@aws-sdk/util-endpoints': 3.965.0
       '@aws-sdk/util-user-agent-browser': 3.965.0
       '@aws-sdk/util-user-agent-node': 3.965.0
-      '@smithy/config-resolver': 4.4.5
-      '@smithy/core': 3.20.1
-      '@smithy/fetch-http-handler': 5.3.8
-      '@smithy/hash-node': 4.2.7
-      '@smithy/invalid-dependency': 4.2.7
-      '@smithy/middleware-content-length': 4.2.7
-      '@smithy/middleware-endpoint': 4.4.2
-      '@smithy/middleware-retry': 4.4.18
-      '@smithy/middleware-serde': 4.2.8
-      '@smithy/middleware-stack': 4.2.7
-      '@smithy/node-config-provider': 4.3.7
-      '@smithy/node-http-handler': 4.4.7
-      '@smithy/protocol-http': 5.3.7
-      '@smithy/smithy-client': 4.10.3
-      '@smithy/types': 4.11.0
-      '@smithy/url-parser': 4.2.7
-      '@smithy/util-base64': 4.3.0
-      '@smithy/util-body-length-browser': 4.2.0
-      '@smithy/util-body-length-node': 4.2.1
-      '@smithy/util-defaults-mode-browser': 4.3.17
-      '@smithy/util-defaults-mode-node': 4.2.20
-      '@smithy/util-endpoints': 3.2.7
-      '@smithy/util-middleware': 4.2.7
-      '@smithy/util-retry': 4.2.7
-      '@smithy/util-utf8': 4.2.0
+      '@smithy/config-resolver': 4.4.11
+      '@smithy/core': 3.23.12
+      '@smithy/fetch-http-handler': 5.3.15
+      '@smithy/hash-node': 4.2.12
+      '@smithy/invalid-dependency': 4.2.12
+      '@smithy/middleware-content-length': 4.2.12
+      '@smithy/middleware-endpoint': 4.4.26
+      '@smithy/middleware-retry': 4.4.43
+      '@smithy/middleware-serde': 4.2.15
+      '@smithy/middleware-stack': 4.2.12
+      '@smithy/node-config-provider': 4.3.12
+      '@smithy/node-http-handler': 4.5.0
+      '@smithy/protocol-http': 5.3.12
+      '@smithy/smithy-client': 4.12.6
+      '@smithy/types': 4.13.1
+      '@smithy/url-parser': 4.2.12
+      '@smithy/util-base64': 4.3.2
+      '@smithy/util-body-length-browser': 4.2.2
+      '@smithy/util-body-length-node': 4.2.3
+      '@smithy/util-defaults-mode-browser': 4.3.42
+      '@smithy/util-defaults-mode-node': 4.2.45
+      '@smithy/util-endpoints': 3.3.3
+      '@smithy/util-middleware': 4.2.12
+      '@smithy/util-retry': 4.2.12
+      '@smithy/util-utf8': 4.2.2
       tslib: 2.8.1
     transitivePeerDependencies:
       - aws-crt
@@ -12518,7 +12511,7 @@ snapshots:
       '@aws-sdk/types': 3.965.0
       '@smithy/property-provider': 4.2.7
       '@smithy/shared-ini-file-loader': 4.4.2
-      '@smithy/types': 4.11.0
+      '@smithy/types': 4.13.1
       tslib: 2.8.1
     transitivePeerDependencies:
       - aws-crt
@@ -12590,7 +12583,7 @@ snapshots:
 
   '@aws-sdk/xml-builder@3.965.0':
     dependencies:
-      '@smithy/types': 4.11.0
+      '@smithy/types': 4.13.1
       fast-xml-parser: 5.2.5
       tslib: 2.8.1
 
@@ -15554,7 +15547,7 @@ snapshots:
 
   '@smithy/abort-controller@4.2.7':
     dependencies:
-      '@smithy/types': 4.11.0
+      '@smithy/types': 4.13.1
       tslib: 2.8.1
 
   '@smithy/config-resolver@4.4.11':
@@ -15611,10 +15604,10 @@ snapshots:
 
   '@smithy/credential-provider-imds@4.2.7':
     dependencies:
-      '@smithy/node-config-provider': 4.3.7
+      '@smithy/node-config-provider': 4.3.12
       '@smithy/property-provider': 4.2.7
-      '@smithy/types': 4.11.0
-      '@smithy/url-parser': 4.2.7
+      '@smithy/types': 4.13.1
+      '@smithy/url-parser': 4.2.12
       tslib: 2.8.1
 
   '@smithy/fetch-http-handler@5.3.15':
@@ -15793,7 +15786,7 @@ snapshots:
 
   '@smithy/property-provider@4.2.7':
     dependencies:
-      '@smithy/types': 4.11.0
+      '@smithy/types': 4.13.1
       tslib: 2.8.1
 
   '@smithy/protocol-http@5.3.12':
@@ -15814,7 +15807,7 @@ snapshots:
 
   '@smithy/querystring-builder@4.2.7':
     dependencies:
-      '@smithy/types': 4.11.0
+      '@smithy/types': 4.13.1
       '@smithy/util-uri-escape': 4.2.0
       tslib: 2.8.1
 
@@ -15825,7 +15818,7 @@ snapshots:
 
   '@smithy/querystring-parser@4.2.7':
     dependencies:
-      '@smithy/types': 4.11.0
+      '@smithy/types': 4.13.1
       tslib: 2.8.1
 
   '@smithy/service-error-classification@4.2.12':
@@ -15834,11 +15827,11 @@ snapshots:
 
   '@smithy/service-error-classification@4.2.7':
     dependencies:
-      '@smithy/types': 4.11.0
+      '@smithy/types': 4.13.1
 
   '@smithy/shared-ini-file-loader@4.4.2':
     dependencies:
-      '@smithy/types': 4.11.0
+      '@smithy/types': 4.13.1
       tslib: 2.8.1
 
   '@smithy/shared-ini-file-loader@4.4.7':
@@ -15860,12 +15853,12 @@ snapshots:
   '@smithy/signature-v4@5.3.7':
     dependencies:
       '@smithy/is-array-buffer': 4.2.0
-      '@smithy/protocol-http': 5.3.7
-      '@smithy/types': 4.11.0
+      '@smithy/protocol-http': 5.3.12
+      '@smithy/types': 4.13.1
       '@smithy/util-hex-encoding': 4.2.0
-      '@smithy/util-middleware': 4.2.7
+      '@smithy/util-middleware': 4.2.12
       '@smithy/util-uri-escape': 4.2.0
-      '@smithy/util-utf8': 4.2.0
+      '@smithy/util-utf8': 4.2.2
       tslib: 2.8.1
 
   '@smithy/smithy-client@4.10.3':
@@ -16048,13 +16041,13 @@ snapshots:
 
   '@smithy/util-stream@4.5.8':
     dependencies:
-      '@smithy/fetch-http-handler': 5.3.8
-      '@smithy/node-http-handler': 4.4.7
-      '@smithy/types': 4.11.0
-      '@smithy/util-base64': 4.3.0
+      '@smithy/fetch-http-handler': 5.3.15
+      '@smithy/node-http-handler': 4.5.0
+      '@smithy/types': 4.13.1
+      '@smithy/util-base64': 4.3.2
       '@smithy/util-buffer-from': 4.2.0
       '@smithy/util-hex-encoding': 4.2.0
-      '@smithy/util-utf8': 4.2.0
+      '@smithy/util-utf8': 4.2.2
       tslib: 2.8.1
 
   '@smithy/util-uri-escape@4.2.0':
@@ -23964,8 +23957,6 @@ snapshots:
   zod-validation-error@4.0.2(zod@4.3.5):
     dependencies:
       zod: 4.3.5
-
-  zod@3.25.76: {}
 
   zod@4.3.5: {}
 

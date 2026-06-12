@@ -1,11 +1,10 @@
 import { Module, Global } from '@nestjs/common';
 import {
-  EncryptionService,
   TokenManagerService,
-  AesEncryptionService,
   OAuthRefreshClient,
   RedisDistributedLock,
 } from '@soopa/credentials';
+import { IEncryptionService, ENCRYPTION_SERVICE } from '@soopa/security';
 import { DatabaseModule } from '@soopa/database';
 import { REDIS_CLIENT } from '@soopa/cache';
 import type { Redis } from '@soopa/cache';
@@ -60,7 +59,7 @@ import { DeleteConnectionUseCase } from './core/use-cases/delete-connection.use-
       useFactory: (
         db: DrizzleDb,
         redis: Redis,
-        crypto: EncryptionService,
+        crypto: IEncryptionService,
         refreshClient: OAuthRefreshClient,
       ) => {
         return new TokenManagerService(
@@ -73,7 +72,7 @@ import { DeleteConnectionUseCase } from './core/use-cases/delete-connection.use-
       inject: [
         DATABASE_CONNECTION,
         REDIS_CLIENT,
-        EncryptionService,
+        ENCRYPTION_SERVICE,
         OAuthRefreshClient,
       ],
     },
@@ -81,7 +80,6 @@ import { DeleteConnectionUseCase } from './core/use-cases/delete-connection.use-
     ConnectionLifecycleService,
     ConnectionRepository,
     CredentialRepository,
-    { provide: EncryptionService, useClass: AesEncryptionService },
     { provide: OAuthRefreshClient, useClass: RegistryOAuthRefreshClient },
 
     // --- Adapters ---

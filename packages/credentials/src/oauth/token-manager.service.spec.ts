@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TokenManagerService, OAuthRefreshError, AppCredentialError, IDistributedLock, OAuthRefreshClient } from './token-manager.service.js';
-import { EncryptionService } from '../crypto/encryption.interface.js';
+import { IEncryptionService } from '@soopa/security';
 import { dataSources, credentials } from '@soopa/database';
 import { eq } from 'drizzle-orm';
 
@@ -19,7 +19,7 @@ class FakeLock implements IDistributedLock {
 describe('TokenManagerService', () => {
   let dbMock: any;
   let lockMock: FakeLock;
-  let cryptoMock: EncryptionService;
+  let cryptoMock: IEncryptionService;
   let oauthClientMock: OAuthRefreshClient;
   let eventPublisherMock: any;
   let service: TokenManagerService;

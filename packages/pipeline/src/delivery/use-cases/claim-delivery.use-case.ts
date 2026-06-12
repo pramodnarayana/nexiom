@@ -1,6 +1,6 @@
 import { StorageResolverService } from "../../storage-resolver/storage-resolver.service.js";
 import { Injectable, Logger, Inject, forwardRef } from "@nestjs/common";
-import { IOutboundGatewayPort } from "@soopa/domain-core";
+import { IOutboundGatewayPort } from "../../shared/domain.js";
 import { DeliveryRetryService } from "../delivery-retry.service.js";
 import { sanitizeErrorObject } from "../../utils.js";
 import { MAX_DELIVERY_ATTEMPTS } from "../delivery.service.js";

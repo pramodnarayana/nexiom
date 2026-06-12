@@ -7,7 +7,7 @@ import type {
   IReplicaStatePort,
   InboundRecord,
   ExtractedReplica,
-} from "@soopa/domain-core";
+} from "../domain.js";
 
 @Injectable()
 export class ReplicaStateAdapter implements IReplicaStatePort {

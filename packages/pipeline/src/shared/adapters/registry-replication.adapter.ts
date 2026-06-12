@@ -9,7 +9,7 @@ import type {
   IRegistryReplicationPort,
   GlobalOutboxRecord,
   DataSourceMetadata,
-} from "@soopa/domain-core";
+} from "../domain.js";
 
 // ISO 8601 pattern — matches timestamps stored as strings in JSONB
 const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;

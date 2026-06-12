@@ -6,7 +6,7 @@ import { buildTenantSchema, assertValidSchemaName } from "@soopa/database";
 import type {
   IOutboundGatewayPort,
   OutboundGatewayRecord,
-} from "@soopa/domain-core";
+} from "../domain.js";
 
 @Injectable()
 export class OutboundGatewayAdapter implements IOutboundGatewayPort {

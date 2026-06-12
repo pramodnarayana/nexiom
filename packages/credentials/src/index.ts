@@ -6,9 +6,7 @@
  *   - `@soopa/piece-framework` — piece/action/trigger/auth/property definitions
  */
 
-// Crypto utilities
-export * from './crypto/encryption.interface.js';
-export * from './crypto/encryption.service.js';
+// Crypto utilities moved to @soopa/security
 
 // Token management (OAuth refresh, credential storage)
 export * from './oauth/token-manager.service.js';

@@ -30,7 +30,7 @@ import { GemHydrationService } from "./gem-hydration.service.js";
 import {
   evaluateDeliveryStatus,
   type DispatchResponse,
-} from "@soopa/domain-core";
+} from "../shared/domain.js";
 import { ClaimDeliveryUseCase } from "./use-cases/claim-delivery.use-case.js";
 
 /** Maximum number of executeAction attempts before permanently failing. */
