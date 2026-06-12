@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesController } from './roles.controller.js';
-import { ROLE_PROVIDER } from '@soopa/identity';
+import { ROLE_REPOSITORY } from '@soopa/identity';
 import {
   AuthGuard,
   PermissionsGuard,
@@ -38,7 +38,7 @@ describe('RolesController - Visibility Logic', () => {
       controllers: [RolesController],
       providers: [
         {
-          provide: ROLE_PROVIDER,
+          provide: ROLE_REPOSITORY,
           useValue: mockRoleProvider,
         },
       ],

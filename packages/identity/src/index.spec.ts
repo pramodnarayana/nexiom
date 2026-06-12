@@ -35,20 +35,20 @@ vi.mock("better-auth/node", () => ({
   fromNodeHeaders: vi.fn(),
 }));
 
-vi.mock("./adapters/better-auth.adapter.js", () => ({
+vi.mock("./adapters/outbound/better-auth.adapter.js", () => ({
   BetterAuthAdapter: class { },
 }));
-vi.mock("./adapters/drizzle-user.adapter.js", () => ({
-  DrizzleUserAdapter: class { },
+vi.mock("./adapters/outbound/drizzle-user.repository.js", () => ({
+  DrizzleUserRepositoryAdapter: class { },
 }));
-vi.mock("./adapters/drizzle-tenant.adapter.js", () => ({
-  DrizzleTenantAdapter: class { },
+vi.mock("./adapters/outbound/drizzle-tenant.repository.js", () => ({
+  DrizzleTenantRepositoryAdapter: class { },
 }));
-vi.mock("./adapters/drizzle-permission.adapter.js", () => ({
-  DrizzlePermissionAdapter: class { },
+vi.mock("./adapters/outbound/drizzle-permission.repository.js", () => ({
+  DrizzlePermissionRepositoryAdapter: class { },
 }));
-vi.mock("./adapters/drizzle-role.adapter.js", () => ({
-  DrizzleRoleAdapter: class { },
+vi.mock("./adapters/outbound/drizzle-role.repository.js", () => ({
+  DrizzleRoleRepositoryAdapter: class { },
 }));
 
 describe("Identity Package", () => {
@@ -57,12 +57,12 @@ describe("Identity Package", () => {
 
     expect((IdentityPackage as any).BetterAuthAdapter).toBeDefined();
 
-    expect((IdentityPackage as any).DrizzleUserAdapter).toBeDefined();
+    expect((IdentityPackage as any).DrizzleUserRepositoryAdapter).toBeDefined();
 
-    expect((IdentityPackage as any).DrizzleTenantAdapter).toBeDefined();
+    expect((IdentityPackage as any).DrizzleTenantRepositoryAdapter).toBeDefined();
 
-    expect((IdentityPackage as any).DrizzlePermissionAdapter).toBeDefined();
+    expect((IdentityPackage as any).DrizzlePermissionRepositoryAdapter).toBeDefined();
 
-    expect((IdentityPackage as any).DrizzleRoleAdapter).toBeDefined();
+    expect((IdentityPackage as any).DrizzleRoleRepositoryAdapter).toBeDefined();
   });
 });

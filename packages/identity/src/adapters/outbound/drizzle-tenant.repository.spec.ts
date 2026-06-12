@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unsafe-assignment */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { Tenant as TenantInterface } from "../interfaces/index.js";
-import type { IIdentityEventPublisher } from "../interfaces/index.js";
-import { DrizzleTenantAdapter } from "./drizzle-tenant.adapter.js";
-import * as schema from "../schema.js";
+import { Tenant as TenantInterface } from "../../core/ports/outbound/index.js";
+import type { IIdentityEventPublisher } from "../../core/ports/outbound/index.js";
+import { DrizzleTenantRepositoryAdapter } from "./drizzle-tenant.repository.js";
+import * as schema from "../../schema.js";
 
 type MockFunc = ReturnType<typeof vi.fn>;
 
@@ -46,7 +46,7 @@ interface MockDb {
   };
 }
 
-describe("DrizzleTenantAdapter", () => {
+describe("DrizzleTenantRepositoryAdapter", () => {
   const now = new Date("2024-01-01T00:00:00.000Z");
 
   const mkOrg = (
@@ -128,7 +128,7 @@ describe("DrizzleTenantAdapter", () => {
   it("create creates organization and admin member, handles slug collision retries", async () => {
     const { db, tx } = mkDb();
     const publisher = mkPublisher();
-    const adapter = new DrizzleTenantAdapter(
+    const adapter = new DrizzleTenantRepositoryAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
       publisher,
     );
@@ -171,7 +171,7 @@ describe("DrizzleTenantAdapter", () => {
 
   it("createTenant inserts organization and maps result; duplicate slug throws", async () => {
     const { db } = mkDb();
-    const adapter = new DrizzleTenantAdapter(
+    const adapter = new DrizzleTenantRepositoryAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
       mkPublisher(),
     );
@@ -192,7 +192,7 @@ describe("DrizzleTenantAdapter", () => {
 
   it("createTenant validates empty slug", async () => {
     const { db } = mkDb();
-    const adapter = new DrizzleTenantAdapter(
+    const adapter = new DrizzleTenantRepositoryAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
       mkPublisher(),
     );
@@ -204,7 +204,7 @@ describe("DrizzleTenantAdapter", () => {
 
   it("update trims slug, serializes metadata, handles unique violation", async () => {
     const { db } = mkDb();
-    const adapter = new DrizzleTenantAdapter(
+    const adapter = new DrizzleTenantRepositoryAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
       mkPublisher(),
     );
@@ -235,7 +235,7 @@ describe("DrizzleTenantAdapter", () => {
 
   it("update rejects empty slug", async () => {
     const { db } = mkDb();
-    const adapter = new DrizzleTenantAdapter(
+    const adapter = new DrizzleTenantRepositoryAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
       mkPublisher(),
     );
@@ -247,7 +247,7 @@ describe("DrizzleTenantAdapter", () => {
 
   it("delete removes related rows and organization; not found throws", async () => {
     const { db, tx } = mkDb();
-    const adapter = new DrizzleTenantAdapter(
+    const adapter = new DrizzleTenantRepositoryAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
       mkPublisher(),
     );
@@ -267,7 +267,7 @@ describe("DrizzleTenantAdapter", () => {
 
   it("findAllForUser joins member and organization and maps role", async () => {
     const { db } = mkDb();
-    const adapter = new DrizzleTenantAdapter(
+    const adapter = new DrizzleTenantRepositoryAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
       mkPublisher(),
     );
@@ -292,7 +292,7 @@ describe("DrizzleTenantAdapter", () => {
 
   it("findAll supports pagination and search; returns total", async () => {
     const { db } = mkDb();
-    const adapter = new DrizzleTenantAdapter(
+    const adapter = new DrizzleTenantRepositoryAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
       mkPublisher(),
     );
@@ -324,7 +324,7 @@ describe("DrizzleTenantAdapter", () => {
 
   it("findById returns mapped tenant or null", async () => {
     const { db } = mkDb();
-    const adapter = new DrizzleTenantAdapter(
+    const adapter = new DrizzleTenantRepositoryAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
       mkPublisher(),
     );
@@ -342,7 +342,7 @@ describe("DrizzleTenantAdapter", () => {
 
   it("findBySlug returns mapped tenant or null", async () => {
     const { db } = mkDb();
-    const adapter = new DrizzleTenantAdapter(
+    const adapter = new DrizzleTenantRepositoryAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
       mkPublisher(),
     );
@@ -360,7 +360,7 @@ describe("DrizzleTenantAdapter", () => {
 
   it("updateStatus updates and returns mapped tenant; not found throws", async () => {
     const { db } = mkDb();
-    const adapter = new DrizzleTenantAdapter(
+    const adapter = new DrizzleTenantRepositoryAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
       mkPublisher(),
     );
@@ -384,7 +384,7 @@ describe("DrizzleTenantAdapter", () => {
 
   it("provisionTenantForUser delegates to create", async () => {
     const { db } = mkDb();
-    const adapter = new DrizzleTenantAdapter(
+    const adapter = new DrizzleTenantRepositoryAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
       mkPublisher(),
     );

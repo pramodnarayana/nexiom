@@ -1,17 +1,21 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { IDENTITY_DB, IDENTITY_EVENT_PUBLISHER, Role } from "../constants.js";
+import {
+  IDENTITY_DB,
+  IDENTITY_EVENT_PUBLISHER,
+  Role,
+} from "../../constants.js";
 import { eq, count, ilike, desc, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import type {
-  ITenantProvider,
+  ITenantRepository,
   Tenant as TenantInterface,
   UpdateTenantInput,
   IIdentityEventPublisher,
-} from "../interfaces/index.js";
-import { TenantProvisionedEvent } from "../events/index.js";
-import * as schema from "../schema.js";
-import { generateFancyTenantName } from "../utils/name-generator.js";
+} from "../../core/ports/outbound/index.js";
+import { TenantProvisionedEvent } from "../../events/index.js";
+import * as schema from "../../schema.js";
+import { generateFancyTenantName } from "../../utils/name-generator.js";
 
 interface PgError extends Error {
   code: string;
@@ -19,7 +23,7 @@ interface PgError extends Error {
 }
 
 @Injectable()
-export class DrizzleTenantAdapter implements ITenantProvider {
+export class DrizzleTenantRepositoryAdapter implements ITenantRepository {
   constructor(
     @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
     @Inject(IDENTITY_EVENT_PUBLISHER)

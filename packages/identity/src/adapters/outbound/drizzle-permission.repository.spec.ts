@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
-import { DrizzlePermissionAdapter } from "./drizzle-permission.adapter.js";
-import * as schema from "../schema.js";
+import { DrizzlePermissionRepositoryAdapter } from "./drizzle-permission.repository.js";
+import * as schema from "../../schema.js";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import type { User } from "../interfaces/index.js";
-import { getSystemTenantId } from "../constants.js";
+import type { User } from "../../core/ports/outbound/index.js";
+import { getSystemTenantId } from "../../constants.js";
 
-vi.mock("../constants", async () => {
+vi.mock("../../constants.js", async () => {
   return {
-    ...(await vi.importActual("../constants")),
+    ...(await vi.importActual("../../constants.js")),
     getSystemTenantId: () => "sys-tenant-id",
     getOwnerRoleId: () => "owner-role-id",
     getAdminRoleId: () => "admin-role-id",
@@ -80,12 +80,12 @@ const mkUser = (over?: Partial<User>): User => ({
   ...over,
 });
 
-describe("DrizzlePermissionAdapter", () => {
+describe("DrizzlePermissionRepositoryAdapter", () => {
   beforeEach(() => vi.restoreAllMocks());
 
   it("can: tenant checks - Owner true, others based on permissions", async () => {
     const db = mkDb();
-    const adapter = new DrizzlePermissionAdapter(db);
+    const adapter = new DrizzlePermissionRepositoryAdapter(db);
     const user = mkUser();
 
     // no membership
@@ -140,7 +140,7 @@ describe("DrizzlePermissionAdapter", () => {
 
   it("can: respects global wildcard access", async () => {
     const db = mkDb();
-    const adapter = new DrizzlePermissionAdapter(db);
+    const adapter = new DrizzlePermissionRepositoryAdapter(db);
     const user = mkUser();
 
     db.select.mockReturnValue(
@@ -160,7 +160,7 @@ describe("DrizzlePermissionAdapter", () => {
 
   it("can: respects resource-level wildcard access", async () => {
     const db = mkDb();
-    const adapter = new DrizzlePermissionAdapter(db);
+    const adapter = new DrizzlePermissionRepositoryAdapter(db);
     const user = mkUser();
 
     db.select.mockReturnValue(
@@ -181,7 +181,7 @@ describe("DrizzlePermissionAdapter", () => {
 
   it("hasRole: checks role id", async () => {
     const db = mkDb();
-    const adapter = new DrizzlePermissionAdapter(db);
+    const adapter = new DrizzlePermissionRepositoryAdapter(db);
     const user = mkUser();
 
     db.select.mockReturnValue(
@@ -211,7 +211,7 @@ describe("DrizzlePermissionAdapter", () => {
 
   it("getPermissions: aggregates wildcard and role-based perms", async () => {
     const db = mkDb();
-    const adapter = new DrizzlePermissionAdapter(db);
+    const adapter = new DrizzlePermissionRepositoryAdapter(db);
 
     // tenant member: user with permissions
     db.select.mockReturnValue(
@@ -237,7 +237,7 @@ describe("DrizzlePermissionAdapter", () => {
 
   it("getPermissions: returns * for system admin if DB returns it", async () => {
     const db = mkDb();
-    const adapter = new DrizzlePermissionAdapter(db);
+    const adapter = new DrizzlePermissionRepositoryAdapter(db);
 
     // Mock DB to return '*' permission for system tenant query
     db.select.mockReturnValue(
@@ -258,7 +258,7 @@ describe("DrizzlePermissionAdapter", () => {
 
   it("getPermissions: returns resource wildcard (e.g. organization:*)", async () => {
     const db = mkDb();
-    const adapter = new DrizzlePermissionAdapter(db);
+    const adapter = new DrizzlePermissionRepositoryAdapter(db);
 
     db.select.mockReturnValue(
       mockChainedQuery([
@@ -278,7 +278,7 @@ describe("DrizzlePermissionAdapter", () => {
 
   it("can: denies permission if scope mismatch", async () => {
     const db = mkDb();
-    const adapter = new DrizzlePermissionAdapter(db);
+    const adapter = new DrizzlePermissionRepositoryAdapter(db);
     const user = mkUser();
 
     // User has 'admin:read' but scoped to system tenant, not 'o1'

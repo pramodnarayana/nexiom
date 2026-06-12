@@ -2,10 +2,10 @@ import { validateFrontendUrl } from "./utils/url.util.js";
 import { organization, admin } from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
 import { createAuthMiddleware } from "better-auth/api";
-import type { ITenantProvider } from "./interfaces/tenant-provider.interface.js";
-import type { IEmailProvider } from "./interfaces/email-provider.interface.js";
-import type { BetterAuthAdapterConfig } from "./interfaces/better-auth-config.interface.js";
-import type { User as UserInterface } from "./interfaces/index.js";
+import type { ITenantRepository } from "./core/ports/outbound/tenant-repository.port.js";
+import type { IEmailProvider } from "./core/ports/outbound/email-provider.port.js";
+import type { BetterAuthAdapterConfig } from "./core/ports/outbound/better-auth-config.port.js";
+import type { User as UserInterface } from "./core/ports/outbound/index.js";
 // ... (existing imports)
 
 import type { HookEndpointContext } from "better-auth";
@@ -58,7 +58,7 @@ const getApiFromContext = (
 export const getBetterAuthPlugins = (
   emailService: IEmailProvider,
   config: BetterAuthAdapterConfig,
-  tenantProvider: ITenantProvider,
+  tenantProvider: ITenantRepository,
 ) => {
   // Define statements matching Better Auth's organization plugin expectations
   const statement = {

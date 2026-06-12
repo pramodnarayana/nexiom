@@ -2,20 +2,24 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { eq, and, ilike, count, desc } from "drizzle-orm";
 import {
-  IUserProvider,
+  IUserRepository,
   UpdateUserInput,
   User as UserInterface,
   IAuthProvider,
   UserNotFoundError,
-} from "../interfaces/index.js";
-import type { CreateUserInput } from "../interfaces/index.js";
-import * as schema from "../schema.js";
-import { AUTH_PROVIDER, IDENTITY_OPTIONS, IDENTITY_DB } from "../constants.js";
-import type { IdentityModuleOptions } from "../identity.module.js";
+} from "../../core/ports/outbound/index.js";
+import type { CreateUserInput } from "../../core/ports/outbound/index.js";
+import * as schema from "../../schema.js";
+import {
+  AUTH_PROVIDER,
+  IDENTITY_OPTIONS,
+  IDENTITY_DB,
+} from "../../constants.js";
+import type { IdentityModuleOptions } from "../../identity.module.js";
 
 @Injectable()
-export class DrizzleUserAdapter implements IUserProvider {
-  private readonly logger = new Logger(DrizzleUserAdapter.name);
+export class DrizzleUserRepositoryAdapter implements IUserRepository {
+  private readonly logger = new Logger(DrizzleUserRepositoryAdapter.name);
 
   constructor(
     @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
@@ -120,7 +124,7 @@ export class DrizzleUserAdapter implements IUserProvider {
       this.logger.error(
         `findById failed for user ${id}: ${errorMessage}`,
         error instanceof Error ? error.stack : undefined,
-        "DrizzleUserAdapter.findById",
+        "DrizzleUserRepositoryAdapter.findById",
       );
       throw error;
     }

@@ -1,6 +1,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { OAuthRefreshClient, OAuthRefreshError } from './token-manager.service.js';
-import { IEncryptionService, ENCRYPTION_SERVICE } from '@soopa/security';
+import type { IEncryptionService } from '@soopa/security';
+import { ENCRYPTION_SERVICE } from '@soopa/security';
 import type { ICredentialsEventPublisher } from '../interfaces/event-publisher.interface.js';
 import { CredentialInvalidatedEvent } from '../events/credential-invalidated.event.js';
 import { resolveOAuth2Url } from '@soopa/piece-framework';

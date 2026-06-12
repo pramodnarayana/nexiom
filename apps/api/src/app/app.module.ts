@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { EncryptionModule } from '@soopa/security';
 import { UsersModule } from '../modules/identity/users/users.module.js';
 import { TenantsModule } from '../modules/identity/tenants/tenants.module.js';
 import { AuthModule } from '@soopa/auth';
@@ -47,6 +48,17 @@ import { PluginsModule } from '../modules/plugins/plugins.module.js';
     // ObservabilityModule must be first so pino is active before all other modules
     // bootstrap and emit their own startup logs.
     ObservabilityModule,
+    // Global encryption module
+    EncryptionModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (cfg: ConfigService) => ({
+        mode: cfg.get('INFRA_MODE') === 'local' ? 'local' : 'kms',
+        encryptionKey: cfg.get('ENCRYPTION_KEY'),
+        kmsKeyId: cfg.get('KMS_KEY_ID'),
+        kmsEndpoint: cfg.get('KMS_ENDPOINT'),
+      }),
+    }),
     // Global Redis client — available to all modules via REDIS_CLIENT token
     CacheModule,
     // Global SQS queue — available to all modules via QUEUE_SERVICE / QueueService token

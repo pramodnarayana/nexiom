@@ -2,7 +2,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller.js';
 import { AuthService, type RequestAuthContext } from '@soopa/auth';
-import { USER_PROVIDER, TENANT_PROVIDER } from '@soopa/identity';
+import { USER_REPOSITORY, TENANT_REPOSITORY } from '@soopa/identity';
 import type { User, Session } from '@soopa/identity';
 import { InvitationsService } from '../invitations/invitations.service.js';
 import { Request, Response } from 'express';
@@ -54,11 +54,11 @@ describe('AuthController', () => {
           useValue: mockAuthService,
         },
         {
-          provide: USER_PROVIDER,
+          provide: USER_REPOSITORY,
           useValue: mockUserProvider,
         },
         {
-          provide: TENANT_PROVIDER,
+          provide: TENANT_REPOSITORY,
           useValue: mockTenantProvider,
         },
         {

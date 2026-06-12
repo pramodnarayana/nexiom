@@ -2,11 +2,10 @@
  * @soopa/credentials — public API
  *
  * Entrypoints:
- *   - `@soopa/credentials`           — runtime services (encryption, token manager)
+ *   - `@soopa/credentials`     — runtime services (e.g., token manager)
+ *   - `@soopa/security`        — crypto utilities (encryption)
  *   - `@soopa/piece-framework` — piece/action/trigger/auth/property definitions
  */
-
-// Crypto utilities moved to @soopa/security
 
 // Token management (OAuth refresh, credential storage)
 export * from './oauth/token-manager.service.js';

@@ -708,6 +708,9 @@ importers:
       '@soopa/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@soopa/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       ai:
         specifier: ^6.0.146
         version: 6.0.146(zod@4.3.5)

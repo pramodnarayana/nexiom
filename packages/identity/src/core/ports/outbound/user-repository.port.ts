@@ -13,7 +13,7 @@ export interface UpdateUserInput extends Partial<User> {
   password?: string;
 }
 
-export interface IUserProvider {
+export interface IUserRepository {
   create(input: CreateUserInput): Promise<User>;
 
   update(id: string, input: UpdateUserInput): Promise<User>;

@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller.js';
 import { AuthService, AuthGuard } from '@soopa/auth';
-import { USER_PROVIDER, TENANT_PROVIDER } from '@soopa/identity';
+import { USER_REPOSITORY, TENANT_REPOSITORY } from '@soopa/identity';
 import { InvitationsService } from '../invitations/invitations.service.js';
 import { BadRequestException } from '@nestjs/common';
 import { vi, describe, it, expect, beforeEach, Mock } from 'vitest';
@@ -75,8 +75,8 @@ describe('AuthController Coverage', () => {
       controllers: [AuthController],
       providers: [
         { provide: AuthService, useValue: authService },
-        { provide: USER_PROVIDER, useValue: userProvider },
-        { provide: TENANT_PROVIDER, useValue: tenantProvider },
+        { provide: USER_REPOSITORY, useValue: userProvider },
+        { provide: TENANT_REPOSITORY, useValue: tenantProvider },
         { provide: InvitationsService, useValue: invitationsService },
       ],
     })

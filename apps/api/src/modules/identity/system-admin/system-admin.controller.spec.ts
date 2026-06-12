@@ -8,9 +8,9 @@ import {
 } from '@nestjs/common';
 import {
   AUTH_PROVIDER,
-  USER_PROVIDER,
-  TENANT_PROVIDER,
-  ROLE_PROVIDER,
+  USER_REPOSITORY,
+  TENANT_REPOSITORY,
+  ROLE_REPOSITORY,
 } from '@soopa/identity';
 import {
   getRequiredAdminRoleId,
@@ -77,9 +77,9 @@ describe('SystemAdminController', () => {
       controllers: [SystemAdminController],
       providers: [
         { provide: AUTH_PROVIDER, useValue: mockAuthProvider },
-        { provide: USER_PROVIDER, useValue: mockUserProvider },
-        { provide: TENANT_PROVIDER, useValue: mockTenantProvider },
-        { provide: ROLE_PROVIDER, useValue: mockRoleProvider },
+        { provide: USER_REPOSITORY, useValue: mockUserProvider },
+        { provide: TENANT_REPOSITORY, useValue: mockTenantProvider },
+        { provide: ROLE_REPOSITORY, useValue: mockRoleProvider },
       ],
     })
       .overrideGuard(SystemAdminGuard)

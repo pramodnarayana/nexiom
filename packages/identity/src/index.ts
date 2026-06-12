@@ -1,4 +1,4 @@
-export * from "./interfaces/index.js";
+export * from "./core/ports/outbound/index.js";
 
 export {
   user,
@@ -31,11 +31,16 @@ export type {
   Invitation as DbInvitation,
 } from "./schema.js";
 
-export * from "./adapters/better-auth.adapter.js";
-export * from "./adapters/drizzle-user.adapter.js";
-export * from "./adapters/drizzle-tenant.adapter.js";
-export * from "./adapters/drizzle-permission.adapter.js";
-export * from "./adapters/drizzle-role.adapter.js";
+export * from "./adapters/outbound/better-auth.adapter.js";
+export * from "./adapters/outbound/drizzle-user.repository.js";
+export * from "./adapters/outbound/drizzle-tenant.repository.js";
+export * from "./adapters/outbound/drizzle-permission.repository.js";
+export * from "./adapters/outbound/drizzle-role.repository.js";
 
 export * from "./identity.module.js";
 export * from "./constants.js";
+export * from "./core/use-cases/users/list-users-with-invitations.use-case.js";
+export * from "./core/use-cases/users/remove-user.use-case.js";
+export * from "./core/use-cases/users/get-user-profile.use-case.js";
+export * from "./core/use-cases/users/create-user.use-case.js";
+export * from "./core/use-cases/users/get-user-by-id.use-case.js";

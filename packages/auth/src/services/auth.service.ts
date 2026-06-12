@@ -7,10 +7,10 @@ import {
   Session,
   User,
   CreateUserInput,
-  TENANT_PROVIDER,
-  ITenantProvider,
-  PERMISSION_PROVIDER,
-  IPermissionProvider,
+  TENANT_REPOSITORY,
+  ITenantRepository,
+  PERMISSION_REPOSITORY,
+  IPermissionRepository,
   getSystemTenantId,
 } from "@soopa/identity";
 
@@ -20,9 +20,10 @@ export class AuthService {
 
   constructor(
     @Inject(AUTH_PROVIDER) private readonly authProvider: IAuthProvider,
-    @Inject(TENANT_PROVIDER) private readonly tenantProvider: ITenantProvider,
-    @Inject(PERMISSION_PROVIDER)
-    private readonly permissionProvider: IPermissionProvider,
+    @Inject(TENANT_REPOSITORY)
+    private readonly tenantProvider: ITenantRepository,
+    @Inject(PERMISSION_REPOSITORY)
+    private readonly permissionProvider: IPermissionRepository,
   ) {}
 
   async login(credentials: LoginCredentials): Promise<AuthResult> {
@@ -87,7 +88,10 @@ export class AuthService {
     // using slice() to avoid mutating the original array
     const sortedTenants = tenants
       .slice()
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      .sort(
+        (a: { createdAt: Date }, b: { createdAt: Date }) =>
+          b.createdAt.getTime() - a.createdAt.getTime(),
+      );
     const hasTenant = sortedTenants.length > 0;
     const organizationId = hasTenant ? sortedTenants[0].id : undefined;
     const organizationName = hasTenant

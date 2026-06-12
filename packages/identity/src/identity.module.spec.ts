@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { IdentityModule, IdentityModuleOptions } from "./identity.module.js";
 import {
   AUTH_PROVIDER,
-  USER_PROVIDER,
-  TENANT_PROVIDER,
-  PERMISSION_PROVIDER,
+  USER_REPOSITORY,
+  TENANT_REPOSITORY,
+  PERMISSION_REPOSITORY,
   IDENTITY_OPTIONS,
 } from "./constants.js";
 
@@ -66,15 +66,15 @@ describe("IdentityModule.register", () => {
 
     const tokens = providers.map((p) => p.provide);
     expect(tokens).toContain(AUTH_PROVIDER);
-    expect(tokens).toContain(USER_PROVIDER);
-    expect(tokens).toContain(TENANT_PROVIDER);
-    expect(tokens).toContain(PERMISSION_PROVIDER);
+    expect(tokens).toContain(USER_REPOSITORY);
+    expect(tokens).toContain(TENANT_REPOSITORY);
+    expect(tokens).toContain(PERMISSION_REPOSITORY);
 
     // exports contain tokens
     expect(mod.exports).toContain(AUTH_PROVIDER);
-    expect(mod.exports).toContain(USER_PROVIDER);
-    expect(mod.exports).toContain(TENANT_PROVIDER);
-    expect(mod.exports).toContain(PERMISSION_PROVIDER);
+    expect(mod.exports).toContain(USER_REPOSITORY);
+    expect(mod.exports).toContain(TENANT_REPOSITORY);
+    expect(mod.exports).toContain(PERMISSION_REPOSITORY);
 
     // factories inject requested tokens
     // Verify providers use correct classes
@@ -93,15 +93,18 @@ describe("IdentityModule.register", () => {
     const authProv = assertClassProvider(AUTH_PROVIDER, "AUTH_PROVIDER");
     expect(authProv.useClass).toBeDefined();
 
-    const userProv = assertClassProvider(USER_PROVIDER, "USER_PROVIDER");
+    const userProv = assertClassProvider(USER_REPOSITORY, "USER_REPOSITORY");
     expect(userProv.useClass).toBeDefined();
 
-    const tenantProv = assertClassProvider(TENANT_PROVIDER, "TENANT_PROVIDER");
+    const tenantProv = assertClassProvider(
+      TENANT_REPOSITORY,
+      "TENANT_REPOSITORY",
+    );
     expect(tenantProv.useClass).toBeDefined();
 
     const permProv = assertClassProvider(
-      PERMISSION_PROVIDER,
-      "PERMISSION_PROVIDER",
+      PERMISSION_REPOSITORY,
+      "PERMISSION_REPOSITORY",
     );
     expect(permProv.useClass).toBeDefined();
   });
