@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import type { AppConnectionRepositoryPort } from '../ports/outbound/app-connection-repository.port.js';
 import type {
   StoreOAuthConnectionOptions,
@@ -15,10 +16,24 @@ export class FakeAppConnectionRepository implements AppConnectionRepositoryPort 
     options: StoreOAuthConnectionOptions,
   ): Promise<ProvisionInfo> {
     this.callCount.storeOAuthConnection++;
-    const id = options.id || `conn_${Date.now()}`;
 
-    // In a real DB, constraint checks would happen here.
-    this.connections.set(id, { ...options, id });
+    let id = options.id;
+    if (id) {
+      const existing = this.connections.get(id);
+      if (
+        !existing ||
+        existing.tenantId !== options.tenantId ||
+        existing.providerName !== options.providerName
+      ) {
+        return Promise.reject(
+          new NotFoundException(`Connection with ID ${id} not found.`),
+        );
+      }
+      this.connections.set(id, { ...existing, ...options });
+    } else {
+      id = `conn_${Date.now()}`;
+      this.connections.set(id, { ...options, id });
+    }
 
     return Promise.resolve({
       schemaName: options.id

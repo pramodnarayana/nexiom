@@ -156,14 +156,6 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
 
         connection.schemaName = schemaNameToStore;
 
-        await tx.insert(globalRegistryOutbox).values({
-          tenantId: connection.tenantId,
-          entityType: 'APP_CONNECTION',
-          entityId: connection.id,
-          action: 'UPSERT',
-          payload: connection,
-        });
-
         await this.savepointManager.releaseSavepoint(
           tx,
           'before_unique_insert',
@@ -271,10 +263,7 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
                 updatedAt: new Date(),
               })
               .where(eq(dataSources.id, existingFailed.id))
-              .returning({
-                id: dataSources.id,
-                schemaName: dataSources.schemaName,
-              });
+              .returning();
 
             await tx
               .insert(credentials)
@@ -314,6 +303,14 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
       const schemaName =
         connection.schemaName ??
         getWorkspaceSchemaName(connection.id, providerName);
+
+      await tx.insert(globalRegistryOutbox).values({
+        tenantId: connection.tenantId,
+        entityType: 'APP_CONNECTION',
+        entityId: connection.id,
+        action: 'UPSERT',
+        payload: connection,
+      });
 
       return {
         schemaName,

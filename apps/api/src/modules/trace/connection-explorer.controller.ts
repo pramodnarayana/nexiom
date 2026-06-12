@@ -4,12 +4,33 @@ import {
   Param,
   Query,
   ParseUUIDPipe,
-  ParseIntPipe,
   UseGuards,
   BadRequestException,
   DefaultValuePipe,
   NotFoundException,
+  PipeTransform,
+  Injectable,
 } from '@nestjs/common';
+
+@Injectable()
+export class BoundedIntPipe implements PipeTransform<string | number, number> {
+  constructor(
+    private min: number,
+    private max: number = Infinity,
+  ) {}
+  transform(value: string | number): number {
+    const val = typeof value === 'string' ? parseInt(value, 10) : value;
+    if (isNaN(val))
+      throw new BadRequestException(
+        'Validation failed (numeric string is expected)',
+      );
+    if (val < this.min)
+      throw new BadRequestException(`Value must be at least ${this.min}`);
+    if (val > this.max)
+      throw new BadRequestException(`Value must be at most ${this.max}`);
+    return val;
+  }
+}
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@soopa/auth';
 import { validateFilterGroup } from './filter-parser.js';
 import { ListConnectionDataUseCase } from './core/use-cases/explorer/list-connection-data.use-case.js';
@@ -42,8 +63,9 @@ export class ConnectionExplorerController {
     @AuthContext() ctx: RequestAuthContext,
     @Param('connectionId', ParseUUIDPipe) connectionId: string,
     @Param('tab') tab: string,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+    @Query('page', new DefaultValuePipe(1), new BoundedIntPipe(1)) page: number,
+    @Query('limit', new DefaultValuePipe(50), new BoundedIntPipe(1, 1000))
+    limit: number,
     @Query('workspaceId', new ParseUUIDPipe({ optional: true }))
     workspaceId?: string,
     @Query('filters') filtersRaw?: string,
@@ -101,7 +123,7 @@ export class ConnectionExplorerController {
     return this.listRoutesUseCase.execute(orgId, connectionId, traceId);
   }
 
-  @Get(':tab/objects')
+  @Get('objects/:tab')
   async listObjectsByConnection(
     @AuthContext() ctx: RequestAuthContext,
     @Param('connectionId', ParseUUIDPipe) connectionId: string,

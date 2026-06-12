@@ -167,6 +167,6 @@ export class WorkspaceConnectionsController {
       );
     }
 
-    return this.syncRunner.run(dataSourceId, objectType);
+    return this.syncRunner.run(connection.id, objectType);
   }
 }

@@ -240,9 +240,25 @@ export class DrizzleExplorerRepositoryAdapter implements ExplorerRepositoryPort 
         )
         .limit(1),
       tenantDb
-        .select()
+        .select({
+          id: schema.normalizedEntity.id,
+          traceId: schema.normalizedEntity.traceId,
+          replicaId: schema.normalizedEntity.replicaId,
+          canonicalType: schema.normalizedEntity.canonicalType,
+          data: schema.normalizedEntity.data,
+          createdAt: schema.normalizedEntity.createdAt,
+        })
         .from(schema.normalizedEntity)
-        .where(eq(schema.normalizedEntity.traceId, traceId))
+        .innerJoin(
+          schema.replicaEntity,
+          eq(schema.normalizedEntity.replicaId, schema.replicaEntity.id),
+        )
+        .where(
+          and(
+            eq(schema.normalizedEntity.traceId, traceId),
+            eq(schema.replicaEntity.dataSourceId, connectionId),
+          ),
+        )
         .limit(1),
       tenantDb
         .select()
