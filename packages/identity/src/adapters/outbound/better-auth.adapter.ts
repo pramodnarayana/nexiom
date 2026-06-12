@@ -5,23 +5,23 @@ import { v4 as uuidv4 } from "uuid";
 import { eq, and } from "drizzle-orm";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { fromNodeHeaders } from "better-auth/node";
-import { normalizeRole } from "../utils/role-normalization.js";
-import { getBetterAuthPlugins } from "../better-auth.config.js";
-import { validateFrontendUrl } from "../utils/url.util.js";
-import type { ITenantProvider } from "../interfaces/tenant-provider.interface.js";
+import { normalizeRole } from "../../utils/role-normalization.js";
+import { getBetterAuthPlugins } from "../../better-auth.config.js";
+import { validateFrontendUrl } from "../../utils/url.util.js";
+import type { ITenantRepository } from "../../core/ports/outbound/tenant-repository.port.js";
 import { Inject, Injectable } from "@nestjs/common";
 import type { IncomingHttpHeaders } from "node:http";
-import * as schema from "../schema.js";
-import type { BetterAuthAdapterConfig } from "../interfaces/better-auth-config.interface.js";
-import type { IEmailProvider } from "../interfaces/email-provider.interface.js";
+import * as schema from "../../schema.js";
+import type { BetterAuthAdapterConfig } from "../../core/ports/outbound/better-auth-config.port.js";
+import type { IEmailProvider } from "../../core/ports/outbound/email-provider.port.js";
 import {
   EMAIL_PROVIDER,
   IDENTITY_OPTIONS,
   IDENTITY_DB,
   BETTER_AUTH_CONFIG,
-  TENANT_PROVIDER,
+  TENANT_REPOSITORY,
   IDENTITY_EVENT_PUBLISHER,
-} from "../constants.js";
+} from "../../constants.js";
 import type {
   IAuthProvider,
   CreateInvitationInput,
@@ -31,10 +31,10 @@ import type {
   Session,
   User as UserInterface,
   IIdentityEventPublisher,
-} from "../interfaces/index.js";
-import { UserInvitedEvent } from "../events/index.js";
-import type { CreateUserInput } from "../interfaces/user-provider.interface.js";
-import type { IdentityModuleOptions } from "../identity.module.js";
+} from "../../core/ports/outbound/index.js";
+import { UserInvitedEvent } from "../../events/index.js";
+import type { CreateUserInput } from "../../core/ports/outbound/user-repository.port.js";
+import type { IdentityModuleOptions } from "../../identity.module.js";
 
 export const PERMISSION_FALLBACK_DASHBOARD_READ = "dashboard:read";
 
@@ -95,7 +95,8 @@ export class BetterAuthAdapter implements IAuthProvider {
     @Inject(EMAIL_PROVIDER) private readonly emailService: IEmailProvider,
     @Inject(BETTER_AUTH_CONFIG)
     private readonly config: BetterAuthAdapterConfig,
-    @Inject(TENANT_PROVIDER) private readonly tenantProvider: ITenantProvider, // Injected Dependency
+    @Inject(TENANT_REPOSITORY)
+    private readonly tenantProvider: ITenantRepository, // Injected Dependency
     @Inject(IDENTITY_OPTIONS) private readonly options: IdentityModuleOptions,
     @Inject(IDENTITY_EVENT_PUBLISHER)
     private readonly eventPublisher: IIdentityEventPublisher,

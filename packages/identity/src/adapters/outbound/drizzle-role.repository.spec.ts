@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from "vitest";
-import { DrizzleRoleAdapter } from "./drizzle-role.adapter.js";
+import { DrizzleRoleRepositoryAdapter } from "./drizzle-role.repository.js";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
-import * as schema from "../schema.js";
+import * as schema from "../../schema.js";
 import { eq, desc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
@@ -46,13 +46,13 @@ const mkDb = () => {
   return db;
 };
 
-describe("DrizzleRoleAdapter", () => {
+describe("DrizzleRoleRepositoryAdapter", () => {
   let db: NodePgDatabase<typeof schema> & MockDb;
-  let adapter: DrizzleRoleAdapter;
+  let adapter: DrizzleRoleRepositoryAdapter;
 
   beforeEach(() => {
     db = mkDb();
-    adapter = new DrizzleRoleAdapter(db);
+    adapter = new DrizzleRoleRepositoryAdapter(db);
     vi.mocked(uuidv4).mockReturnValue(
       "test-uuid" as unknown as ReturnType<typeof uuidv4>,
     );

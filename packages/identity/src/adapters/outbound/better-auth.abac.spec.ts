@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, type Mock } from "vitest";
 import { BetterAuthAdapter } from "./better-auth.adapter.js";
-import type { IdentityModuleOptions } from "../identity.module.js";
+import type { IdentityModuleOptions } from "../../identity.module.js";
 import type {
   IEmailProvider,
-  ITenantProvider,
+  ITenantRepository,
   IIdentityEventPublisher,
-} from "../interfaces/index.js";
+} from "../../core/ports/outbound/index.js";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import * as schema from "../schema.js";
+import * as schema from "../../schema.js";
 
 // Mocks
 vi.mock("better-auth", () => ({
@@ -59,7 +59,7 @@ describe("BetterAuthAdapter - ABAC Condition Mapping", () => {
   it("should serialize permissions with conditions as JSON strings", async () => {
     const db = mkDb();
     const mockEmail = { sendEmail: vi.fn() } as unknown as IEmailProvider;
-    const mockTenantProvider = {} as unknown as ITenantProvider;
+    const mockTenantProvider = {} as unknown as ITenantRepository;
     const options = mkOptions();
 
     const mockEventPublisher: IIdentityEventPublisher = {

@@ -35,34 +35,42 @@ vi.mock("better-auth/node", () => ({
   fromNodeHeaders: vi.fn(),
 }));
 
-vi.mock("./adapters/better-auth.adapter.js", () => ({
+vi.mock("./adapters/outbound/better-auth.adapter.js", () => ({
   BetterAuthAdapter: class { },
 }));
-vi.mock("./adapters/drizzle-user.adapter.js", () => ({
-  DrizzleUserAdapter: class { },
+vi.mock("./adapters/outbound/drizzle-user.repository.js", () => ({
+  DrizzleUserRepositoryAdapter: class { },
 }));
-vi.mock("./adapters/drizzle-tenant.adapter.js", () => ({
-  DrizzleTenantAdapter: class { },
+vi.mock("./adapters/outbound/drizzle-tenant.repository.js", () => ({
+  DrizzleTenantRepositoryAdapter: class { },
 }));
-vi.mock("./adapters/drizzle-permission.adapter.js", () => ({
-  DrizzlePermissionAdapter: class { },
+vi.mock("./adapters/outbound/drizzle-permission.repository.js", () => ({
+  DrizzlePermissionRepositoryAdapter: class { },
 }));
-vi.mock("./adapters/drizzle-role.adapter.js", () => ({
-  DrizzleRoleAdapter: class { },
+vi.mock("./adapters/outbound/drizzle-role.repository.js", () => ({
+  DrizzleRoleRepositoryAdapter: class { },
 }));
 
 describe("Identity Package", () => {
-  it("should export adapters", () => {
+  it("should export package symbols", () => {
     expect(IdentityPackage).toBeDefined();
 
+    // Adapters
     expect((IdentityPackage as any).BetterAuthAdapter).toBeDefined();
+    expect((IdentityPackage as any).DrizzleUserRepositoryAdapter).toBeDefined();
+    expect((IdentityPackage as any).DrizzleTenantRepositoryAdapter).toBeDefined();
+    expect((IdentityPackage as any).DrizzlePermissionRepositoryAdapter).toBeDefined();
+    expect((IdentityPackage as any).DrizzleRoleRepositoryAdapter).toBeDefined();
 
-    expect((IdentityPackage as any).DrizzleUserAdapter).toBeDefined();
+    // Use Cases
+    expect((IdentityPackage as any).ListUsersWithInvitationsUseCase).toBeDefined();
+    expect((IdentityPackage as any).RemoveUserUseCase).toBeDefined();
+    expect((IdentityPackage as any).GetUserProfileUseCase).toBeDefined();
+    expect((IdentityPackage as any).CreateUserUseCase).toBeDefined();
+    expect((IdentityPackage as any).GetUserByIdUseCase).toBeDefined();
 
-    expect((IdentityPackage as any).DrizzleTenantAdapter).toBeDefined();
-
-    expect((IdentityPackage as any).DrizzlePermissionAdapter).toBeDefined();
-
-    expect((IdentityPackage as any).DrizzleRoleAdapter).toBeDefined();
+    // Exceptions
+    expect((IdentityPackage as any).UserNotFoundError).toBeDefined();
+    expect((IdentityPackage as any).TenantNotFoundError).toBeDefined();
   });
 });

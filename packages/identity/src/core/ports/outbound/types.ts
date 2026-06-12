@@ -56,3 +56,23 @@ export interface AuthResult {
   user: User;
   cookie?: string | string[];
 }
+
+export type UserListItem =
+  | (User & { kind?: "user" })
+  | {
+      kind: "invitation";
+      id: string;
+      email: string;
+      name?: string;
+      role: string;
+      status: "pending";
+      emailVerified: boolean;
+      createdAt: Date;
+      updatedAt: Date;
+      isInvitation: true;
+      permissions?: string[];
+      image?: string;
+      banned?: boolean;
+      banReason?: string | null;
+      banExpires?: Date | null;
+    };

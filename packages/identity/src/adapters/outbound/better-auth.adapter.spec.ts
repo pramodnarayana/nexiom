@@ -3,11 +3,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   BetterAuthAdapter,
 } from "./better-auth.adapter.js";
-import type { BetterAuthAdapterConfig } from "../interfaces/better-auth-config.interface.js";
-import type { IIdentityEventPublisher } from "../interfaces/index.js";
-import * as schema from "../schema.js";
+import type { BetterAuthAdapterConfig } from '../../core/ports/outbound/better-auth-config.port.js';
+import type { IIdentityEventPublisher } from '../../core/ports/outbound/index.js';
+import * as schema from '../../schema.js';
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { getBetterAuthPlugins } from "../better-auth.config.js";
+import { getBetterAuthPlugins } from '../../better-auth.config.js';
 
 vi.mock("better-auth", () => ({
   betterAuth: vi.fn((opts: any) => ({

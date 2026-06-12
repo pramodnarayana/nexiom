@@ -8,9 +8,9 @@ import {
 } from '@nestjs/common';
 import {
   AUTH_PROVIDER,
-  USER_PROVIDER,
-  TENANT_PROVIDER,
-  ROLE_PROVIDER,
+  USER_REPOSITORY,
+  TENANT_REPOSITORY,
+  ROLE_REPOSITORY,
 } from '@soopa/identity';
 import {
   getRequiredAdminRoleId,
@@ -77,9 +77,9 @@ describe('SystemAdminController', () => {
       controllers: [SystemAdminController],
       providers: [
         { provide: AUTH_PROVIDER, useValue: mockAuthProvider },
-        { provide: USER_PROVIDER, useValue: mockUserProvider },
-        { provide: TENANT_PROVIDER, useValue: mockTenantProvider },
-        { provide: ROLE_PROVIDER, useValue: mockRoleProvider },
+        { provide: USER_REPOSITORY, useValue: mockUserProvider },
+        { provide: TENANT_REPOSITORY, useValue: mockTenantProvider },
+        { provide: ROLE_REPOSITORY, useValue: mockRoleProvider },
       ],
     })
       .overrideGuard(SystemAdminGuard)
@@ -206,6 +206,10 @@ describe('SystemAdminController', () => {
 
     it('should create user via provider', async () => {
       mockUserProvider.findByEmail.mockResolvedValue(null);
+      mockRoleProvider.findById.mockResolvedValue({
+        id: 'member',
+        name: 'Member',
+      });
       const mockUser = {
         id: 'u1',
         email: 'new@example.com',
@@ -219,6 +223,7 @@ describe('SystemAdminController', () => {
       });
 
       expect(result).toEqual(mockUser);
+      expect(mockRoleProvider.findById).toHaveBeenCalledWith('member');
       expect(mockUserProvider.create).toHaveBeenCalledWith({
         name: 'Test',
         email: 'new@example.com',

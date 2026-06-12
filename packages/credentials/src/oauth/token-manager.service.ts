@@ -3,7 +3,8 @@ import { dataSources, credentials, DATABASE_CONNECTION } from '@soopa/database';
 import { eq } from 'drizzle-orm';
 import type { DrizzleDb } from '@soopa/database';
 
-import { IEncryptionService, ENCRYPTION_SERVICE } from '@soopa/security';
+import type { IEncryptionService } from '@soopa/security';
+import { ENCRYPTION_SERVICE } from '@soopa/security';
 import type { IDistributedLock } from './distributed-lock.interface.js';
 
 /**

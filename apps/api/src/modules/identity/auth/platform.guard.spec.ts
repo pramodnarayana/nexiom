@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
   ExecutionContext,
 } from '@nestjs/common';
-import { PERMISSION_PROVIDER } from '@soopa/identity';
+import { PERMISSION_REPOSITORY } from '@soopa/identity';
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 
 describe('PlatformGuard', () => {
@@ -31,7 +31,7 @@ describe('PlatformGuard', () => {
           },
         },
         {
-          provide: PERMISSION_PROVIDER,
+          provide: PERMISSION_REPOSITORY,
           useValue: {
             hasRole: vi.fn(),
           },

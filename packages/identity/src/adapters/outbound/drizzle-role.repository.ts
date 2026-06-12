@@ -2,18 +2,18 @@ import { Injectable, Inject, NotFoundException } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { eq, desc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
-import * as schema from "../schema.js";
-import { IDENTITY_DB } from "../constants.js";
+import * as schema from "../../schema.js";
+import { IDENTITY_DB } from "../../constants.js";
 import type {
-  IRoleProvider,
+  IRoleRepository,
   RoleEntity,
   FindRolesOptions,
   CreateRoleInput,
   UpdateRoleInput,
-} from "../interfaces/index.js";
+} from "../../core/ports/outbound/index.js";
 
 @Injectable()
-export class DrizzleRoleAdapter implements IRoleProvider {
+export class DrizzleRoleRepositoryAdapter implements IRoleRepository {
   constructor(
     @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
   ) {}

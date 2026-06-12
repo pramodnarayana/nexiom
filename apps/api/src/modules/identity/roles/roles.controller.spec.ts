@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesController } from './roles.controller.js';
-import { ROLE_PROVIDER, RoleScope } from '@soopa/identity';
+import { ROLE_REPOSITORY, RoleScope } from '@soopa/identity';
 import {
   AuthGuard,
   PermissionsGuard,
@@ -38,7 +38,7 @@ describe('RolesController', () => {
       controllers: [RolesController],
       providers: [
         {
-          provide: ROLE_PROVIDER,
+          provide: ROLE_REPOSITORY,
           useValue: roleProvider,
         },
       ],

@@ -9,6 +9,7 @@ import { ObservabilityModule } from "./bootstrap/observability/observability.mod
 import { DatabaseModule } from "@soopa/database";
 import { DbManagerModule } from "./bootstrap/dbmanager/dbmanager.module.js";
 import { EventEmitterModule } from "@nestjs/event-emitter";
+import { EncryptionModule } from "@soopa/security";
 
 // Consumers
 import { CopilotWorker } from "./consumers/copilot.worker.js";
@@ -50,6 +51,17 @@ import { NestCacheInvalidatorAdapter } from "./adapters/outbound/nest-cache-inva
     DatabaseModule,
     DbManagerModule,
     ObservabilityModule,
+    EncryptionModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (cfg: ConfigService) => ({
+        mode: cfg.get("INFRA_MODE") === "local" ? "local" : "kms",
+        encryptionKey: cfg.get("ENCRYPTION_KEY"),
+        kmsKeyId: cfg.get("KMS_KEY_ID"),
+        kmsEndpoint: cfg.get("KMS_ENDPOINT"),
+        region: cfg.get("KMS_REGION"),
+      }),
+    }),
     PiecesModule.forRoot(),
     ...(process.env.ENABLE_PLUGIN_MIGRATIONS === "true"
       ? [PiecesModule.withMigrations()]

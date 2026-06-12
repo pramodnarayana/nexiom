@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Request } from 'express';
 import { TenantsController } from './tenants.controller.js';
-import { TENANT_PROVIDER, Tenant } from '@soopa/identity';
+import { TENANT_REPOSITORY, Tenant } from '@soopa/identity';
 import { AuthGuard } from '@soopa/auth';
 import { UpdateTenantStatus } from './tenants.validation.js';
 
@@ -24,7 +24,7 @@ describe('TenantsController', () => {
       controllers: [TenantsController],
       providers: [
         {
-          provide: TENANT_PROVIDER,
+          provide: TENANT_REPOSITORY,
           useValue: mockTenantProvider,
         },
       ],

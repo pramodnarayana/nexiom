@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { EventEmitter2 } from "@nestjs/event-emitter";
-import type { IIdentityEventPublisher } from "../interfaces/index.js";
+import type { IIdentityEventPublisher } from "../core/ports/outbound/index.js";
 import type {
   TenantProvisionedEvent,
   UserInvitedEvent,

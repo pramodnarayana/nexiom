@@ -19,9 +19,9 @@ import {
   AuthContext,
   type RequestAuthContext,
 } from '@soopa/auth';
-import { ROLE_PROVIDER, RoleScope } from '@soopa/identity';
+import { ROLE_REPOSITORY, RoleScope } from '@soopa/identity';
 import type {
-  IRoleProvider,
+  IRoleRepository,
   CreateRoleInput,
   UpdateRoleInput,
 } from '@soopa/identity';
@@ -31,7 +31,7 @@ import { filterRolesForRequester } from '@soopa/identity/utils/role-visibility';
 @UseGuards(AuthGuard, PermissionsGuard)
 export class RolesController {
   constructor(
-    @Inject(ROLE_PROVIDER) private readonly roleProvider: IRoleProvider,
+    @Inject(ROLE_REPOSITORY) private readonly roleProvider: IRoleRepository,
   ) {}
 
   @Get()

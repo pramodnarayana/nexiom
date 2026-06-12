@@ -48,6 +48,7 @@
     "@soopa/piece-framework": "workspace:*",
     "@soopa/piece-registry": "workspace:*",
     "@soopa/queue": "workspace:*",
+    "@soopa/security": "workspace:*",
     "ai": "^6.0.146",
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.4.10",

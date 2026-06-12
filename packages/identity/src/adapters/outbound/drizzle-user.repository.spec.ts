@@ -1,15 +1,15 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { DrizzleUserAdapter } from "./drizzle-user.adapter.js";
-import * as schema from "../schema.js";
-import { UserNotFoundError } from "../interfaces/index.js";
-import type { IdentityModuleOptions } from "../identity.module.js";
+import { DrizzleUserRepositoryAdapter } from "./drizzle-user.repository.js";
+import * as schema from "../../schema.js";
+import { UserNotFoundError } from "../../core/ports/outbound/index.js";
+import type { IdentityModuleOptions } from "../../identity.module.js";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type {
   IAuthProvider,
   CreateUserInput,
   UpdateUserInput,
-} from "../interfaces/index.js";
+} from "../../core/ports/outbound/index.js";
 
 type MockFunc = ReturnType<typeof vi.fn>;
 
@@ -118,7 +118,7 @@ const mkOptions = (): IdentityModuleOptions => ({
     adminRoleId: "admin-role-id",
     memberRoleId: "member-role-id",
   },
-  // Minimal stub — DrizzleUserAdapter does not use betterAuthConfig directly;
+  // Minimal stub — DrizzleUserRepositoryAdapter does not use betterAuthConfig directly;
   // it is required by IdentityModuleOptions but unused in this adapter's logic.
   betterAuthConfig: {
     allowedOrigins: [],
@@ -126,7 +126,7 @@ const mkOptions = (): IdentityModuleOptions => ({
   },
 });
 
-describe("DrizzleUserAdapter", () => {
+describe("DrizzleUserRepositoryAdapter", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
@@ -134,7 +134,7 @@ describe("DrizzleUserAdapter", () => {
   it("create delegates to auth provider", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
+    const adapter = new DrizzleUserRepositoryAdapter(db, mkOptions(), auth);
 
     const user = await adapter.create({
       email: "a@b.com",
@@ -146,7 +146,7 @@ describe("DrizzleUserAdapter", () => {
   it("update handles password via auth provider; updates fields; throws if missing user after update", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
+    const adapter = new DrizzleUserRepositoryAdapter(db, mkOptions(), auth);
 
     // password path
     db.query.user.findFirst.mockResolvedValueOnce(mkUser({ id: "u1" }));
@@ -164,7 +164,7 @@ describe("DrizzleUserAdapter", () => {
     expect(res.name).toBe("A");
 
     // missing setPassword support
-    const adapter2 = new DrizzleUserAdapter(db, mkOptions(), {
+    const adapter2 = new DrizzleUserRepositoryAdapter(db, mkOptions(), {
       createUser: (input: CreateUserInput) => auth.createUser(input),
     } as unknown as IAuthProvider);
     await expect(
@@ -182,7 +182,7 @@ describe("DrizzleUserAdapter", () => {
   it("delete cascades and related tables in a transaction", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
+    const adapter = new DrizzleUserRepositoryAdapter(db, mkOptions(), auth);
 
     // Access the transaction mock to verify cascade behavior
     const txCalls: any[] = [];
@@ -212,7 +212,7 @@ describe("DrizzleUserAdapter", () => {
   it("findById and findByEmail return mapped or null", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
+    const adapter = new DrizzleUserRepositoryAdapter(db, mkOptions(), auth);
 
     auth.findById = vi.fn().mockResolvedValue(mkUser({ id: "u1" }));
     const byId = await adapter.findById("u1");
@@ -225,7 +225,11 @@ describe("DrizzleUserAdapter", () => {
     const authNoFind = mkAuth();
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     delete (authNoFind as any).findById;
-    const adapterFallback = new DrizzleUserAdapter(db, mkOptions(), authNoFind);
+    const adapterFallback = new DrizzleUserRepositoryAdapter(
+      db,
+      mkOptions(),
+      authNoFind,
+    );
 
     db.query.user.findFirst.mockResolvedValueOnce(mkUser({ id: "u2" }));
     const byIdFallback = await adapterFallback.findById("u2");
@@ -255,7 +259,7 @@ describe("DrizzleUserAdapter", () => {
   it("deleteIfNotLastAdmin handles various scenarios", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
+    const adapter = new DrizzleUserRepositoryAdapter(db, mkOptions(), auth);
 
     const mockSelect = vi.fn();
     const mockTx = {
@@ -274,6 +278,7 @@ describe("DrizzleUserAdapter", () => {
       membership: any[],
       adminCount: any[],
       remainingMemberships: any[],
+      tenantExists: boolean = true,
     ) => {
       mockSelect.mockReset();
 
@@ -295,6 +300,7 @@ describe("DrizzleUserAdapter", () => {
 
           // 1. Lock
           if (columns?.id && !columns.memberId) {
+            chain.for.mockResolvedValue(tenantExists ? [{ id: "org" }] : []);
             return chain;
           }
 
@@ -341,6 +347,12 @@ describe("DrizzleUserAdapter", () => {
       );
     };
 
+    // Scenario 0: Tenant not found
+    setupMocks([], [], [], false);
+    await expect(adapter.deleteIfNotLastAdmin("u1", "o1")).rejects.toThrow(
+      "Organization not found",
+    );
+
     // Scenario 1: User not member
     setupMocks([], [], []);
     await expect(adapter.deleteIfNotLastAdmin("u1", "o1")).rejects.toThrow(
@@ -382,7 +394,7 @@ describe("DrizzleUserAdapter", () => {
   it("forceVerifyEmail updates user", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
+    const adapter = new DrizzleUserRepositoryAdapter(db, mkOptions(), auth);
 
     await adapter.forceVerifyEmail("u1");
 
@@ -398,7 +410,7 @@ describe("DrizzleUserAdapter", () => {
   it("count returns total users with optional filtering", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
+    const adapter = new DrizzleUserRepositoryAdapter(db, mkOptions(), auth);
 
     // Mock count result
     const mockCountResult = [{ count: 5 }];
@@ -424,7 +436,7 @@ describe("DrizzleUserAdapter", () => {
   it("findAll builds search filters correctly", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
+    const adapter = new DrizzleUserRepositoryAdapter(db, mkOptions(), auth);
 
     const dataChain = {
       from: vi.fn().mockReturnThis(),
@@ -456,7 +468,7 @@ describe("DrizzleUserAdapter", () => {
   it("findAll handles tenant scoping", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
+    const adapter = new DrizzleUserRepositoryAdapter(db, mkOptions(), auth);
 
     const dataChain = {
       from: vi.fn().mockReturnThis(),

@@ -15,15 +15,15 @@ import {
 } from '@nestjs/common';
 import {
   AUTH_PROVIDER,
-  USER_PROVIDER,
-  TENANT_PROVIDER,
-  ROLE_PROVIDER,
+  USER_REPOSITORY,
+  TENANT_REPOSITORY,
+  ROLE_REPOSITORY,
 } from '@soopa/identity';
 import type {
   IAuthProvider,
-  IUserProvider,
-  ITenantProvider,
-  IRoleProvider,
+  IUserRepository,
+  ITenantRepository,
+  IRoleRepository,
 } from '@soopa/identity';
 import { AuthContext, type RequestAuthContext } from '@soopa/auth';
 import {
@@ -47,9 +47,10 @@ import { RequirePermission, PermissionsGuard, AuthGuard } from '@soopa/auth';
 export class SystemAdminController {
   constructor(
     @Inject(AUTH_PROVIDER) private readonly authProvider: IAuthProvider,
-    @Inject(USER_PROVIDER) private readonly userProvider: IUserProvider,
-    @Inject(TENANT_PROVIDER) private readonly tenantProvider: ITenantProvider,
-    @Inject(ROLE_PROVIDER) private readonly roleProvider: IRoleProvider,
+    @Inject(USER_REPOSITORY) private readonly userProvider: IUserRepository,
+    @Inject(TENANT_REPOSITORY)
+    private readonly tenantProvider: ITenantRepository,
+    @Inject(ROLE_REPOSITORY) private readonly roleProvider: IRoleRepository,
   ) {}
 
   @Post('users/:id/invite')
