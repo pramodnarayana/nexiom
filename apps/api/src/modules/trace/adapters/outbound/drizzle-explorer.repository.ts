@@ -125,7 +125,7 @@ export class DrizzleExplorerRepositoryAdapter implements ExplorerRepositoryPort 
     const filterWhere = buildDrizzleFilter(filters, normalizedEntity);
     const finalWhere = and(
       eq(replicaEntity.dataSourceId, connectionId),
-      objectType ? eq(replicaEntity.entityType, objectType) : undefined,
+      objectType ? eq(normalizedEntity.canonicalType, objectType) : undefined,
       filterWhere,
     );
 
@@ -313,7 +313,12 @@ export class DrizzleExplorerRepositoryAdapter implements ExplorerRepositoryPort 
     if (tab === 'normalized') {
       const rows = await tenantDb
         .selectDistinct({ type: schema.normalizedEntity.canonicalType })
-        .from(schema.normalizedEntity);
+        .from(schema.normalizedEntity)
+        .innerJoin(
+          schema.replicaEntity,
+          eq(schema.normalizedEntity.replicaId, schema.replicaEntity.id),
+        )
+        .where(eq(schema.replicaEntity.dataSourceId, connectionId));
       return rows.map((r) => r.type ?? 'Uncategorized');
     }
 

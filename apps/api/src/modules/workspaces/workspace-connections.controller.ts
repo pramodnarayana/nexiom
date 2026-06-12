@@ -43,6 +43,15 @@ export class WorkspaceConnectionsController {
     private readonly syncRunner: SyncRunner,
   ) {}
 
+  private async ensureWorkspaceExists(orgId: string, workspaceId: string) {
+    const workspace = await this.getWorkspaceUseCase.execute(
+      orgId,
+      workspaceId,
+    );
+    if (!workspace) throw new NotFoundException('Workspace not found');
+    return workspace;
+  }
+
   @Get()
   @RequirePermission('workspaces', 'read')
   async listConnections(
@@ -50,11 +59,7 @@ export class WorkspaceConnectionsController {
     @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
   ) {
     const orgId = requireOrgId(auth);
-    const workspace = await this.getWorkspaceUseCase.execute(
-      orgId,
-      workspaceId,
-    );
-    if (!workspace) throw new NotFoundException('Workspace not found');
+    await this.ensureWorkspaceExists(orgId, workspaceId);
 
     return this.listWorkspaceConnectionsUseCase.execute(
       orgId,
@@ -71,11 +76,7 @@ export class WorkspaceConnectionsController {
     @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
   ) {
     const orgId = requireOrgId(auth);
-    const workspace = await this.getWorkspaceUseCase.execute(
-      orgId,
-      workspaceId,
-    );
-    if (!workspace) throw new NotFoundException('Workspace not found');
+    await this.ensureWorkspaceExists(orgId, workspaceId);
 
     return this.listWorkspaceConnectionsUseCase.execute(
       orgId,
@@ -94,11 +95,7 @@ export class WorkspaceConnectionsController {
   ) {
     const orgId = requireOrgId(auth);
 
-    const workspace = await this.getWorkspaceUseCase.execute(
-      orgId,
-      workspaceId,
-    );
-    if (!workspace) throw new NotFoundException('Workspace not found');
+    const workspace = await this.ensureWorkspaceExists(orgId, workspaceId);
 
     const connection = await this.getConnectionForAssignmentUseCase.execute(
       dataSourceId,
@@ -135,11 +132,7 @@ export class WorkspaceConnectionsController {
   ) {
     const orgId = requireOrgId(auth);
 
-    const workspace = await this.getWorkspaceUseCase.execute(
-      orgId,
-      workspaceId,
-    );
-    if (!workspace) throw new NotFoundException('Workspace not found');
+    await this.ensureWorkspaceExists(orgId, workspaceId);
 
     await this.unassignConnectionUseCase.execute(workspaceId, dataSourceId);
   }
@@ -155,11 +148,7 @@ export class WorkspaceConnectionsController {
   ) {
     const orgId = requireOrgId(auth);
 
-    const workspace = await this.getWorkspaceUseCase.execute(
-      orgId,
-      workspaceId,
-    );
-    if (!workspace) throw new NotFoundException('Workspace not found');
+    const workspace = await this.ensureWorkspaceExists(orgId, workspaceId);
 
     if (!/^[\w.-]{1,200}$/.test(objectType)) {
       throw new BadRequestException(

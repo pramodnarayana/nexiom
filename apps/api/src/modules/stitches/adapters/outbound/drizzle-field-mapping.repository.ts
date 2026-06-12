@@ -108,9 +108,10 @@ export class DrizzleFieldMappingRepositoryAdapter
     if (!stitch) throw new NotFoundException(`Stitch ${stitchId} not found.`);
 
     return this.transaction(async (txCtx) => {
+      const exec = this.getExecutor(txCtx);
+
       // Delete orphaned canonicals
       for (const canonical of body.toDelete) {
-        const exec = this.getExecutor(txCtx);
         await exec
           .delete(fieldMappings)
           .where(
@@ -124,7 +125,6 @@ export class DrizzleFieldMappingRepositoryAdapter
       // Upsert all mappings
       const results = [];
       for (const mapping of body.toUpsert) {
-        const exec = this.getExecutor(txCtx);
         const [result] = await exec
           .insert(fieldMappings)
           .values({

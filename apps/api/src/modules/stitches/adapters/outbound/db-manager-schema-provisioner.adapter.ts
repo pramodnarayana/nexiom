@@ -29,9 +29,7 @@ export class DbManagerSchemaProvisionerAdapter implements SchemaProvisionerPort 
         SchemaPlan.OUTBOUND_ACTIVE,
         { appName: destAppName, appProfile: destAppProfile || 'standard' },
       );
-      this.logger.debug(
-        `Provisioned schema ${schemaName} to OUTBOUND_ACTIVE`,
-      );
+      this.logger.debug(`Provisioned schema ${schemaName} to OUTBOUND_ACTIVE`);
     } catch (err) {
       this.logger.error(
         `Failed to provision schema ${schemaName}: ${err instanceof Error ? err.message : String(err)}`,

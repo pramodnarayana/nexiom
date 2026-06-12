@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, ForbiddenException } from '@nestjs/common';
 import type { ExplorerRepositoryPort } from '../../ports/outbound/explorer-repository.port.js';
 import type { TraceStorageResolverPort } from '../../ports/outbound/trace-storage-resolver.port.js';
 
@@ -25,7 +25,9 @@ export class GetConnectionTraceUseCase {
       await this.storageResolver.resolveStorageProfile(connectionId);
 
     if (storageProfile.tenantId !== orgId) {
-      throw new Error('Unauthorized: connection does not belong to organization');
+      throw new ForbiddenException(
+        'Unauthorized: connection does not belong to organization',
+      );
     }
 
     return this.explorerRepo.getConnectionTrace(

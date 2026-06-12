@@ -8,7 +8,6 @@ import type { DatabaseManager } from '@soopa/dbmanager';
 import { DATABASE_CONNECTION } from '@soopa/database';
 import type { DrizzleDb } from '@soopa/database';
 import { sql } from 'drizzle-orm';
-import { SchemaPlan } from '@soopa/dbmanager';
 
 @Injectable()
 export class PipelineDatabaseProvisionerAdapter implements DatabaseProvisionerPort {
@@ -23,7 +22,7 @@ export class PipelineDatabaseProvisionerAdapter implements DatabaseProvisionerPo
     await this.dbManager.applyPlan(
       params.tenantId,
       params.schemaName,
-      params.schemaPlan as SchemaPlan,
+      params.schemaPlan,
       { appName: params.appName, appProfile: params.appProfile },
     );
   }

@@ -21,7 +21,9 @@ export class FakeAppConnectionRepository implements AppConnectionRepositoryPort 
     this.connections.set(id, { ...options, id });
 
     return Promise.resolve({
-      schemaName: options.id ? '' : `schema_${options.tenantId}_${options.providerName}`,
+      schemaName: options.id
+        ? ''
+        : `schema_${options.tenantId}_${options.providerName}`,
       dataSourceId: `ds_${id}`,
       createdAppConnection: !options.id,
     });

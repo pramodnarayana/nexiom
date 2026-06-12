@@ -17,13 +17,7 @@ import { GetConnectionTraceUseCase } from './core/use-cases/explorer/get-connect
 import { ListTraceRoutesUseCase } from './core/use-cases/explorer/list-trace-routes.use-case.js';
 import { ListObjectsUseCase } from './core/use-cases/explorer/list-objects.use-case.js';
 
-const ALLOWED_TABS = [
-  'inbound',
-  'replica',
-  'normalized',
-  'entity-map',
-  'outbound',
-] as const;
+const ALLOWED_TABS = ['inbound', 'replica', 'normalized', 'outbound'] as const;
 type TabName = (typeof ALLOWED_TABS)[number];
 
 @Controller('connections/:connectionId/explorer')

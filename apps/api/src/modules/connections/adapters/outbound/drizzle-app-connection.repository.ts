@@ -271,7 +271,10 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
                 updatedAt: new Date(),
               })
               .where(eq(dataSources.id, existingFailed.id))
-              .returning({ id: dataSources.id, schemaName: dataSources.schemaName });
+              .returning({
+                id: dataSources.id,
+                schemaName: dataSources.schemaName,
+              });
 
             await tx
               .insert(credentials)
@@ -308,7 +311,9 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
         );
       }
 
-      const schemaName = connection.schemaName ?? getWorkspaceSchemaName(connection.id, providerName);
+      const schemaName =
+        connection.schemaName ??
+        getWorkspaceSchemaName(connection.id, providerName);
 
       return {
         schemaName,
