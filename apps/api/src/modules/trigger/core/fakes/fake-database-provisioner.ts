@@ -28,8 +28,10 @@ export class FakeDatabaseProvisioner implements DatabaseProvisionerPort {
   unregisterPublication(schemaName: string): Promise<void> {
     this.callCount.unregisterPublication++;
     if (this.failUnregister) {
-      throw new Error(
-        `FakeDatabaseProvisioner: Simulated failure for unregisterPublication`,
+      return Promise.reject(
+        new Error(
+          `FakeDatabaseProvisioner: Simulated failure for unregisterPublication`,
+        ),
       );
     }
     this.registeredPublications.delete(schemaName);

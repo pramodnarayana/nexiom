@@ -14,7 +14,7 @@ export interface ExplorerRepositoryPort {
     limit: number,
     objectType?: string,
     filters?: import('../../../filter-parser.js').FilterGroup,
-  ): Promise<ExplorerPage<any>>;
+  ): Promise<ExplorerPage<unknown>>;
 
   listConnectionReplica(
     tenantId: string,
@@ -24,7 +24,7 @@ export interface ExplorerRepositoryPort {
     limit: number,
     objectType?: string,
     filters?: import('../../../filter-parser.js').FilterGroup,
-  ): Promise<ExplorerPage<any>>;
+  ): Promise<ExplorerPage<unknown>>;
 
   listConnectionNormalized(
     tenantId: string,
@@ -34,7 +34,7 @@ export interface ExplorerRepositoryPort {
     limit: number,
     objectType?: string,
     filters?: import('../../../filter-parser.js').FilterGroup,
-  ): Promise<ExplorerPage<any>>;
+  ): Promise<ExplorerPage<unknown>>;
 
   listConnectionOutbound(
     tenantId: string,
@@ -42,7 +42,7 @@ export interface ExplorerRepositoryPort {
     connectionId: string,
     page: number,
     limit: number,
-  ): Promise<ExplorerPage<any>>;
+  ): Promise<ExplorerPage<unknown>>;
 
   getConnectionTrace(
     tenantId: string,

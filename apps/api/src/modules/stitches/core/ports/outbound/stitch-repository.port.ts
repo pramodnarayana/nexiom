@@ -15,11 +15,11 @@ export interface StitchRepositoryPort {
       destDataSourceId: string;
       canonicalObject?: string;
       targetObject?: string;
-      syncCondition?: any[];
+      syncCondition?: unknown[];
       status?: 'ACTIVE' | 'PAUSED';
       fieldMappings?: {
         sourceCanonical: string;
-        mappingRules: any[];
+        mappingRules: unknown[];
       }[];
     },
   ): Promise<{
@@ -53,7 +53,7 @@ export interface StitchRepositoryPort {
     params: {
       name?: string;
       status?: 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
-      syncCondition?: any[];
+      syncCondition?: unknown[];
     },
   ): Promise<unknown>;
 

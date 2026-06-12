@@ -54,7 +54,7 @@ export default tseslint.config(
           mode: "folder"
         }
       ],
-      "boundaries/ignore": ["**/*.spec.ts"]
+      "boundaries/ignore": ["**/*.spec.ts", "**/*.spec.tsx"]
     },
     rules: {
       "boundaries/element-types": [

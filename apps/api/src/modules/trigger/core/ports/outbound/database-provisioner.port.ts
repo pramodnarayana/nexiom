@@ -1,7 +1,9 @@
+import { SchemaPlan } from '@soopa/dbmanager';
+
 export interface ProvisionPlanParams {
   tenantId: string;
   schemaName: string;
-  schemaPlan: string;
+  schemaPlan: SchemaPlan;
   appName: string;
   appProfile: string;
 }

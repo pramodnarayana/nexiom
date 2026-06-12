@@ -274,7 +274,7 @@ export class DrizzleExplorerRepositoryAdapter implements ExplorerRepositoryPort 
     const { syncLog } = buildTenantSchema(schemaName);
 
     const routes = await tenantDb
-      .select({ routeId: syncLog.routeId })
+      .selectDistinct({ routeId: syncLog.routeId })
       .from(syncLog)
       .where(and(eq(syncLog.traceId, traceId), isNotNull(syncLog.routeId)));
 

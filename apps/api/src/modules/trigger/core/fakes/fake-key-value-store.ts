@@ -18,7 +18,8 @@ export class FakeKeyValueStore implements IKeyValueStore {
 
   get(key: string): Promise<string | null> {
     this.callCount.get++;
-    return Promise.resolve(this.store.get(key) || null);
+    const val = this.store.get(key);
+    return Promise.resolve(val !== undefined ? val : null);
   }
 
   del(key: string): Promise<number> {
@@ -60,7 +61,7 @@ export class FakeKeyValueStore implements IKeyValueStore {
     try {
       const parsed = JSON.parse(hash) as Record<string, string>;
       const val = parsed[field];
-      return Promise.resolve(val ? String(val) : null);
+      return Promise.resolve(val !== undefined ? String(val) : null);
     } catch {
       return Promise.resolve(null);
     }

@@ -12,7 +12,7 @@ export class GetConnectionTraceUseCase {
   ) {}
 
   async execute(
-    _orgId: string,
+    orgId: string,
     connectionId: string,
     traceId: string,
   ): Promise<{
@@ -23,6 +23,10 @@ export class GetConnectionTraceUseCase {
   }> {
     const storageProfile =
       await this.storageResolver.resolveStorageProfile(connectionId);
+
+    if (storageProfile.tenantId !== orgId) {
+      throw new Error('Unauthorized: connection does not belong to organization');
+    }
 
     return this.explorerRepo.getConnectionTrace(
       storageProfile.tenantId,

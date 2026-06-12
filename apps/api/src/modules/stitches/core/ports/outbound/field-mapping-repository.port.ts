@@ -12,7 +12,7 @@ export interface FieldMappingRepositoryPort {
       toDelete: string[];
       toUpsert: {
         sourceCanonical: string;
-        mappingRules: any[];
+        mappingRules: unknown[];
       }[];
     },
   ): Promise<unknown[]>;
@@ -26,7 +26,7 @@ export interface FieldMappingRepositoryPort {
     stitchId: string,
     params: {
       sourceCanonical: string;
-      mappingRules: any[];
+      mappingRules: unknown[];
     },
   ): Promise<unknown>;
 

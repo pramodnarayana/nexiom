@@ -8,8 +8,10 @@ export class FakeTriggerStorageResolver implements TriggerStorageResolverPort {
   resolveSchemaName(dataSourceId: string): Promise<string> {
     this.callCount.resolveSchemaName++;
     if (this.failResolution) {
-      throw new Error(
-        `FakeTriggerStorageResolver: Simulated failure for ${dataSourceId}`,
+      return Promise.reject(
+        new Error(
+          `FakeTriggerStorageResolver: Simulated failure for ${dataSourceId}`,
+        ),
       );
     }
     return Promise.resolve(

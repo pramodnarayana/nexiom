@@ -78,11 +78,11 @@ export class EnableTriggerUseCase {
 
       await params.trigger.onEnable?.(context);
 
+      wroteRegistryRow = true;
       await this.gatewayRepo.updateSchemaPlan(
         params.dataSourceId,
         SchemaPlan.OUTBOUND_ACTIVE,
       );
-      wroteRegistryRow = true;
     } catch (err) {
       if (wroteRegistryRow) {
         try {
