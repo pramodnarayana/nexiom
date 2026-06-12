@@ -7,7 +7,7 @@
 
 ## Decision
 
-OAuth App Credentials (`app_credential`) and User Connection tokens (`app_connection`) are stored in the **central Catalog Database** (`nexiom_local`), in the `public` schema, isolated logically by a `tenant_id` column.
+OAuth App Credentials (`app_credential`) and User Connection tokens (`app_connection`) are stored in the **central Catalog Database** (`platform_local`), in the `public` schema, isolated logically by a `tenant_id` column.
 
 They are **not** stored inside each tenant's physically isolated PostgreSQL database.
 
@@ -19,7 +19,7 @@ Storing credentials inside tenant databases was considered and rejected for thre
 
 ### 1. Connection Pool Exhaustion
 
-The Nexiom Engine must proactively maintain and refresh OAuth tokens. If credentials lived in 5,000 separate tenant databases, the Engine would need to:
+The Soopa Engine must proactively maintain and refresh OAuth tokens. If credentials lived in 5,000 separate tenant databases, the Engine would need to:
 
 - Maintain 5,000 separate Postgres connection pools simultaneously (impossible), OR
 - Open a dynamic connection to each tenant's database on demand for every workflow execution
@@ -46,7 +46,7 @@ Counting active integrations, running schema migrations, or patching a security 
 
 ## The Hybrid Architecture (Approved)
 
-Nexiom uses a **Hybrid Model** that balances security with efficiency:
+Soopa uses a **Hybrid Model** that balances security with efficiency:
 
 | Layer | Storage | Isolation Method |
 |---|---|---|
@@ -55,7 +55,7 @@ Nexiom uses a **Hybrid Model** that balances security with efficiency:
 
 ### How it flows
 
-1. A Nexiom workflow triggers for **Tenant A**.
+1. A Soopa workflow triggers for **Tenant A**.
 2. The Engine reads the OAuth token from `app_connection WHERE tenant_id = 'tenant_a'` in the **Catalog DB** (instant, single connection pool).
 3. The Engine makes the HTTP call to Salesforce.
 4. The Engine dynamically connects to **Tenant A's isolated database** to write the returned data records.
@@ -70,9 +70,9 @@ This means token retrieval is fast and always-available via a central pool, whil
 |---|---|---|
 | **Activepieces** | Shared Catalog DB (`projectId` row isolation) | Same Shared DB |
 | **n8n Cloud** | Shared Catalog DB (control plane) | Isolated K8s pods per enterprise tenant |
-| **Nexiom** | Shared Catalog DB (`tenant_id` row isolation) | Isolated Tenant DB per customer |
+| **Soopa** | Shared Catalog DB (`tenant_id` row isolation) | Isolated Tenant DB per customer |
 
-Nexiom's approach is **more isolated than Activepieces** (for payload data) and **more efficient than n8n Cloud** (no per-tenant pod overhead for small/mid-size customers).
+Soopa's approach is **more isolated than Activepieces** (for payload data) and **more efficient than n8n Cloud** (no per-tenant pod overhead for small/mid-size customers).
 
 ---
 

@@ -14,7 +14,7 @@
 
 #### 1. Endpoint & Trigger
 
-* **URL:** `POST https://api.nexiom.com/webhooks/tms/revenova/envoylogistics`
+* **URL:** `POST https://api.soopa.com/webhooks/tms/revenova/envoylogistics`
 * **Payload:** Salesforce Outbound Message (XML/JSON)
 
 #### 2. Platform Function (Infrastructure)

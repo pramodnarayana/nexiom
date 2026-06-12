@@ -1,4 +1,4 @@
-# Nexiom Scalable Canonical Schema & Mapping Strategy
+# Soopa Scalable Canonical Schema & Mapping Strategy
 
 ## Overview
 This document defines a scalable strategy for building and maintaining canonical schemas and mappings across multiple SaaS applications (Salesforce, QuickBooks, etc.).
@@ -287,5 +287,5 @@ AI-ready data
 ```
 
 Result:
-A scalable, maintainable, and extensible canonical data layer for Nexiom.
+A scalable, maintainable, and extensible canonical data layer for Soopa.
 

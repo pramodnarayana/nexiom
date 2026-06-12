@@ -19,7 +19,7 @@ import { QueueService, QueueName } from '@soopa/queue';
  *
  * Register this endpoint in GitHub:
  *   Settings → Webhooks → Payload URL:
- *     https://api.nexiom.io/internal/gitops/sync
+ *     https://api.soopa.com/internal/gitops/sync
  *   Secret: <GITOPS_WEBHOOK_SECRET>
  *   Content type: application/json
  *   Events: Just the push event

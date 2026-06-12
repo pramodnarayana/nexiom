@@ -1,25 +1,25 @@
-# Architecture: Activepieces Triggers for Nexiom
+# Architecture: Activepieces Triggers for Soopa
 
-In the Activepieces ecosystem, a **Trigger** is a specialized piece of code that detects a change in a source system. For Nexiom, we use these triggers to feed our **Source Gateway (Layer 1)** and initialize our **Universal Replicas (Layer 2)**.
+In the Activepieces ecosystem, a **Trigger** is a specialized piece of code that detects a change in a source system. For Soopa, we use these triggers to feed our **Source Gateway (Layer 1)** and initialize our **Universal Replicas (Layer 2)**.
 
 ---
 
 ## 1. The Two Types of Triggers
 
-Activepieces (and consequently Nexiom) categorizes triggers into two technical patterns:
+Activepieces (and consequently Soopa) categorizes triggers into two technical patterns:
 
 ### A. Webhook Triggers (Push)
 
 Used for real-time events. The source app (e.g., Stripe, Shopify) sends data to our `api-gateway` the moment an event occurs.
 
-- **Nexiom Mapping:** Maps to `POST /webhooks/:connectionId`.
-- **AP Framework Advantage:** Includes `onEnable` and `onDisable` hooks. When a user creates a Route, Nexiom can automatically call the Salesforce API to "subscribe" to a webhook, and "unsubscribe" when the route is deleted.
+- **Soopa Mapping:** Maps to `POST /webhooks/:connectionId`.
+- **AP Framework Advantage:** Includes `onEnable` and `onDisable` hooks. When a user creates a Route, Soopa can automatically call the Salesforce API to "subscribe" to a webhook, and "unsubscribe" when the route is deleted.
 
 ### B. Polling Triggers (Pull)
 
 Used for apps that don't support webhooks or for enterprise objects (e.g., Salesforce Accounts). The system "polls" the API every N minutes to look for new or updated records.
 
-- **Nexiom Mapping:** Maps to the `PollerService` cron schedule (runs every 5 minutes via `@nestjs/schedule`).
+- **Soopa Mapping:** Maps to the `PollerService` cron schedule (runs every 5 minutes via `@nestjs/schedule`).
 - **AP Framework Advantage:** Handles the cursor logic. It remembers the last ID or timestamp seen so it doesn't fetch the same data twice.
 
 ---
@@ -54,18 +54,18 @@ export const newRecordTrigger = createTrigger({
 
 ---
 
-## 3. How Nexiom Integrates Triggers
+## 3. How Soopa Integrates Triggers
 
 We do not use the Activepieces workflow runner. Instead, we use the trigger definitions to populate our Gateway Tables.
 
-| Trigger Event | Nexiom Physical Action |
+| Trigger Event | Soopa Physical Action |
 |---------------|------------------------|
 | Webhook Hits  | The `WebhooksController` invokes `TriggerExecutorService.runWebhook()`, which verifies the signature, calls `trigger.run()`, and saves results to `ws_source.inbound_gateway`. |
 | Poller Runs   | `PollerService` invokes `TriggerExecutorService.runPoll()`, which acquires a distributed lock, calls `trigger.run()`, ingests records idempotently into `ws_source.inbound_gateway`, and routes failures to the DLQ. |
 
 ---
 
-## 4. Implementation Strategy for Nexiom
+## 4. Implementation Strategy for Soopa
 
 To make triggers "seamless" like the actions we previously implemented:
 

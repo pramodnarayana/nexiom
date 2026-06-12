@@ -2,7 +2,7 @@
 
 <!-- markdownlint-disable-file MD060 -->
 
-This document defines the Nexiom approach to handling complex business graphs
+This document defines the Soopa approach to handling complex business graphs
 (e.g., Invoices with related Loads, Stops, and Vendors). The architecture
 ensures data completeness by automatically discovering and syncing related
 entities into a single physical silo based on policy-driven access, followed
@@ -14,11 +14,11 @@ by a composite assembly for transformation.
 
 Before describing the sync strategy, it is essential to understand where each
 concern lives in the monorepo. This boundary is the foundational architectural
-decision for Nexiom.
+decision for Soopa.
 
 ### The Core Principle
 
-> **The Sync Engine is the product.** It is Nexiom's core IP.
+> **The Sync Engine is the product.** It is Soopa's core IP.
 > `packages/` is commodity infrastructure that enables the engine to run.
 > These two concerns must never be conflated.
 
@@ -31,7 +31,7 @@ decision for Nexiom.
 > All **net-new** engine code must be written directly in `engine/` from this point forward.
 
 ```text
-nexiom/
+soopa/
 │
 ├── apps/            Thin executable services (orchestrate the engine)
 │   ├── api/         Control plane — HTTP gateway, scheduling, webhook ingestion
@@ -39,7 +39,7 @@ nexiom/
 │   ├── web/         Frontend
 │   └── mock-gateway/
 │
-├── engine/          THE SYNC ENGINE — Nexiom's core IP          [TARGET — T055]
+├── engine/          THE SYNC ENGINE — Soopa's core IP          [TARGET — T055]
 │   │
 │   ├── platform/    HOW sync works (generic execution machinery)
 │   │   ├── core/                                                [TARGET — T055]
@@ -104,7 +104,7 @@ All **net-new** engine code must go directly in `engine/` — never in `packages
 
 ### A. Policy-Driven Connection Access (RBAC/ABAC)
 
-Nexiom eliminates the manual "assignment" of connections to workspaces. Instead,
+Soopa eliminates the manual "assignment" of connections to workspaces. Instead,
 connection availability is governed by a central **Policy Engine**.
 
 - **Identity Context:** When a user enters a workspace, the UI queries the
@@ -141,7 +141,7 @@ Table** per workspace schema (`ws_{id}`). This preserves relational context via
 
 | Column          | Type   | Description                                                      |
 | :-------------- | :----- | :--------------------------------------------------------------- |
-| `id`            | UUID   | Primary Key (Nexiom Internal).                                   |
+| `id`            | UUID   | Primary Key (Soopa Internal).                                   |
 | `root_trace_id` | UUID   | **The Glue:** Links all objects in a single business transaction. |
 | `entity_type`   | String | Discriminator (e.g., `INVOICE`, `LOAD`, `STOP`).                |
 | `source_id`     | String | The external ID from the source system (e.g., `sf-123`).        |
@@ -170,11 +170,11 @@ a JSON spec describing which source JSON path maps to which target field, and
 which Formula Library function (if any) to apply.
 
 At runtime, the **Standard Execution Engine** — common platform code written
-and maintained by the Nexiom Application Team — reads this configuration and
+and maintained by the Soopa Application Team — reads this configuration and
 constructs the target JSON automatically. This engine is:
 
 - **Written once** — generic, not per-customer
-- **Shipped as a pre-compiled platform asset** in the Nexiom codebase
+- **Shipped as a pre-compiled platform asset** in the Soopa codebase
 - **The 80% solution** — handles all integrations fully expressible via the canvas
 
 ```text
@@ -193,7 +193,7 @@ Canonical Composite JSON
 
 For the **20%** of customers whose requirements exceed what the visual canvas can
 express (complex conditional math, proprietary business rules, multi-field
-derived calculations), Nexiom engineers write **custom TypeScript** and maintain
+derived calculations), Soopa engineers write **custom TypeScript** and maintain
 it in **Git Shard Fleet repositories** inside this monorepo.
 
 - **The Input:** The custom script receives the fully hydrated Canonical
@@ -204,7 +204,7 @@ it in **Git Shard Fleet repositories** inside this monorepo.
 - **Version-controlled:** Every line of custom logic goes through peer review
   and automated testing in the normal Git workflow before reaching production.
 - **No UI involvement:** Customers cannot write or upload code. All custom logic
-  is authored by Nexiom engineers and deployed via CI/CD.
+  is authored by Soopa engineers and deployed via CI/CD.
 
 ---
 
@@ -319,7 +319,7 @@ simple inputs (text boxes, dropdowns) — never free-form code.
 ### D. Complex Logic Enforcement
 
 If a customer's requirement **cannot** be expressed through the canvas + Formula
-Library, it **must** be implemented in the Git Shard Fleet by a Nexiom engineer.
+Library, it **must** be implemented in the Git Shard Fleet by a Soopa engineer.
 This ensures every line of transformation logic passes peer review and automated
 testing before reaching production.
 
@@ -416,7 +416,7 @@ graph LR
 | Concern | Code | Responsibility |
 | :--- | :--- | :--- |
 | **Platform** | `engine/platform/core/relational-enricher` | Executes "Relational Enrichment": detects missing parent IDs (e.g., an Invoice missing an Account), triggers Layer 5 (Fetcher) to resolve dependencies, assembles the enriched graph |
-| **Application** | `engine/application/canonical/{model}.schema.ts` | Maps the source-specific schema to the Canonical Model (e.g., `TMS_VENDOR`, `CONTACT`). This is the **single source of truth** for what fields mean in Nexiom's domain |
+| **Application** | `engine/application/canonical/{model}.schema.ts` | Maps the source-specific schema to the Canonical Model (e.g., `TMS_VENDOR`, `CONTACT`). This is the **single source of truth** for what fields mean in Soopa's domain |
 
 ---
 

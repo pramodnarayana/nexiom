@@ -114,13 +114,13 @@ describe("TenantProvisionWorker", () => {
       expect(mockQuery).toHaveBeenNthCalledWith(
         1,
         expect.stringContaining("SELECT 1 FROM pg_database"),
-        ["nexiom_tenant_1234_abcd"],
+        ["tenant_1234_abcd"],
       );
 
       // Second query creates the DB
       expect(mockQuery).toHaveBeenNthCalledWith(
         2,
-        'CREATE DATABASE "nexiom_tenant_1234_abcd"',
+        'CREATE DATABASE "tenant_1234_abcd"',
       );
 
       // Third query updates the registry
@@ -178,7 +178,7 @@ describe("TenantProvisionWorker", () => {
 
       // Create database query should NOT be called
       expect(mockQuery).not.toHaveBeenCalledWith(
-        'CREATE DATABASE "nexiom_tenant_1234_abcd"',
+        'CREATE DATABASE "tenant_1234_abcd"',
       );
 
       // Should still update registry
@@ -195,7 +195,7 @@ describe("TenantProvisionWorker", () => {
           hostUrl: "postgresql://localhost",
         }),
       ).rejects.toThrow(
-        'Invalid tenant database name: "nexiom_tenant_1234; DROP TABLE users;"',
+        'Invalid tenant database name: "tenant_1234; DROP TABLE users;"',
       );
     });
 

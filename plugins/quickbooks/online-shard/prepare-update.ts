@@ -3,7 +3,7 @@
  * before it is sent to the piece for an Update operation.
  *
  * Rules applied here (in order):
- *  1. Strip internal Nexiom metadata fields (any key prefixed with `_`, e.g. `_routingEnvelope`).
+ *  1. Strip internal Soopa metadata fields (any key prefixed with `_`, e.g. `_routingEnvelope`).
  *     QB rejects these with ValidationFault code 2010 ("unsupported property").
  *  2. Inject `Id` from `destId` so QB treats this as an update, not a create.
  *  3. Inject `SyncToken` from `destState` so QB accepts the optimistic-lock update.
@@ -17,7 +17,7 @@ export async function PrepareQBUpdatePayload(
     destState?: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
     // ── 1. Strip internal pipeline metadata ──────────────────────────────────
-    // Keys starting with `_` (e.g. `_routingEnvelope`) are Nexiom-internal and must never
+    // Keys starting with `_` (e.g. `_routingEnvelope`) are Soopa-internal and must never
     // be forwarded to any third-party API.
     const finalPayload: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(payload)) {

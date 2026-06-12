@@ -1,4 +1,4 @@
-# Nexiom CDC Pipeline Architecture
+# Soopa CDC Pipeline Architecture
 
 > Living document. Update as decisions evolve.  
 > Created: 2026-04-19  
@@ -35,7 +35,7 @@
 
 ### The Broken Link
 
-The Nexiom sync pipeline is correctly designed with **6 layers** and an **Outbox pattern** between each layer. However, the relay between L1 and L2 (and L2 and L3) is currently implemented as a **polling cron** — not an event-driven mechanism.
+The Soopa sync pipeline is correctly designed with **6 layers** and an **Outbox pattern** between each layer. However, the relay between L1 and L2 (and L2 and L3) is currently implemented as a **polling cron** — not an event-driven mechanism.
 
 ```
 CURRENT (broken):
@@ -134,7 +134,7 @@ This is the **immediate target architecture**. Zero new infrastructure beyond wh
 │  Postgres WAL  (wal_level = logical)                            │
 │         ↓  [inbound_outbox INSERT detected — microseconds]      │
 │  Debezium Connect  (Docker / ECS)                               │
-│    connector: nexiom-inbound-cdc                                │
+│    connector: soopa-inbound-cdc                                │
 │    table: *.inbound_outbox                                      │
 │         ↓  HTTP POST  { traceId, connectionId, schemaName }     │
 │  AWS API Gateway  /inbound-relay                                │
@@ -151,7 +151,7 @@ This is the **immediate target architecture**. Zero new infrastructure beyond wh
 │  Postgres WAL  (replica_outbox INSERT detected)                 │
 │         ↓                                                       │
 │  Debezium Connect                                               │
-│    connector: nexiom-replica-cdc                                │
+│    connector: soopa-replica-cdc                                │
 │    table: *.replica_outbox                                      │
 │         ↓  HTTP POST                                            │
 │  AWS API Gateway  /replica-relay                                │
@@ -219,9 +219,9 @@ PHASE 2 (50+ customers):
 ### Phase 2 Kafka Topic Design
 
 ```
-nexiom.inbound_outbox.events   ← L1 → L2 relay
-nexiom.replica_outbox.events   ← L2 → L3 relay
-nexiom.outbound_outbox.events  ← L4 → L5 relay
+soopa.inbound_outbox.events   ← L1 → L2 relay
+soopa.replica_outbox.events   ← L2 → L3 relay
+soopa.outbound_outbox.events  ← L4 → L5 relay
 
 Partition key: connectionId
 → All events for one connection land in the same partition
@@ -258,8 +258,8 @@ Partition key: connectionId
 | Property | Value |
 |---|---|
 | **Config change** | `wal_level = logical` (one line in `postgresql.conf`) |
-| **Replication slot** | `nexiom_slot` — persists WAL position across Debezium restarts |
-| **Publication** | `CREATE PUBLICATION nexiom_slot FOR TABLE inbound_outbox, replica_outbox` |
+| **Replication slot** | `platform_slot` — persists WAL position across Debezium restarts |
+| **Publication** | `CREATE PUBLICATION platform_slot FOR TABLE inbound_outbox, replica_outbox` |
 | **Slot retention** | WAL retained until slot consumer acknowledges — prevents data loss on Debezium downtime |
 | **Risk** | If Debezium is down for extended periods with no WAL consumer, disk fills with retained WAL. Set `max_slot_wal_keep_size` to bound this. |
 
@@ -324,7 +324,7 @@ NormalizationService Worker
         condition: service_started
     profiles: ["app"]
     networks:
-      - nexiom-network
+      - app-network
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "(echo > /dev/tcp/localhost/8080) >/dev/null 2>&1 || exit 1"]
@@ -349,13 +349,13 @@ NormalizationService Worker
       - localstack_data:/var/lib/localstack
       - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-localstack.sh
     healthcheck:
-      test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name delivery-queue --region us-east-1 && awslocal kms list-aliases --region us-east-1 | grep alias/nexiom-local"]
+      test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name delivery-queue --region us-east-1 && awslocal kms list-aliases --region us-east-1 | grep alias/soopa-local"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
     networks:
-      - nexiom-network
+      - app-network
 ```
 
 ### Debezium Server Configuration (Local)
@@ -367,12 +367,12 @@ NormalizationService Worker
 debezium.source.connector.class=io.debezium.connector.postgresql.PostgresConnector
 debezium.source.database.hostname=postgres
 debezium.source.database.port=5432
-debezium.source.database.user=nexiom
-debezium.source.database.password=nexiom
-debezium.source.database.dbname=nexiom
+debezium.source.database.user=soopa
+debezium.source.database.password=soopa
+debezium.source.database.dbname=soopa
 debezium.source.plugin.name=pgoutput
-debezium.source.publication.name=nexiom_slot
-debezium.source.slot.name=nexiom_slot
+debezium.source.publication.name=platform_slot
+debezium.source.slot.name=platform_slot
 debezium.source.table.include.list=*.inbound_outbox,*.replica_outbox
 debezium.source.snapshot.mode=never
 
@@ -399,8 +399,8 @@ wal_level = logical   # changed from 'replica' (default)
 
 ```sql
 -- Run once on DB init (add to migration scripts):
-CREATE PUBLICATION nexiom_slot FOR TABLES IN SCHEMA public;
--- Tenant schemas are added dynamically: ALTER PUBLICATION nexiom_slot ADD TABLE ws_sf_abc.inbound_outbox;
+CREATE PUBLICATION platform_slot FOR TABLES IN SCHEMA public;
+-- Tenant schemas are added dynamically: ALTER PUBLICATION platform_slot ADD TABLE ws_sf_abc.inbound_outbox;
 ```
 
 ### New NestJS Component: CdcRelayController
@@ -451,8 +451,8 @@ AWS_ENDPOINT_URL=http://localhost:4566
 AWS_ACCESS_KEY_ID=test
 AWS_SECRET_ACCESS_KEY=test
 AWS_REGION=us-east-1
-INBOUND_QUEUE_URL=http://localhost:4566/000000000000/nexiom-inbound-queue
-REPLICA_QUEUE_URL=http://localhost:4566/000000000000/nexiom-replica-queue
+INBOUND_QUEUE_URL=http://localhost:4566/000000000000/soopa-inbound-queue
+REPLICA_QUEUE_URL=http://localhost:4566/000000000000/soopa-replica-queue
 ```
 
 ---
@@ -475,7 +475,7 @@ Workers (ECS Tasks — NormalizationService/ReplicaService)
 
 ```json
 {
-  "family": "nexiom-debezium",
+  "family": "soopa-debezium",
   "cpu": "256",
   "memory": "512",
   "networkMode": "awsvpc",
@@ -498,7 +498,7 @@ Workers (ECS Tasks — NormalizationService/ReplicaService)
 
 ## 8. Multi-Tenant Schema Strategy
 
-Nexiom uses **per-connection Postgres schemas** (e.g. `ws_sf_abc123`). Each schema has its own `inbound_outbox` and `replica_outbox` tables.
+Soopa uses **per-connection Postgres schemas** (e.g. `ws_sf_abc123`). Each schema has its own `inbound_outbox` and `replica_outbox` tables.
 
 ### Debezium Publication Registration
 
@@ -507,8 +507,8 @@ Postgres `PUBLICATION` does not support wildcards across dynamic schemas. When a
 ```typescript
 // Called by TriggerExecutorService.runOnEnable() after schema provisioning
 await db.execute(sql`
-  ALTER PUBLICATION nexiom_slot ADD TABLE ${tenantSchema}.inbound_outbox;
-  ALTER PUBLICATION nexiom_slot ADD TABLE ${tenantSchema}.replica_outbox;
+  ALTER PUBLICATION platform_slot ADD TABLE ${tenantSchema}.inbound_outbox;
+  ALTER PUBLICATION platform_slot ADD TABLE ${tenantSchema}.replica_outbox;
 `);
 ```
 

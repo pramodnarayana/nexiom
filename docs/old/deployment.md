@@ -168,11 +168,11 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ steps.login-ecr.outputs.registry }}/nexiom-api:${{ github.sha }}
+          tags: ${{ steps.login-ecr.outputs.registry }}/app-api:${{ github.sha }}
       
       - name: Deploy to ECS
         run: |
-          aws ecs update-service --cluster nexiom-prod --service api --force-new-deployment
+          aws ecs update-service --cluster soopa-prod --service api --force-new-deployment
 ```
 
 ## 5. AI Code Review Configuration

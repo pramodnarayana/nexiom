@@ -5,7 +5,7 @@ import { Action, PropertyType, AnyProperty } from '@soopa/piece-framework';
 @Injectable()
 export class McpSchemaBuilderService {
   /**
-   * Converts Nexiom Piece action properties into a Zod validation schema
+   * Converts Soopa Piece action properties into a Zod validation schema
    * required by the Vercel AI SDK.
    */
   public buildZodSchemaForProps(props: Record<string, AnyProperty>): z.ZodObject<any> {

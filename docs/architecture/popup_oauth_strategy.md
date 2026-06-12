@@ -2,7 +2,7 @@
 
 ## Objective
 
-To provide a seamless, enterprise-grade user experience when connecting third-party apps, Nexiom will implement a popup-based OAuth authorization flow on the frontend. This strategy heavily borrows from the tried-and-true UX found in integration platforms like Activepieces.
+To provide a seamless, enterprise-grade user experience when connecting third-party apps, Soopa will implement a popup-based OAuth authorization flow on the frontend. This strategy heavily borrows from the tried-and-true UX found in integration platforms like Activepieces.
 
 ## Why a Popup?
 
@@ -18,8 +18,8 @@ By executing the OAuth flow inside a dedicated popup window (`window.open`):
 ## The Authorized Handshake Flow (End-to-End)
 
 1. **Initiation (Main Window):**
-   * The user clicks the "Connect" button on an app card in the Nexiom Marketplace UI.
-   * The React application uses a utility to construct the backend authentication URL (e.g., `https://api.nexiom.com/connect/salesforce?tenantId=abc`).
+   * The user clicks the "Connect" button on an app card in the Soopa Marketplace UI.
+   * The React application uses a utility to construct the backend authentication URL (e.g., `https://api.soopa.com/connect/salesforce?tenantId=abc`).
    * The React application calls `window.open(url, '_blank', 'resizable=no,width=600,height=800')`.
    * A popup window launches, and the main React window sets up a `window.addEventListener('message', ...)` listener to wait for the tokens to return.
 
@@ -30,11 +30,11 @@ By executing the OAuth flow inside a dedicated popup window (`window.open`):
    * The backend redirects the popup window directly to the vendor's login page (e.g., Salesforce Login).
 
 3. **Vendor Authentication (Popup Window):**
-   * The user logs in and grants permissions to Nexiom within the vendor's UI in the popup window.
-   * The vendor redirects the popup window back to the Nexiom callback URL (`https://api.nexiom.com/connect/:provider/callback`).
+   * The user logs in and grants permissions to Soopa within the vendor's UI in the popup window.
+   * The vendor redirects the popup window back to the Soopa callback URL (`https://api.soopa.com/connect/:provider/callback`).
 
 4. **Token Exchange & Storage (Popup Window):**
-   * The Nexiom `OAuthCallbackController` intercepts the callback in the popup.
+   * The Soopa `OAuthCallbackController` intercepts the callback in the popup.
    * It extracts the authorization `code` and verifies the stateless JWT `state` to ensure the session hasn't been tampered with and the correct `tenantId` is applied.
    * The backend exchanges the `code` for an `access_token` and `refresh_token`.
    * The credentials are encrypted and stored in the `app_connection` database table.

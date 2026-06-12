@@ -2,7 +2,7 @@
 
 ## Overview
 
-As the Nexiom monorepo expands to include multiple applications (e.g., the main API, background queue processors, WebSocket servers, or internal CLI tools), authentication logic must be universally accessible, strictly decoupled, and highly performant.
+As the Soopa monorepo expands to include multiple applications (e.g., the main API, background queue processors, WebSocket servers, or internal CLI tools), authentication logic must be universally accessible, strictly decoupled, and highly performant.
 
 Currently, core authentication components—such as `AuthGuard`, `AuthService`, and session validation logic—reside within the `identity` feature module. This creates tight coupling, forcing other domains (like `connections`) to import files across feature boundaries using fragile relative paths (`../../identity/auth/auth.guard`).
 

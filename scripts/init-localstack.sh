@@ -59,15 +59,15 @@ for QUEUE in "${QUEUES[@]}"; do
 done
 
 echo "[init-localstack] Creating KMS key..."
-# Idempotent: reuse the existing alias/nexiom-local key if it already exists.
+# Idempotent: reuse the existing alias/soopa-local key if it already exists.
 KEY_ID=$(awslocal kms list-aliases \
-  --query "Aliases[?AliasName=='alias/nexiom-local'].TargetKeyId | [0]" \
+  --query "Aliases[?AliasName=='alias/soopa-local'].TargetKeyId | [0]" \
   --output text)
 
 if [ "$KEY_ID" = "None" ] || [ -z "$KEY_ID" ]; then
-  KEY_ID=$(awslocal kms create-key --description "nexiom-local-dev-key" --query 'KeyMetadata.KeyId' --output text)
-  awslocal kms create-alias --alias-name "alias/nexiom-local" --target-key-id "$KEY_ID"
+  KEY_ID=$(awslocal kms create-key --description "soopa-local-dev-key" --query 'KeyMetadata.KeyId' --output text)
+  awslocal kms create-alias --alias-name "alias/soopa-local" --target-key-id "$KEY_ID"
 fi
-echo "[init-localstack]   ✓ alias/nexiom-local → $KEY_ID"
+echo "[init-localstack]   ✓ alias/soopa-local → $KEY_ID"
 
 echo "[init-localstack] Done."

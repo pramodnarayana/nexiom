@@ -27,7 +27,7 @@ export interface ApplicationShardModule {
   ): { entityType: string; entityId: string; data: Record<string, unknown> } | null;
 
   /**
-   * L3 — Map the extracted vendor domain object into a Nexiom canonical record.
+   * L3 — Map the extracted vendor domain object into a Soopa canonical record.
    * Returns null if normalization is not applicable for this entity type.
    */
   normalize(

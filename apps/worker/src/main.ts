@@ -15,7 +15,7 @@ async function bootstrap() {
 
     app.enableShutdownHooks();
 
-    logger.log(`Nexiom Worker application started and listening to queues...`);
+    logger.log(`Soopa Worker application started and listening to queues...`);
     if (process.env.WORKER_LOG_FILE) {
       logger.log(
         `Logging output is also being redirected to ${process.env.WORKER_LOG_FILE}`,

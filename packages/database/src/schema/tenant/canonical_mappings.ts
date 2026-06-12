@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 /**
  * Customer-specific canonical JSON property mappings.
  *
- * Maps raw piece (foreign app) shapes into Nexiom's strictly-typed internal
+ * Maps raw piece (foreign app) shapes into Soopa's strictly-typed internal
  * canonical format. Each customer owns and manages their own mappings via the UI.
  *
  * Lives in both the global DB (for system-wide defaults) and tenant DBs (for overrides).

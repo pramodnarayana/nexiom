@@ -62,7 +62,7 @@ export interface MappingRule {
    *
    * The JSONata expression has access to all fields in compositeJson
    * and the full Jsonata standard library (70+ functions).
-   * Nexiom domain extensions are registered via jsonata-extensions.ts.
+   * Soopa domain extensions are registered via jsonata-extensions.ts.
    */
   expression?: string;
 }

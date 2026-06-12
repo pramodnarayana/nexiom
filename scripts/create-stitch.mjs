@@ -44,7 +44,7 @@ function toCamel(row) {
 
 function printUsage() {
   console.log(`
-\x1b[1;36mNexiom Stitch & Field Mapping Creator Script\x1b[0m
+\x1b[1;36mSoopa Stitch & Field Mapping Creator Script\x1b[0m
 Creates or updates an integration stitch and its associated field mappings.
 Ensures that replication to the tenant database is triggered automatically.
 

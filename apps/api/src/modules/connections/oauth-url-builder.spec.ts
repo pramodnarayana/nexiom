@@ -18,22 +18,22 @@ describe('OAuthUrlBuilder', () => {
   describe('buildRedirectUri()', () => {
     it('appends /api/connect/callback to the base URL', () => {
       const builder = new OAuthUrlBuilder();
-      expect(builder.buildRedirectUri('https://api.nexiom.io')).toBe(
-        'https://api.nexiom.io/api/connect/callback',
+      expect(builder.buildRedirectUri('https://api.soopa.com')).toBe(
+        'https://api.soopa.com/api/connect/callback',
       );
     });
 
     it('strips a single trailing slash from baseUrl', () => {
       const builder = new OAuthUrlBuilder();
-      expect(builder.buildRedirectUri('https://api.nexiom.io/')).toBe(
-        'https://api.nexiom.io/api/connect/callback',
+      expect(builder.buildRedirectUri('https://api.soopa.com/')).toBe(
+        'https://api.soopa.com/api/connect/callback',
       );
     });
 
     it('strips multiple trailing slashes from baseUrl', () => {
       const builder = new OAuthUrlBuilder();
-      expect(builder.buildRedirectUri('https://api.nexiom.io///')).toBe(
-        'https://api.nexiom.io/api/connect/callback',
+      expect(builder.buildRedirectUri('https://api.soopa.com///')).toBe(
+        'https://api.soopa.com/api/connect/callback',
       );
     });
 
@@ -97,7 +97,7 @@ describe('OAuthUrlBuilder', () => {
       authUrl: 'https://login.salesforce.com/services/oauth2/authorize',
       clientId: 'test-client-id',
       state: 'random-csrf-state',
-      redirectUri: 'https://api.nexiom.io/api/connect/callback',
+      redirectUri: 'https://api.soopa.com/api/connect/callback',
       scope: ['api', 'refresh_token'],
       vendorParams: {},
     };
@@ -124,7 +124,7 @@ describe('OAuthUrlBuilder', () => {
       const builder = new OAuthUrlBuilder();
       const url = new URL(builder.buildAuthorizationUrl(baseParams));
       expect(url.searchParams.get('redirect_uri')).toBe(
-        'https://api.nexiom.io/api/connect/callback',
+        'https://api.soopa.com/api/connect/callback',
       );
     });
 

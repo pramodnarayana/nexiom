@@ -7,7 +7,7 @@ export class DbFixture {
     constructor() {
         // DB connection string from docker-compose or environment
         // Assuming default local dev credentials
-        const connectionString = process.env.DATABASE_URL || 'postgres://user:password@localhost:5432/nexiom_local';
+        const connectionString = process.env.DATABASE_URL || 'postgres://user:password@localhost:5432/platform_local';
 
         this.pool = new Pool({
             connectionString,
@@ -63,7 +63,7 @@ export class DbFixture {
             // 2. Check if System Tenant exists (create if not)
             await client.query(`
                 INSERT INTO "organization" (id, name, slug, status, "isSystem")
-                VALUES ($1, 'Nexiom Platform', 'system', 'active', true)
+                VALUES ($1, 'Soopa Platform', 'system', 'active', true)
                 ON CONFLICT (id) DO NOTHING
             `, [SYSTEM_TENANT_ID]);
             // 3. Ensure Owner Role exists

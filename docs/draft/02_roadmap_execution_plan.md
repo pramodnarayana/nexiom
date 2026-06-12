@@ -1,4 +1,4 @@
-# Nexiom Platform - Roadmap & Execution Plan
+# Soopa Platform - Roadmap & Execution Plan
 
 **Document Status:** DRAFT
 **Version:** 1.0
@@ -8,7 +8,7 @@
 
 ## Overview
 
-This document provides a detailed execution roadmap for the Nexiom Platform development, organized by phases, modules, and implementable tasks.
+This document provides a detailed execution roadmap for the Soopa Platform development, organized by phases, modules, and implementable tasks.
 
 ---
 

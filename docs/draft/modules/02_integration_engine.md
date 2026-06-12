@@ -13,7 +13,7 @@ The Integration Engine is the core component that enables data synchronization b
 
 ### Purpose
 
-Enable seamless, bidirectional data synchronization between Nexiom tenants and external business applications.
+Enable seamless, bidirectional data synchronization between Soopa tenants and external business applications.
 
 ### Key Capabilities
 

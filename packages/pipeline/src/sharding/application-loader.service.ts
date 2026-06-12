@@ -20,7 +20,7 @@ export class ShardNotFoundError extends Error {
 //
 // The SHARD_APPLICATION_PATH environment variable controls where shards are
 // loaded from. In local development this points to the monorepo directory.
-// In production, it points to the checked-out nexiom-integrations repository.
+// In production, it points to the checked-out soopa-integrations repository.
 // ---------------------------------------------------------------------------
 
 @Injectable()

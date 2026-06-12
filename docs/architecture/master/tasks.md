@@ -757,7 +757,7 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 > Spec: `docs/architecture/sync_strategy/sync_strategy.md` §0
 >
 > **Goal:** Establish a clear top-level directory boundary between the
-> **Nexiom Sync Engine** (core business / IP) and **Infrastructure packages**
+> **Soopa Sync Engine** (core business / IP) and **Infrastructure packages**
 > (commodity plumbing). All net-new engine code must go in `engine/` from
 > this point forward. Existing misplaced packages migrate incrementally.
 
@@ -789,7 +789,7 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 - [x] **Phase 4 — Verify `packages/` contains only infrastructure**
   - Remaining in `packages/`: `queue`, `database`, `cache`, `infra-adapters`, `auth`, `identity`, `dbmanager`, `eslint-config`
   - Add `packages/README.md`: "Infrastructure packages — commodity, not core IP"
-  - Add `engine/README.md`: "Nexiom Sync Engine — core IP. See docs/architecture/sync_strategy/"
+  - Add `engine/README.md`: "Soopa Sync Engine — core IP. See docs/architecture/sync_strategy/"
   - Enforce via ESLint `import/no-restricted-paths` rule: `packages/*` must never import from `engine/*`
 
 - Files:

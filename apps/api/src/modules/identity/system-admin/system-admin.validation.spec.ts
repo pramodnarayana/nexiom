@@ -69,7 +69,7 @@ describe('SystemAdminValidation', () => {
     it('should pass with valid data', () => {
       const result = CreateUserSchema.safeParse({
         name: 'Admin User',
-        email: 'admin@nexiom.com',
+        email: 'admin@soopa.com',
       });
       expect(result.success).toBe(true);
     });

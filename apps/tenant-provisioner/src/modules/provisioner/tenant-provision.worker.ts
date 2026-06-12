@@ -68,13 +68,13 @@ export class TenantProvisionWorker implements OnModuleInit {
 
   /**
    * Provisions a new database in the warm pool:
-   *  1. CREATE DATABASE nexiom_tenant_<poolSlotId>
+   *  1. CREATE DATABASE tenant_<poolSlotId>
    *  2. Run all tenant-schema Drizzle migrations
    *  3. Register it in tenant_storage_registry with status=WARM
    */
   private async provision(event: ProvisionDatabaseEvent): Promise<void> {
     const { poolSlotId, hostUrl } = event;
-    const dbName = `nexiom_tenant_${poolSlotId.replace(/-/g, "_")}`;
+    const dbName = `tenant_${poolSlotId.replace(/-/g, "_")}`;
 
     // ── Step 1: CREATE DATABASE ────────────────────────────────────────────
     await this.createDatabase(dbName);

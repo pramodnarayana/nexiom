@@ -34,7 +34,7 @@ export function getArchitectureBoundaryRule(basePath) {
 }
 
 /**
- * Creates a shared ESLint config for Nexiom integration packages.
+ * Creates a shared ESLint config for Soopa integration packages.
  * @param {string} tsconfigRootDir - The __dirname of the consuming package
  * @param {object} [overrides] - Optional per-package rule overrides
  * @returns {import('typescript-eslint').ConfigArray}

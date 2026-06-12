@@ -1,4 +1,4 @@
-# Nexiom Platform Architecture
+# Soopa Platform Architecture
 
 > Living document. Update as decisions evolve.  
 > Last updated: 2026-04-17
@@ -23,7 +23,7 @@
 
 ## 1. Sync Pipeline — The 6 Layers
 
-Every record that enters Nexiom flows through 6 layers. Each layer has a single responsibility and writes to the next via a transactional outbox.
+Every record that enters Soopa flows through 6 layers. Each layer has a single responsibility and writes to the next via a transactional outbox.
 
 ```text
 Webhook / Poll
@@ -519,7 +519,7 @@ All piece packages expose a `dev` script running `tsc --watch`. `dev:light` runs
 
 ## 11. Custom Mapping — The Security & Scale Boundary
 
-Nexiom scales multi-object mapping across thousands of connections using a dual strategy.
+Soopa scales multi-object mapping across thousands of connections using a dual strategy.
 
 ### 1. Standard Mapping via Configuration (The 90%)
 

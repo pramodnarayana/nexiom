@@ -1,4 +1,4 @@
-# Nexiom Internal Mapping System Design
+# Soopa Internal Mapping System Design
 
 ## Overview
 This document defines the internal system required to scale canonical schema mapping across multiple SaaS applications.
@@ -6,7 +6,7 @@ This document defines the internal system required to scale canonical schema map
 It covers:
 - Mapping Schema Standard
 - Relation Resolver Design
-- Internal Mapping Builder UI (for Nexiom team, not customers)
+- Internal Mapping Builder UI (for Soopa team, not customers)
 
 This system is **NOT exposed to SMB users**. It powers the zero-config experience.
 
@@ -208,7 +208,7 @@ Only resolve relations when needed:
 
 ## 5.1 Purpose
 
-Used by Nexiom team to:
+Used by Soopa team to:
 - Create mappings
 - Debug transformations
 - Onboard new apps
@@ -255,7 +255,7 @@ Used by Nexiom team to:
 
 ## 5.3 NOT exposed to SMB users
 
-This UI is strictly **internal to Nexiom engineering and operations teams**.
+This UI is strictly **internal to Soopa engineering and operations teams**.
 
 ### Access Control & Governance
 
@@ -283,7 +283,7 @@ This UI is strictly **internal to Nexiom engineering and operations teams**.
    - All mapping changes require peer review
    - Automated validation against schema contracts
    - Rollback capability for all changes
-   - Change notification to Nexiom operations team
+   - Change notification to Soopa operations team
 
 Until these criteria are implemented and validated, the UI remains permanently internal.
 
@@ -441,4 +441,4 @@ This system enables:
 - Zero-config experience for users
 
 Result:
-A powerful internal data abstraction layer that powers Nexiom's AI platform.
+A powerful internal data abstraction layer that powers Soopa's AI platform.

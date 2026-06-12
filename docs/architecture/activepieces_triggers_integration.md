@@ -1,6 +1,6 @@
 # Architecture: Activepieces Trigger Integration
 
-This document defines how Nexiom hosts and executes Activepieces Triggers to power our **Source Gateway (Layer 1)**.
+This document defines how Soopa hosts and executes Activepieces Triggers to power our **Source Gateway (Layer 1)**.
 
 ---
 
@@ -10,7 +10,7 @@ Activepieces triggers are more complex than actions because they have a lifecycl
 
 ### Lifecycle Mapping
 
-| AP Trigger Lifecycle | Nexiom Action |
+| AP Trigger Lifecycle | Soopa Action |
 |----------------------|---------------|
 | `onEnable`           | Triggered when a Route is activated. Used to register webhooks in the source app (e.g., Salesforce). |
 | `onDisable`          | Triggered when a Route is deleted/disabled. Unregisters the webhook. |

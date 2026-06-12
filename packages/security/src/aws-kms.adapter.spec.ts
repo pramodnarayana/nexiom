@@ -27,7 +27,7 @@ describe("AwsKmsAdapter", () => {
   beforeEach(() => {
     mockSend.mockReset();
     adapter = new AwsKmsAdapter({
-      keyId: "alias/nexiom-test",
+      keyId: "alias/soopa-test",
       region: "us-east-1",
     });
   });

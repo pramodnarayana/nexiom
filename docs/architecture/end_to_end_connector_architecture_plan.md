@@ -13,7 +13,7 @@ Provide a seamless "Marketplace" experience for users to connect third-party app
 To support 500+ scalable integrations, the codebase spans multiple workspaces inside the monorepo:
 
 ```text
-nexiom/
+soopa/
 ├── apps/
 │   ├── api/
 │   │   └── src/
@@ -33,7 +33,7 @@ nexiom/
     └── connections/                         # (alias: @soopa/connections)
         └── src/
             ├── connectivity/                # Core: TokenManagerService & ProviderRegistryService
-            ├── http/                        # NexiomHttpClient (Goal 2)
+            ├── http/                        # SoopaHttpClient (Goal 2)
             ├── piece-framework/             # Shim types for Activepieces compatibility (Goal 2)
             └── crypto/                      # Crypto: EncryptionService for secure tokens
 ```
@@ -76,7 +76,7 @@ Before starting on the Marketplace, the core foundation of the engine has been e
 
 ### Popup OAuth Strategy
 
-To preserve the user's current context when connecting a third-party app, Nexiom implements a **popup-based OAuth flow** rather than redirecting the entire browser window.
+To preserve the user's current context when connecting a third-party app, Soopa implements a **popup-based OAuth flow** rather than redirecting the entire browser window.
 
 **Why a Popup?**
 
@@ -90,7 +90,7 @@ A hard redirect to the vendor's login screen destroys the user's current context
 
 1. **Initiation (Main Window)**
    * User clicks the "Connect" button on an app card.
-   * The React app constructs the backend URL (e.g., `https://api.nexiom.com/connect/salesforce`).
+   * The React app constructs the backend URL (e.g., `https://api.soopa.com/connect/salesforce`).
    * React calls `window.open(url, '_blank', 'resizable=no,width=600,height=800')`.
    * The main window sets up `window.addEventListener('message', handler)` to wait for the result.
 
@@ -102,7 +102,7 @@ A hard redirect to the vendor's login screen destroys the user's current context
 
 3. **Vendor Authentication (Popup Window)**
    * The user logs in and grants permissions in the vendor's UI.
-   * The vendor redirects the popup back to `https://api.nexiom.com/connect/:provider/callback`.
+   * The vendor redirects the popup back to `https://api.soopa.com/connect/:provider/callback`.
 
 4. **Token Exchange & Storage (Popup Window)**
    * `OAuthCallbackController` intercepts the callback.
@@ -168,7 +168,7 @@ The system must guarantee that stored tokens are always valid for background wor
 
 ## 6. Integration Execution Engine (Goal 2: Reading & Writing Data)
 
-Once Goal 1 OAuth connections are established, the system needs a secure, scalable way to execute business logic (read, write, update) against vendor APIs. To support 500+ apps without writing custom HTTP handlers for every endpoint, Nexiom implements a **Decoupled Execution Framework** inspired by Activepieces.
+Once Goal 1 OAuth connections are established, the system needs a secure, scalable way to execute business logic (read, write, update) against vendor APIs. To support 500+ apps without writing custom HTTP handlers for every endpoint, Soopa implements a **Decoupled Execution Framework** inspired by Activepieces.
 
 ### A. The `Piece` Concept
 
@@ -188,13 +188,13 @@ To standardize how we talk to 500+ APIs, every Action is defined by a strict Typ
 
 ### C. The Activepieces Compatibility Layer
 
-To leverage thousands of open-source Activepieces actions **without rewriting or maintaining custom fetch logic**, Nexiom implements a shim inside `@soopa/connections`.
+To leverage thousands of open-source Activepieces actions **without rewriting or maintaining custom fetch logic**, Soopa implements a shim inside `@soopa/connections`.
 
 > **Key Insight:** We do **not** need to run the entire Activepieces Node.js engine — we only need their TypeScript type signatures.
 
 **The Shim Architecture:**
 
-Nexiom exports `createPiece`, `createAction`, `PieceAuth`, and `Property` with the **exact same TypeScript signatures** as `@activepieces/pieces-framework`. This means open-source Activepieces integration files can be dropped into `nexiom/integrations/` and work immediately.
+Soopa exports `createPiece`, `createAction`, `PieceAuth`, and `Property` with the **exact same TypeScript signatures** as `@activepieces/pieces-framework`. This means open-source Activepieces integration files can be dropped into `soopa/integrations/` and work immediately.
 
 **Folder structure** (mirrors Activepieces):
 
@@ -202,9 +202,9 @@ Nexiom exports `createPiece`, `createAction`, `PieceAuth`, and `Property` with t
 * `index.ts` exports a `createPiece({ ... })` wrapper (defining `PieceAuth.OAuth2`, scopes, actions)
 * Actions like `create-contact.ts` use `createAction({ props: {...}, run(context) {...} })`
 
-### D. The Nexiom `HttpClient` Wrapper
+### D. The Soopa `HttpClient` Wrapper
 
-The single most powerful override is replacing Activepieces' `httpClient.sendRequest()`. When a copied action calls `await httpClient.sendRequest()`, our `NexiomHttpClient` intercepts it and:
+The single most powerful override is replacing Activepieces' `httpClient.sendRequest()`. When a copied action calls `await httpClient.sendRequest()`, our `SoopaHttpClient` intercepts it and:
 
 1. Calls `TokenManagerService.getValidCredentials(connectionId)` to get a guaranteed unexpired token.
 2. Switches on `Piece.authType` to choose the correct injection strategy:
@@ -214,12 +214,12 @@ The single most powerful override is replacing Activepieces' `httpClient.sendReq
 3. Normalizes credential shape so `run(context)` always receives a consistent interface regardless of `authType`.
 4. Executes the vendor API call with credentials already applied.
 
-> **Note:** `@soopa/connections` is a workspace alias that maps to `packages/connections`. `NexiomHttpClient` lives at `packages/connections/src/http/nexiom-http-client.ts`.
+> **Note:** `@soopa/connections` is a workspace alias that maps to `packages/connections`. `SoopaHttpClient` lives at `packages/connections/src/http/soopa-http-client.ts`.
 
 ### E. Why this is Enterprise-Grade
 
 1. **Code Portability:** We can copy-paste `salesforce/actions/create-contact.ts` from the Activepieces GitHub repository into `integrations/salesforce/` and it will instantly work with `TokenManagerService`.
-   > **Compliance Note:** Activepieces code is MIT-licensed. When copying `Piece` or `Action` files into `integrations/`, developers MUST preserve the original MIT license header and attribute Activepieces. Before merging, verify attribution against the **project-level compliance checklist** at [`docs/compliance/CHECKLIST.md`](../compliance/CHECKLIST.md). Nexiom's `TokenManagerService` and `HttpClient` execute these actions natively, but strict adherence to upstream licensing at the file level is required.
+   > **Compliance Note:** Activepieces code is MIT-licensed. When copying `Piece` or `Action` files into `integrations/`, developers MUST preserve the original MIT license header and attribute Activepieces. Before merging, verify attribution against the **project-level compliance checklist** at [`docs/compliance/CHECKLIST.md`](../compliance/CHECKLIST.md). Soopa's `TokenManagerService` and `HttpClient` execute these actions natively, but strict adherence to upstream licensing at the file level is required.
 2. **Sandboxed Credentials:** The `run(context)` function **never sees the raw, decrypted OAuth tokens** — only the `HttpClient` does.
 3. **Instant Scalability:** Access to hundreds of CRM, Marketing, and Accounting workflows without writing bespoke HTTP wrappers.
 4. **Sandboxing:** Actions are stateless functions. They can eventually run in isolated Node.js child processes or AWS Lambda for untrusted code.
@@ -232,7 +232,7 @@ The single most powerful override is replacing Activepieces' `httpClient.sendReq
 
 1. **Token Manager Mocking:** Vitest unit tests for `TokenManagerService` focusing on the Redis `SET NX PX` lock mechanism — ensuring only one promise triggers an outgoing refresh while others wait.
 2. **Database Insertion Flow:** Unit tests mapping a mocked OAuth callback payload through `OAuthCallbackController` to ensure `EncryptionService` is invoked and `app_connection` is populated accurately.
-3. **NexiomHttpClient:** Unit tests for each `authType` strategy (Bearer, API Key, Basic Auth).
+3. **SoopaHttpClient:** Unit tests for each `authType` strategy (Bearer, API Key, Basic Auth).
 
 ### Goal 1 End-to-End Verification (Popup OAuth)
 

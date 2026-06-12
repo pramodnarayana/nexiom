@@ -90,7 +90,7 @@ export function AiChat() {
           <Sparkles className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Nexiom AI</h2>
+          <h2 className="text-sm font-semibold text-foreground">Soopa AI</h2>
           <p className="text-xs text-muted-foreground">Connected to your live enterprise data</p>
         </div>
       </div>

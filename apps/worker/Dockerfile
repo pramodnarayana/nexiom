@@ -16,7 +16,7 @@ COPY engine ./engine
 COPY apps/worker ./apps/worker
 
 RUN pnpm install --frozen-lockfile && \
-    pnpm -r --filter "@nexiom/*" build && \
+    pnpm -r --filter "@soopa/*" build && \
     pnpm --filter worker build
 
 # Stage 2: Production

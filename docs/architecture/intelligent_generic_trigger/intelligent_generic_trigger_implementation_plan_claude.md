@@ -1,6 +1,6 @@
 # Implementation Plan: Intelligent Generic Trigger Engine
 
-This document provides the concrete engineering roadmap to transition Nexiom from hardcoded webhook stubs to a 100% Intelligent Metadata-Driven polling engine, starting with Salesforce (8 triggers) and QuickBooks (5 triggers).
+This document provides the concrete engineering roadmap to transition Soopa from hardcoded webhook stubs to a 100% Intelligent Metadata-Driven polling engine, starting with Salesforce (8 triggers) and QuickBooks (5 triggers).
 
 All file paths, function names, and API endpoints are grounded in the actual codebase.
 

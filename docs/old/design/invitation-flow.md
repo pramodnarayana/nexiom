@@ -6,9 +6,9 @@ This document outlines the standard usability flow for processing user invitatio
 When a user clicks an invitation link, the *intent* (joining an organization) must be preserved throughout the authentication process (Sign Up or Log In).
 
 ## Scenario 1: The New User (No Account)
-*User B does not exist in Nexiom yet.*
+*User B does not exist in Soopa yet.*
 
-1.  **Email Receipt**: User B receives an email: *"Alice has invited you to join **Acme Corp** on Nexiom."*
+1.  **Email Receipt**: User B receives an email: *"Alice has invited you to join **Acme Corp** on Soopa."*
 2.  **Click Action**: User B clicks the "Join Acme Corp" button.
 3.  **Landing Page**:
     *   System detects User B has no session / is not logged in.
@@ -28,7 +28,7 @@ When a user clicks an invitation link, the *intent* (joining an organization) mu
     *   User B is redirected immediately to the **Acme Corp Dashboard**.
 
 ## Scenario 2: The Existing User
-*User B already has a Nexiom account.*
+*User B already has a Soopa account.*
 
 1.  **Email Receipt**: User B receives an email.
 2.  **Click Action**: User B clicks the link.

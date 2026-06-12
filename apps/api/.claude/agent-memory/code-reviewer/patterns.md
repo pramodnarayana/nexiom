@@ -1,6 +1,6 @@
 ---
 name: Codebase patterns and conventions
-description: Key architectural patterns, error handling conventions, and testing patterns in the Nexiom monorepo
+description: Key architectural patterns, error handling conventions, and testing patterns in the Soopa monorepo
 type: project
 ---
 

@@ -92,7 +92,7 @@ export class SystemAdminController {
     const invitation = await this.authProvider.createInvitation({
       email: body.email,
       role: body.role, // Zod handles default
-      organizationId: getRequiredSystemTenantId(), // System tenant (Nexiom Platform)
+      organizationId: getRequiredSystemTenantId(), // System tenant (Soopa Platform)
       inviterId: ctx.user.id,
       headers: ctx.headers, // Required by Better Auth
     });

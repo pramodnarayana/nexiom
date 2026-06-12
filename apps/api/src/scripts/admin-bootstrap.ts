@@ -85,7 +85,7 @@ async function elevateToOwner(
       .insert(schema.organization)
       .values({
         id: SYSTEM_TENANT_ID,
-        name: 'Nexiom Platform',
+        name: 'Soopa Platform',
         slug: 'system',
       })
       .onConflictDoNothing();
@@ -211,7 +211,7 @@ async function bootstrapAdmin() {
           password: PASSWORD,
           firstName: FIRST_NAME,
           lastName: LAST_NAME,
-          companyName: 'Nexiom Platform',
+          companyName: 'Soopa Platform',
           role: 'admin',
         }),
       });
@@ -270,7 +270,7 @@ async function forceResetAdmin() {
     process.env.ADMIN_LAST_NAME ||
     FULL_NAME.split(' ').slice(1).join(' ') ||
     'User';
-  const COMPANY_NAME = process.env.ADMIN_COMPANY_NAME ?? 'Nexiom Platform';
+  const COMPANY_NAME = process.env.ADMIN_COMPANY_NAME ?? 'Soopa Platform';
   const ROLE = process.env.ADMIN_ROLE ?? 'admin';
 
   if (!EMAIL || !PASSWORD) {

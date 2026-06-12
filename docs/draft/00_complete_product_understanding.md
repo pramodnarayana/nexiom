@@ -1,13 +1,13 @@
-# My Complete Understanding of Nexiom Platform
+# My Complete Understanding of Soopa Platform
 
 **Created:** 2026-01-22  
-**Purpose:** Plain-English explanation of what Nexiom is, what exists today, and what we're building
+**Purpose:** Plain-English explanation of what Soopa is, what exists today, and what we're building
 
 ---
 
-## Executive Summary: What Is Nexiom?
+## Executive Summary: What Is Soopa?
 
-**Nexiom is a B2B Integration Platform (iPaaS)** - think of it as a "data highway" that connects different business applications and keeps their data in sync.
+**Soopa is a B2B Integration Platform (iPaaS)** - think of it as a "data highway" that connects different business applications and keeps their data in sync.
 
 ### The Real-World Problem It Solves
 
@@ -17,12 +17,12 @@ Imagine a trucking company (like Envoy Logistics) that uses:
 - **QuickBooks** to handle accounting and invoices
 - **HubSpot** for sales and CRM
 
-Today, they manually copy data between these systems or pay expensive consultants. **Nexiom automates this** - when they create a customer "Acme Trucking" in Revenova, it automatically appears in QuickBooks and HubSpot.
+Today, they manually copy data between these systems or pay expensive consultants. **Soopa automates this** - when they create a customer "Acme Trucking" in Revenova, it automatically appears in QuickBooks and HubSpot.
 
 ### The Business Model
 
-- **Multi-Tenant SaaS:** One Nexiom instance serves many companies (tenants)
-- **Self-Hosted Option:** Companies can run their own Nexiom
+- **Multi-Tenant SaaS:** One Soopa instance serves many companies (tenants)
+- **Self-Hosted Option:** Companies can run their own Soopa
 - **Connector Marketplace:** Pre-built integrations for popular apps
 - **Custom Integrations:** Flexible framework for custom connections
 
@@ -119,7 +119,7 @@ erDiagram
 
 **In Plain English:**
 
-- **Users** are people who log into Nexiom
+- **Users** are people who log into Soopa
 - **Organizations** are companies (tenants) - each gets isolated data
 - **Members** link users to organizations with roles
 - **Invitations** let admins invite new users
@@ -130,7 +130,7 @@ erDiagram
 
 ### The 6-Layer Integration Pipeline
 
-This is the **core innovation** of Nexiom - a systematic way to move data from Source App → Nexiom → Destination App(s).
+This is the **core innovation** of Soopa - a systematic way to move data from Source App → Soopa → Destination App(s).
 
 ```mermaid
 graph LR
@@ -138,7 +138,7 @@ graph LR
         REVENOVA[Revenova TMS]
     end
     
-    subgraph "Nexiom 6-Layer Pipeline"
+    subgraph "Soopa 6-Layer Pipeline"
         L1[Layer 1<br/>GATEWAY<br/>Raw Webhook]
         L2[Layer 2<br/>REPLICA<br/>Parse to Tables]
         L3[Layer 3<br/>NORMALIZED<br/>Canonical Format]
@@ -179,7 +179,7 @@ graph LR
 ```
 Revenova sends: "Customer 'Acme Trucking' was created"
 ↓
-Nexiom receives at: POST /webhooks/tms/revenova/envoylogistics
+Soopa receives at: POST /webhooks/tms/revenova/envoylogistics
 ↓
 Saves raw JSON to database table: revenova_gateway
 ↓
@@ -221,7 +221,7 @@ Pushes to next queue: "Normalize sf_account #ACC-001"
 
 #### Layer 3: NORMALIZED (The Translator)
 
-**Purpose:** Convert source-specific data to Nexiom's universal format
+**Purpose:** Convert source-specific data to Soopa's universal format
 
 **Real Example:**
 
@@ -230,7 +230,7 @@ Revenova calls it: sf_account
 Salesforce calls it: Account
 QuickBooks calls it: Customer
 ↓
-Nexiom normalizes to: tms_vendor (universal format)
+Soopa normalizes to: tms_vendor (universal format)
 ↓
 Saves to table: tms_vendor with standard fields
 ↓
@@ -371,7 +371,7 @@ graph TB
 ```mermaid
 graph LR
     SOURCE[Source: Revenova<br/>Sends whatever it wants]
-    NEXIOM[Nexiom Pipeline<br/>Flexible processing]
+    NEXIOM[Soopa Pipeline<br/>Flexible processing]
     DEST[Destination: QuickBooks<br/>Defines requirements]
     
     SOURCE -->|"Here's data"| NEXIOM
@@ -606,7 +606,7 @@ graph TB
     CONNECT[Connects source app OAuth]
     CONFIGURE[Configures sync rules]
     WEBHOOK[Source app sends webhook]
-    PROCESS[Nexiom processes through 6 layers]
+    PROCESS[Soopa processes through 6 layers]
     DELIVER[Data appears in destination]
     MONITOR[User views sync logs]
     
@@ -643,7 +643,7 @@ graph TB
 
 ```mermaid
 gantt
-    title Nexiom Development Roadmap
+    title Soopa Development Roadmap
     dateFormat YYYY-MM-DD
     section Phase 1
     Platform Core           :done, p1, 2024-01-01, 90d
@@ -740,7 +740,7 @@ gantt
 
 ## Part 9: Production Expansion Features (Post-MVP)
 
-After the core 6-layer pipeline is built and working, we'll add two major features that make Nexiom even more powerful.
+After the core 6-layer pipeline is built and working, we'll add two major features that make Soopa even more powerful.
 
 ### Expansion Feature 1: The Merge Layer (Multi-Source Magic)
 
@@ -1073,7 +1073,7 @@ The main cause is QuickBooks API timeouts during peak hours (2-4 PM)."
 - ✅ No visibility into sync history
 - ✅ Requires technical knowledge to troubleshoot
 
-**Together They Make Nexiom:**
+**Together They Make Soopa:**
 
 - 🎯 More powerful (merge multiple sources)
 - 🚀 Easier to use (just ask questions)
@@ -1111,7 +1111,7 @@ gantt
 
 ---
 
-## Conclusion: Do I Understand Nexiom?
+## Conclusion: Do I Understand Soopa?
 
 ### Yes, I understand
 

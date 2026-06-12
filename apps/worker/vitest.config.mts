@@ -18,7 +18,7 @@ export default defineConfig({
         },
         server: {
             deps: {
-                external: ['@nexiom/auth', '@nexiom/identity'],
+                external: ['@soopa/auth', '@soopa/identity'],
             },
         },
         env: {

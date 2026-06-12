@@ -1,6 +1,6 @@
 # Detailed Design: Intelligent Generic Trigger Engine
 
-This document provides the low-level technical specification for the Nexiom Intelligent Generic Trigger Engine. All type names, file paths, and API patterns are grounded in the actual codebase.
+This document provides the low-level technical specification for the Soopa Intelligent Generic Trigger Engine. All type names, file paths, and API patterns are grounded in the actual codebase.
 
 ---
 

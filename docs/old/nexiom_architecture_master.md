@@ -1,8 +1,8 @@
-# Nexiom System Architecture (Master Context)
+# Soopa System Architecture (Master Context)
 
 ## 1. Product Identity
 
-* **Name:** Nexiom
+* **Name:** Soopa
 
 * **Type:** Open Source Multi-Tenant B2B Integration Platform (iPaaS).
 

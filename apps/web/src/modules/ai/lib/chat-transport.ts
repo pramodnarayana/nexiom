@@ -3,7 +3,7 @@ import type { NavigateFunction } from 'react-router-dom';
 
 /**
  * Creates a custom Vercel AI SDK Fetch implementation designed to deeply integrate
- * with the new Nexiom architecture (Queueing POSTs + Polling SSE Streams).
+ * with the new Soopa architecture (Queueing POSTs + Polling SSE Streams).
  *
  * Vercel `useChat({ fetch: customJobStreamFetcher })` will inject its URL and standard payload into this function.
  * We intercept it to make the internal POST call and wire up the subsequent SSE Reader seamlessly.

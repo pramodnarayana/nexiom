@@ -1,8 +1,8 @@
-# Nexiom Technical Plan: The SaaS Framework Strategy (v6.0)
+# Soopa Technical Plan: The SaaS Framework Strategy (v6.0)
 
 ## 1. The Core Philosophy
 
-**Nexiom** is two things:
+**Soopa** is two things:
 
 1. **A Universal SaaS Framework**: A set of drop-in modules for Multi-Tenancy, Billing, and Notifications that any B2B product needs.
 2. **An Integration Platform**: A reference implementation built *on top* of the framework.

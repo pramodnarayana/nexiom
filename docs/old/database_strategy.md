@@ -64,7 +64,7 @@ This is how we handle the "Action" step in different situations.
 
 ---
 
-## 3. Our Plan for Nexiom 🗺️
+## 3. Our Plan for Soopa 🗺️
 
 1.  **Local Docker (Now)**:
     *   It is empty.

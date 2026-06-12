@@ -37,7 +37,8 @@ export class OauthStateService {
           'FATAL: JWT_SECRET or OAUTH_STATE_SECRET must be provided in production',
         );
       }
-      this.jwtSecret = 'nexiom-local-dev-oauth-state-secret-do-not-use-in-prod';
+      this.jwtSecret =
+        'platform-local-dev-oauth-state-secret-do-not-use-in-prod';
     }
   }
 

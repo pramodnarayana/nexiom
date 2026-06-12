@@ -3,7 +3,7 @@ import { KMSClient, EncryptCommand, DecryptCommand } from "@aws-sdk/client-kms";
 import type { IEncryptionService } from "../interfaces/encryption-service.interface.js";
 
 export interface AwsKmsAdapterOptions {
-  /** Full ARN or alias ARN of the KMS key (e.g. 'alias/nexiom-local'). */
+  /** Full ARN or alias ARN of the KMS key (e.g. 'alias/soopa-local'). */
   keyId: string;
   /** AWS region. Default: 'us-east-1'. */
   region?: string;

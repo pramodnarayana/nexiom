@@ -1,4 +1,4 @@
-# Nexiom AI Refactor Implementation Plan
+# Soopa AI Refactor Implementation Plan
 
 ## Overview
 This document provides a step-by-step, repo-aligned implementation plan to refactor the existing `engine/ai` module into a scalable, token-efficient, enterprise-grade architecture.
@@ -282,5 +282,5 @@ This refactor introduces:
 - Runtime orchestration
 
 Result:
-A scalable, efficient AI system aligned with Nexiom architecture.
+A scalable, efficient AI system aligned with Soopa architecture.
 

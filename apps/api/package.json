@@ -8,7 +8,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
-    "docker:build": "docker build -t nexiom-api:latest -f Dockerfile ../..",
+    "docker:build": "docker build -t app-api:latest -f Dockerfile ../..",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "dev": "nest start --watch",

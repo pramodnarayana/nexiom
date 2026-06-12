@@ -2,7 +2,7 @@
 
 ## Objective
 
-To massively accelerate the development of Goal 2 (Integration Execution Engine) and support 500+ apps, Nexiom will aggressively reuse the open-source integration scripts ("Pieces") developed by the Activepieces community.
+To massively accelerate the development of Goal 2 (Integration Execution Engine) and support 500+ apps, Soopa will aggressively reuse the open-source integration scripts ("Pieces") developed by the Activepieces community.
 
 ## Activepieces Model Deep-Dive
 
@@ -15,7 +15,7 @@ After cloning and examining the `activepieces/packages/pieces` repository, the i
     * Execution logic is housed in an async `run(context)` function.
     * HTTP calls use a generic `httpClient.sendRequest()` utility provided by `@activepieces/pieces-common`.
 
-## The Nexiom Compatibility Layer
+## The Soopa Compatibility Layer
 
 To leverage these thousands of open-source actions without having to rewrite or maintain custom fetch logic for each vendor, we will implement a "Compatibility Layer" inside `@soopa/connections`.
 
@@ -23,13 +23,13 @@ We do **not** need to run the entire Activepieces Node.js engine. We only need t
 
 ### The Shim Architecture
 
-If Nexiom exposes a library that exports `createPiece`, `createAction`, `PieceAuth`, and `Property` with the **exact same TypeScript type signatures** as `@activepieces/pieces-framework`, we can safely copy-paste open-source integration files into `nexiom/integrations/`.
+If Soopa exposes a library that exports `createPiece`, `createAction`, `PieceAuth`, and `Property` with the **exact same TypeScript type signatures** as `@activepieces/pieces-framework`, we can safely copy-paste open-source integration files into `soopa/integrations/`.
 
-### The Nexiom Http Client
+### The Soopa Http Client
 
 The single most powerful override will be replacing their `httpClient`.
 When a copied Activepieces action calls `await httpClient.sendRequest()`, our patched import will intercept it.
-Instead of trusting the action to handle tokens itself, our `NexiomHttpClient` will:
+Instead of trusting the action to handle tokens itself, our `SoopaHttpClient` will:
 
 1. Pause execution.
 2. Call `TokenManagerService.getValidCredentials(connectionId)` to obtain a guaranteed unexpired, un-revoked OAuth token.

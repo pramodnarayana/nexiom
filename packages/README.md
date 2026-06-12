@@ -2,11 +2,11 @@
 
 > **This is commodity infrastructure — not the core product.**
 
-These packages provide the plumbing that enables the Nexiom Sync Engine to
+These packages provide the plumbing that enables the Soopa Sync Engine to
 run. They are generic, reusable, and have **zero knowledge** of stitches,
 field mappings, vendor connections, or sync business rules.
 
-For the core Nexiom product code, see [`engine/`](../engine/README.md).
+For the core Soopa product code, see [`engine/`](../engine/README.md).
 
 ---
 

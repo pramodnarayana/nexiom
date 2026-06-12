@@ -84,7 +84,7 @@ describe('RunWebhookUseCase', () => {
     triggerName: 'new-issue',
     objectType: undefined,
     auth: { token: '123' },
-    propsValue: { repo: 'nexiom' },
+    propsValue: { repo: 'soopa' },
     headers: { 'x-hub-signature': 'sig' },
     rawBody: Buffer.from('{"id":1}'),
     secret: 'my-secret',

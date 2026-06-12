@@ -1,7 +1,7 @@
-# Nexiom Chat & Conversation System Architecture
+# Soopa Chat & Conversation System Architecture
 
 ## Overview
-This document defines the chat layer for Nexiom, enabling users to interact with AI via conversations, view history, and manage chats (similar to ChatGPT-style UX).
+This document defines the chat layer for Soopa, enabling users to interact with AI via conversations, view history, and manage chats (similar to ChatGPT-style UX).
 
 ---
 
@@ -288,4 +288,4 @@ This system enables:
 - Scalable conversation storage
 
 Result:
-A production-ready chat interface layer for Nexiom AI.
+A production-ready chat interface layer for Soopa AI.

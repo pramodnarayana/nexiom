@@ -1,6 +1,6 @@
 # Enterprise AI Copilot Implementation Plan (InstantDB + BullMQ)
 
-This document dictates the structured execution plan to transition the existing Nexiom Copilot infrastructure to the heavily distributed, multi-region architecture defined in `ai_scaling.md`.
+This document dictates the structured execution plan to transition the existing Soopa Copilot infrastructure to the heavily distributed, multi-region architecture defined in `ai_scaling.md`.
 
 ## Phase 1: Reactive Interface Layer (InstantDB)
 

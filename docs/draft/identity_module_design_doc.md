@@ -2,13 +2,13 @@
 
 **Status:** RFC (Request for Comments)
 **Author:** Staff Architect
-**Version:** 2.0 (Aligns with Nexiom Master Architecture)
+**Version:** 2.0 (Aligns with Soopa Master Architecture)
 
 ---
 
 ## 1. Architectural Context (C4 Model)
 
-The **Identity Module** (`@soopa/identity`) is the "Security Kernel" of the Nexiom Platform. It is NOT just a user table; it is the **Authority** for:
+The **Identity Module** (`@soopa/identity`) is the "Security Kernel" of the Soopa Platform. It is NOT just a user table; it is the **Authority** for:
 
 1. **Authentication:** Who are you? (Users/Machines)
 2. **Multitenancy:** Which data silo do you own? (Tenant Resolution)
@@ -24,7 +24,7 @@ C4Context
     Person(user, "User", "System Admin or Tenant Member")
     System_Ext(auth_provider, "Auth Provider", "BetterAuth / Clerk / Supabase")
     
-    System_Boundary(nexiom, "Nexiom Platform") {
+    System_Boundary(soopa, "Soopa Platform") {
         System(api, "API Monolith", "NestJS Backend")
         System(identity, "Identity Kernel", "@soopa/identity Package")
         System(db, "Database", "Postgres (Public & Tenant Schemas)")

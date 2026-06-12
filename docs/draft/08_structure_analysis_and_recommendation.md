@@ -8,7 +8,7 @@
 
 ## The Gap: Current vs. Proposed
 
-### 1. Proposed Structure (`docs/old/nexiom_tech_stack_and_repo_plan.md`)
+### 1. Proposed Structure (`docs/old/soopa_tech_stack_and_repo_plan.md`)
 
 The plan calls for a **Modular Monorepo** (Turborepo style) where core logic lives in shared packages:
 

@@ -40,7 +40,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - nexiom-network
+      - app-network
 
   # --- PgBouncer (transaction-mode connection pooler) ---
   # Accepts connections on Docker-internal port 5432 (exposed as host port 5433)
@@ -48,7 +48,7 @@ services:
   # DATABASE_POOLED_URL points here; use it for all services.
   #
   # Config: infra/pgbouncer/pgbouncer.ini
-  #   - nexiom_global: explicit mapping with pool_size=25
+  #   - platform_global: explicit mapping with pool_size=25
   #   - *: wildcard catch-all for dynamically provisioned tenant databases
   # Auth:   infra/pgbouncer/userlist.txt (md5 hashes)
   pgbouncer:
@@ -68,7 +68,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - nexiom-network
+      - app-network
 
   # --- LocalStack (SQS + KMS) ---
   # SQS queues are auto-created on startup via the init script.
@@ -86,13 +86,13 @@ services:
       - localstack_data:/var/lib/localstack
       - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-localstack.sh
     healthcheck:
-      test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name delivery-queue --region us-east-1 && awslocal kms list-aliases --region us-east-1 | grep alias/nexiom-local"]
+      test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name delivery-queue --region us-east-1 && awslocal kms list-aliases --region us-east-1 | grep alias/soopa-local"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
     networks:
-      - nexiom-network
+      - app-network
 
   # --- Centralized Mock Gateway ---
   # Replaces individual Prism containers. Dynamically serves all OpenAPI mocks.
@@ -105,7 +105,7 @@ services:
     ports:
       - "4000:4000"
     networks:
-      - nexiom-network
+      - app-network
 
   # --- Debezium CDC Relay ---
   debezium:
@@ -122,7 +122,7 @@ services:
         condition: service_healthy
     profiles: ["app"]
     networks:
-      - nexiom-network
+      - app-network
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "(echo > /dev/tcp/localhost/8080) >/dev/null 2>&1 || exit 1"]
@@ -139,7 +139,7 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - nexiom-network
+      - app-network
 
   # --- Mailpit (Email Capture) ---
   mailpit:
@@ -150,7 +150,7 @@ services:
       - "8025:8025" # UI
       - "1025:1025" # SMTP
     networks:
-      - nexiom-network
+      - app-network
 
   # --- Backend ---
   api:
@@ -166,7 +166,7 @@ services:
       # Overrides for Docker Networking
       # Windmill — docker networking overrides (secrets loaded from apps/api/.env via env_file)
       WINDMILL_BASE_URL: http://windmill_server:8000
-      WINDMILL_WORKSPACE: nexiom
+      WINDMILL_WORKSPACE: platform
       WINDMILL_ENABLED: "true"
       WINDMILL_CALLBACK_URL: http://api:3000
       SMTP_HOST: mailpit
@@ -190,7 +190,7 @@ services:
         condition: service_healthy
 
     networks:
-      - nexiom-network
+      - app-network
 
   # --- Background Worker ---
   worker:
@@ -205,7 +205,7 @@ services:
     environment:
       <<: *common-env
       WINDMILL_BASE_URL: http://windmill_server:8000
-      WINDMILL_WORKSPACE: nexiom
+      WINDMILL_WORKSPACE: platform
       WINDMILL_ENABLED: "true"
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
@@ -221,7 +221,7 @@ services:
       localstack:
         condition: service_healthy
     networks:
-      - nexiom-network
+      - app-network
 
   # --- Migrator (Ephemeral) ---
   migrator:
@@ -239,7 +239,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - nexiom-network
+      - app-network
 
   # --- ID Studio (DB GUI) ---
   studio:
@@ -261,7 +261,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - nexiom-network
+      - app-network
 
   # --- Windmill (Scheduler) ---
   # Schema migrations are performed by windmill_server at startup or by a separate migration job.
@@ -287,7 +287,7 @@ services:
       retries: 10
       start_period: 120s
     networks:
-      - nexiom-network
+      - app-network
 
   windmill_worker:
     image: ghcr.io/windmill-labs/windmill:1.672.0
@@ -306,7 +306,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - nexiom-network
+      - app-network
 
   # --- Observability: Vector log-shipping sidecar ---
   # Reads JSON from the `api` container's stdout and ships to OpenObserve.
@@ -321,13 +321,13 @@ services:
       - vector_data:/var/lib/vector
     environment:
       OPENOBSERVE_URL: ${OPENOBSERVE_URL:-}
-      OPENOBSERVE_ORG: ${OPENOBSERVE_ORG:-nexiom}
+      OPENOBSERVE_ORG: ${OPENOBSERVE_ORG:-soopa}
       OPENOBSERVE_STREAM: ${OPENOBSERVE_STREAM:-api-logs}
       OPENOBSERVE_TOKEN: ${OPENOBSERVE_TOKEN:-}
     depends_on:
       - api
     networks:
-      - nexiom-network
+      - app-network
 
   # --- Frontend ---
   web:
@@ -340,10 +340,10 @@ services:
     depends_on:
       - api
     networks:
-      - nexiom-network
+      - app-network
 
 networks:
-  nexiom-network:
+  app-network:
     driver: bridge
 
 volumes:

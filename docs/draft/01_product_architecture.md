@@ -1,4 +1,4 @@
-# Nexiom Platform - Product Architecture
+# Soopa Platform - Product Architecture
 
 **Document Status:** DRAFT
 **Version:** 1.0
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-Nexiom is a **B2B Integration Platform (iPaaS)** that enables seamless data exchange between business applications. The platform separates the **Infrastructure** (The Engine) from **Integration Logic** (The Connectors), providing a scalable, secure, and maintainable solution for modern business connectivity.
+Soopa is a **B2B Integration Platform (iPaaS)** that enables seamless data exchange between business applications. The platform separates the **Infrastructure** (The Engine) from **Integration Logic** (The Connectors), providing a scalable, secure, and maintainable solution for modern business connectivity.
 
 ### Vision
 
@@ -201,7 +201,7 @@ flowchart LR
         API_EXT[External API]
     end
     
-    subgraph "Nexiom Platform"
+    subgraph "Soopa Platform"
         CONN[Connectors]
         PIPE[Pipelines]
         TRANS[Transformers]

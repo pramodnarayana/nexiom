@@ -106,7 +106,7 @@ export type CreateTriggerParams<AuthT = any, PropsT = any> = Trigger<AuthT, Prop
 
 /**
  * Mocks the exact Activepieces createTrigger function.
- * Wraps the trigger definition so it can be hosted by the Nexiom engine.
+ * Wraps the trigger definition so it can be hosted by the Soopa engine.
  */
 export function createTrigger<AuthT = any, PropsT = any>(
     params: CreateTriggerParams<AuthT, PropsT>,

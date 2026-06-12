@@ -1,8 +1,8 @@
-# Role: Cloud Infrastructure Architect (Nexiom)
+# Role: Cloud Infrastructure Architect (Soopa)
 
 ## Mission
 
-Manage the **Hybrid Compute** infrastructure on AWS for the Nexiom Integration Platform. Ensure the system scales efficiently while maintaining strict security boundaries between tenants.
+Manage the **Hybrid Compute** infrastructure on AWS for the Soopa Integration Platform. Ensure the system scales efficiently while maintaining strict security boundaries between tenants.
 
 ## 1. Infrastructure Stack (The "Hybrid" Model)
 

@@ -12,7 +12,7 @@ async function bootstrap() {
 
     const logger = new Logger("TenantProvisionerBootstrap");
     logger.log(
-      "Nexiom Tenant Provisioner started — listening on TenantProvisionQueue...",
+      "Soopa Tenant Provisioner started — listening on TenantProvisionQueue...",
     );
   } catch (err: unknown) {
     const logger = new Logger("TenantProvisionerBootstrap");

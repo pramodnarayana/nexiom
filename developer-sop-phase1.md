@@ -77,7 +77,7 @@ Once you are happy with the manual output, formalize it into a Vitest test suite
 
 ## 4. E2E Automated Testing (The "Mock Platform")
 
-Prove your piece can successfully write to the database (L1 ➡️ L3) without booting the Nexiom platform.
+Prove your piece can successfully write to the database (L1 ➡️ L3) without booting the Soopa platform.
 
 ### Step 4.1: The Test Setup (Testcontainers)
 
@@ -130,7 +130,7 @@ it('should successfully ingest a webhook and write to the database', async () =>
 
 ## 5. Local Platform UI Testing (Hot Reloading)
 
-Before opening a Pull Request, you must verify your integration works visually inside your local `nexiom` platform. Because Nexiom is a dynamic architecture, you do **not** use `yalc` or restart the server.
+Before opening a Pull Request, you must verify your integration works visually inside your local `soopa` platform. Because Soopa is a dynamic architecture, you do **not** use `yalc` or restart the server.
 
 1. **Build the Local Bundle (`soopapieces`):**
    In your `soopapieces` terminal, run:
@@ -143,15 +143,15 @@ Before opening a Pull Request, you must verify your integration works visually i
 
 2. **Trigger the Local Hot-Reload:**
    Copy the generated `.tgz` package (or point the local platform's plugin directory to your `dist` folder).
-   The local `nexiom` platform's Background Poller will instantly detect the new local bundle.
+   The local `soopa` platform's Background Poller will instantly detect the new local bundle.
 
 3. **Verify the Background Automation:**
-   Watch your local `nexiom` terminal. You will see the platform automatically:
+   Watch your local `soopa` terminal. You will see the platform automatically:
    - Hot-load the new JavaScript into memory.
    - Run the background Drizzle Migrator to automatically create the `tms_vendor_invoice` table in your local Postgres database.
 
 4. **Execute the End-to-End Flow in the UI:**
-   Open your browser to your local Nexiom instance and perform the following sequence to prove the integration works exactly as a user would experience it:
-   - **Step A:** Fire a test webhook from Revenova and verify that the data successfully flows into Nexiom and is saved correctly in your newly provisioned `tms_vendor_invoice` normalization table.
+   Open your browser to your local Soopa instance and perform the following sequence to prove the integration works exactly as a user would experience it:
+   - **Step A:** Fire a test webhook from Revenova and verify that the data successfully flows into Soopa and is saved correctly in your newly provisioned `tms_vendor_invoice` normalization table.
    - **Step B:** Once the data is populated, use the UI to create the "Revenova Vendor Invoice ➡️ QB Bill" Stitch and configure the field mapping.
    - **Step C:** Execute the stitch and verify that the platform correctly pushes the data out of the normalized table and creates the Bill in QuickBooks!

@@ -1,6 +1,6 @@
 import { Pool } from "pg";
 
-const pool = new Pool({ connectionString: "postgres://user:password@localhost:5433/nexiom_global" });
+const pool = new Pool({ connectionString: "postgres://user:password@localhost:5433/platform_global" });
 
 const STITCH_ID = "45375f51-0a16-4df7-9228-161e80fc9fc7";
 const SRC_CONN_ID = "0be743ed-63fa-4919-a05f-f5b975df022a";

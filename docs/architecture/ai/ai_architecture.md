@@ -1,7 +1,7 @@
-# Nexiom AI Data Architecture
+# Soopa AI Data Architecture
 
 ## Overview
-This document defines the architecture for building a scalable, token-efficient AI layer for Nexiom across multiple SaaS apps (Salesforce/Revenova, QuickBooks, etc.). The system enforces:
+This document defines the architecture for building a scalable, token-efficient AI layer for Soopa across multiple SaaS apps (Salesforce/Revenova, QuickBooks, etc.). The system enforces:
 
 - Category-based abstraction (TMS, Accounting, CRM)
 - Generic transformation before LLM

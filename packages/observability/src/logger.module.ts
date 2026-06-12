@@ -46,7 +46,7 @@ export class LoggerModule {
               });
             }
 
-            if (logFile && serviceName === 'nexiom-worker') {
+            if (logFile && serviceName === 'app-worker') {
               targets.push({
                 target: 'pino/file',
                 level: 'trace',

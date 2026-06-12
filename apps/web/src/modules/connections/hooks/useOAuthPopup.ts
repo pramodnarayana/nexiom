@@ -134,7 +134,7 @@ export function useOAuthPopup({ onSuccess, onError, onClose }: OAuthPopupOptions
 
         popupRef.current = window.open(
             connectUrl,
-            'nexiom_oauth',
+            'platform_oauth',
             `width=${width},height=${height},left=${left},top=${top},resizable=no`,
         );
         if (!popupRef.current) {
