@@ -3,7 +3,7 @@ import type {
   ModuleMetadata,
   InjectionToken,
 } from "@nestjs/common";
-import { Global, Module, Inject } from "@nestjs/common";
+import { Global, Module } from "@nestjs/common";
 import { ModuleRef } from "@nestjs/core";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
@@ -202,13 +202,22 @@ export class IdentityModule {
         IdentityEventPublisher,
         {
           provide: IDENTITY_EVENT_PUBLISHER,
-          useFactory: (identityOptions: IdentityModuleOptions, defaultPublisher: IdentityEventPublisher) => {
-            // Honor eventPublisherToken from resolved options
-            // If a custom token was provided, it should be injected at index 2
-            // Otherwise, use the default IdentityEventPublisher
+          useFactory: (
+            identityOptions: IdentityModuleOptions,
+            defaultPublisher: IdentityEventPublisher,
+            moduleRef: ModuleRef,
+          ) => {
+            if (identityOptions.eventPublisherToken) {
+              return moduleRef.get<IdentityEventPublisher>(
+                identityOptions.eventPublisherToken,
+                {
+                  strict: false,
+                },
+              );
+            }
             return defaultPublisher;
           },
-          inject: [IDENTITY_OPTIONS, IdentityEventPublisher],
+          inject: [IDENTITY_OPTIONS, IdentityEventPublisher, ModuleRef],
         },
         {
           provide: AUTH_PROVIDER,

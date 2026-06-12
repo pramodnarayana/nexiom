@@ -7,11 +7,11 @@ import { NotFoundException } from "@nestjs/common";
 describe("GetUserByIdUseCase", () => {
   let useCase: GetUserByIdUseCase;
   let userRepository: { findById: ReturnType<typeof vi.fn> };
-  let tenantRepository: { findAllForUser: ReturnType<typeof vi.fn> };
+  let tenantRepository: { findOneForUser: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     userRepository = { findById: vi.fn() };
-    tenantRepository = { findAllForUser: vi.fn() };
+    tenantRepository = { findOneForUser: vi.fn() };
     useCase = new GetUserByIdUseCase(
       userRepository as unknown as IUserRepository,
       tenantRepository as unknown as ITenantRepository,
@@ -32,7 +32,7 @@ describe("GetUserByIdUseCase", () => {
   it("should throw NotFoundException if user is not member of tenant", async () => {
     const user = { id: "user1" };
     userRepository.findById.mockResolvedValue(user);
-    tenantRepository.findAllForUser.mockResolvedValue([{ id: "other-tenant" }]);
+    tenantRepository.findOneForUser.mockResolvedValue(null);
 
     await expect(useCase.execute("user1", "tenant1")).rejects.toThrow(
       NotFoundException,
@@ -42,7 +42,7 @@ describe("GetUserByIdUseCase", () => {
   it("should return user if member of tenant", async () => {
     const user = { id: "user1" };
     userRepository.findById.mockResolvedValue(user);
-    tenantRepository.findAllForUser.mockResolvedValue([{ id: "tenant1" }]);
+    tenantRepository.findOneForUser.mockResolvedValue({ id: "tenant1" });
 
     const result = await useCase.execute("user1", "tenant1");
     expect(result).toEqual(user);

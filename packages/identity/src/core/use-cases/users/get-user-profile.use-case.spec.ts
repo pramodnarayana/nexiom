@@ -27,9 +27,7 @@ describe("GetUserProfileUseCase", () => {
   it("should throw NotFoundException when user is not found", async () => {
     userRepository.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute("user-id")).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(useCase.execute("user-id")).rejects.toThrow(NotFoundException);
     expect(userRepository.findById).toHaveBeenCalledWith("user-id");
   });
 });

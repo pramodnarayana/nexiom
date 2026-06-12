@@ -206,6 +206,10 @@ describe('SystemAdminController', () => {
 
     it('should create user via provider', async () => {
       mockUserProvider.findByEmail.mockResolvedValue(null);
+      mockRoleProvider.findById.mockResolvedValue({
+        id: 'member',
+        name: 'Member',
+      });
       const mockUser = {
         id: 'u1',
         email: 'new@example.com',

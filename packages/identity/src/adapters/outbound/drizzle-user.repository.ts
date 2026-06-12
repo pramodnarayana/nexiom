@@ -298,7 +298,9 @@ export class DrizzleUserRepositoryAdapter implements IUserRepository {
         .limit(1);
 
       if (!membershipWithRole.length) {
-        throw new Error("User is not a member of this organization");
+        throw new UserNotFoundError(
+          "User is not a member of this organization",
+        );
       }
 
       const userRole = membershipWithRole[0].roleId;

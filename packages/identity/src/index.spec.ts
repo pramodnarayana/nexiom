@@ -52,17 +52,24 @@ vi.mock("./adapters/outbound/drizzle-role.repository.js", () => ({
 }));
 
 describe("Identity Package", () => {
-  it("should export adapters", () => {
+  it("should export package symbols", () => {
     expect(IdentityPackage).toBeDefined();
 
+    // Adapters
     expect((IdentityPackage as any).BetterAuthAdapter).toBeDefined();
-
     expect((IdentityPackage as any).DrizzleUserRepositoryAdapter).toBeDefined();
-
     expect((IdentityPackage as any).DrizzleTenantRepositoryAdapter).toBeDefined();
-
     expect((IdentityPackage as any).DrizzlePermissionRepositoryAdapter).toBeDefined();
-
     expect((IdentityPackage as any).DrizzleRoleRepositoryAdapter).toBeDefined();
+
+    // Use Cases
+    expect((IdentityPackage as any).ListUsersWithInvitationsUseCase).toBeDefined();
+    expect((IdentityPackage as any).RemoveUserUseCase).toBeDefined();
+    expect((IdentityPackage as any).GetUserProfileUseCase).toBeDefined();
+    expect((IdentityPackage as any).CreateUserUseCase).toBeDefined();
+    expect((IdentityPackage as any).GetUserByIdUseCase).toBeDefined();
+
+    // Exceptions
+    expect((IdentityPackage as any).UserNotFoundError).toBeDefined();
   });
 });

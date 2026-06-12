@@ -111,10 +111,7 @@ describe("IdentityModule.register", () => {
     );
     expect(permProv.useClass).toBeDefined();
 
-    const roleProv = assertClassProvider(
-      ROLE_REPOSITORY,
-      "ROLE_REPOSITORY",
-    );
+    const roleProv = assertClassProvider(ROLE_REPOSITORY, "ROLE_REPOSITORY");
     expect(roleProv.useClass).toBeDefined();
   });
 
