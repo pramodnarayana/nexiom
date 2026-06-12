@@ -12,10 +12,11 @@ import {
   Logger,
   HttpException,
   Param,
+  Inject,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@soopa/auth';
-import { EncryptionService } from '@soopa/credentials';
+import { ENCRYPTION_SERVICE, type IEncryptionService } from '@soopa/security';
 import { PieceRegistryService } from '@soopa/piece-registry';
 import { ConnectionRepository } from '../repositories/connection.repository.js';
 import type { AnyProperty } from '@soopa/piece-framework';
@@ -62,7 +63,7 @@ export class CredentialController {
     private readonly connectionRepository: ConnectionRepository,
     private readonly pieceRegistry: PieceRegistryService,
     private readonly deleteConnectionUseCase: DeleteConnectionUseCase,
-    private readonly crypto: EncryptionService,
+    @Inject(ENCRYPTION_SERVICE) private readonly crypto: IEncryptionService,
   ) {}
 
   @Get('providers')

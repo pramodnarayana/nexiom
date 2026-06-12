@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '@soopa/auth';
 import { CacheModule } from '@soopa/cache';
-import { EncryptionService, AesEncryptionService } from '@soopa/credentials';
 import { DatabaseModule } from '@soopa/database';
 import { ConnectionsModule } from '../connections/connections.module.js';
 import { StitchesController } from './stitches.controller.js';
@@ -56,7 +55,6 @@ import { DeleteFieldMappingUseCase } from './core/use-cases/field-mappings/delet
       provide: SCHEMA_PROVISIONER_PORT,
       useClass: DbManagerSchemaProvisionerAdapter,
     },
-    { provide: EncryptionService, useClass: AesEncryptionService },
     CreateStitchUseCase,
     UpdateStitchUseCase,
     ArchiveStitchUseCase,

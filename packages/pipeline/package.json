@@ -21,6 +21,8 @@
   },
   "dependencies": {
     "@nestjs/event-emitter": "^3.1.0",
+    "@soopa/observability": "workspace:*",
+    "@soopa/security": "workspace:*",
     "@soopa/credentials": "workspace:*",
     "@soopa/database": "workspace:*",
     "@soopa/piece-framework": "workspace:*",
@@ -30,7 +32,6 @@
     "@soopa/queue": "workspace:*",
     "@soopa/piece-registry": "workspace:*",
     "@soopa/dbmanager": "workspace:*",
-    "@soopa/domain-core": "workspace:*",
     "@soopa/cache": "workspace:*",
     "@soopa/mapping": "workspace:*"
   },

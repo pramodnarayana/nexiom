@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, Mocked } from 'vitest';
 import { RegistryReplicationService } from './registry-replication.service.js';
 import { QueueService, QueueName } from '@soopa/queue';
-import type { IRegistryReplicationPort } from '@soopa/domain-core';
+import type { IRegistryReplicationPort } from "../shared/domain.js";
 import { DB_MANAGER, SchemaPlan, getWorkspaceSchemaName } from '@soopa/dbmanager';
 import type { DatabaseManager } from '@soopa/dbmanager';
 

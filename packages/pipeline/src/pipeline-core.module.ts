@@ -5,11 +5,10 @@ import { ApplicationLoaderModule } from "./sharding/application-loader.module.js
 import { PiecesModule } from "@soopa/piece-registry";
 import {
   TokenManagerService,
-  AesEncryptionService,
-  EncryptionService,
   OAuthRefreshClient,
   RedisDistributedLock,
 } from "@soopa/credentials";
+import { IEncryptionService, ENCRYPTION_SERVICE } from "@soopa/security";
 import { RegistryOAuthRefreshClient } from "./replication/registry-token-refresh.service.js";
 import { DATABASE_CONNECTION } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
@@ -130,10 +129,7 @@ import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-ca
     GemHydrationService,
     DependencySweeperService,
     RegistryReplicationService,
-    {
-      provide: EncryptionService,
-      useClass: AesEncryptionService,
-    },
+    
     {
       provide: OAuthRefreshClient,
       useClass: RegistryOAuthRefreshClient,
@@ -143,7 +139,7 @@ import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-ca
       useFactory: (
         db: DrizzleDb,
         redis: Redis,
-        crypto: EncryptionService,
+        crypto: IEncryptionService,
         refreshClient: OAuthRefreshClient,
       ) => {
         return new TokenManagerService(
@@ -156,7 +152,7 @@ import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-ca
       inject: [
         DATABASE_CONNECTION,
         "REDIS_CLIENT",
-        EncryptionService,
+        ENCRYPTION_SERVICE,
         OAuthRefreshClient,
       ],
     },

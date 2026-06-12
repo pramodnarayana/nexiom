@@ -3,7 +3,7 @@ import { dataSources, credentials, DATABASE_CONNECTION } from '@soopa/database';
 import { eq } from 'drizzle-orm';
 import type { DrizzleDb } from '@soopa/database';
 
-import { EncryptionService } from '../crypto/encryption.interface.js';
+import { IEncryptionService, ENCRYPTION_SERVICE } from '@soopa/security';
 import type { IDistributedLock } from './distributed-lock.interface.js';
 
 /**
@@ -82,7 +82,7 @@ export class TokenManagerService {
     constructor(
         @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
         private readonly lock: IDistributedLock,
-        private readonly crypto: EncryptionService,
+        @Inject(ENCRYPTION_SERVICE) private readonly crypto: IEncryptionService,
         private readonly oauthClient: OAuthRefreshClient,
         // Using Optional() since other apps might not provide it if not needed
         @Optional() @Inject(CredentialsEventPublisher) private readonly eventPublisher?: CredentialsEventPublisher,

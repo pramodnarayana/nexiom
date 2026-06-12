@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BaseOAuthRefreshClient, IHttpClient } from './token-refresh.service.js';
 import { OAuthRefreshError } from './token-manager.service.js';
-import { EncryptionService } from '../crypto/encryption.interface.js';
+import { IEncryptionService } from '@soopa/security';
 
 class MockRefreshClient extends BaseOAuthRefreshClient {
   public tokenUrlToReturn = 'https://api.example.com/oauth/token';
@@ -16,7 +16,7 @@ class MockRefreshClient extends BaseOAuthRefreshClient {
 
 describe('BaseOAuthRefreshClient', () => {
   let dbMock: any;
-  let cryptoMock: EncryptionService;
+  let cryptoMock: IEncryptionService;
   let httpClientMock: IHttpClient;
   let client: MockRefreshClient;
 

@@ -3,7 +3,7 @@ import { ReplicaService } from './replica.service.js';
 import { QueueService, QueueName } from '@soopa/queue';
 import { StorageResolverService } from '../storage-resolver/storage-resolver.service.js';
 import { PipelineHookBrokerService } from '../sharding/pipeline-hook-broker.service.js';
-import type { IReplicaStatePort } from '@soopa/domain-core';
+import type { IReplicaStatePort } from "../shared/domain.js";
 import { FakeConnectionRepository } from '../shared/fakes/fake-connection.repository.js';
 import { DependenciesMissingError } from '@soopa/piece-framework';
 

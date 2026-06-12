@@ -2,7 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { RegistryOAuthRefreshClient } from "./registry-token-refresh.service.js";
 import { PieceRegistryService } from "@soopa/piece-registry";
 import { DATABASE_CONNECTION, TestDatabaseManager } from "@soopa/database";
-import { EncryptionService } from "@soopa/credentials";
+import { ENCRYPTION_SERVICE } from "@soopa/security";
 import { PropertyType, Piece } from "@soopa/piece-framework";
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 
@@ -35,7 +35,7 @@ describe("RegistryOAuthRefreshClient", () => {
           useValue: testDbManager.db!,
         },
         {
-          provide: EncryptionService,
+          provide: ENCRYPTION_SERVICE,
           useValue: {}, // mock crypto
         },
       ],
