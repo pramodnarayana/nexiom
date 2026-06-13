@@ -14,11 +14,11 @@ import type { IOutboundDispatcher } from "../shared/interfaces/outbound-dispatch
 
 import { TokenManagerService } from "@soopa/credentials";
 
-import { SyncLogRepositoryPort } from "../shared/ports/sync-log.repository.port.js";
-import { PipelineStateRepositoryPort } from "../shared/ports/pipeline-state.repository.port.js";
-import { OutboundGatewayRepositoryPort } from "../shared/ports/outbound-gateway.repository.port.js";
-import { StitchRepositoryPort } from "../shared/ports/stitch.repository.port.js";
-import { TransactionManagerPort } from "../shared/ports/transaction-manager.port.js";
+import { SyncLogRepositoryPort, SYNC_LOG_REPOSITORY_PORT } from "../shared/ports/sync-log.repository.port.js";
+import { PipelineStateRepositoryPort, PIPELINE_STATE_REPOSITORY_PORT } from "../shared/ports/pipeline-state.repository.port.js";
+import { OutboundGatewayRepositoryPort, OUTBOUND_GATEWAY_REPOSITORY_PORT } from "../shared/ports/outbound-gateway.repository.port.js";
+import { StitchRepositoryPort, STITCH_REPOSITORY_PORT } from "../shared/ports/stitch.repository.port.js";
+import { TransactionManagerPort, TRANSACTION_MANAGER_PORT } from "../shared/ports/transaction-manager.port.js";
 
 import {
   sanitizeError,
@@ -44,15 +44,15 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     private readonly storageResolver: StorageResolverService,
     @Inject("IOutboundDispatcher")
     private readonly outboundDispatcher: IOutboundDispatcher,
-    @Inject("OutboundGatewayRepositoryPort")
+    @Inject(OUTBOUND_GATEWAY_REPOSITORY_PORT)
     private readonly outboundGatewayRepository: OutboundGatewayRepositoryPort,
-    @Inject("SyncLogRepositoryPort")
+    @Inject(SYNC_LOG_REPOSITORY_PORT)
     private readonly syncLogRepository: SyncLogRepositoryPort,
-    @Inject("PipelineStateRepositoryPort")
+    @Inject(PIPELINE_STATE_REPOSITORY_PORT)
     private readonly pipelineStateRepository: PipelineStateRepositoryPort,
-    @Inject("StitchRepositoryPort")
+    @Inject(STITCH_REPOSITORY_PORT)
     private readonly stitchRepository: StitchRepositoryPort,
-    @Inject("TransactionManagerPort")
+    @Inject(TRANSACTION_MANAGER_PORT)
     private readonly transactionManager: TransactionManagerPort,
 
     @Inject(forwardRef(() => DeliveryRetryService))

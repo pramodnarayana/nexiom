@@ -44,6 +44,10 @@ export class ExchangeOAuthCode {
 
   @IsOptional()
   @IsString()
+  vendorTenantId?: string;
+
+  @IsOptional()
+  @IsString()
   @IsNotEmpty()
   @MaxLength(64)
   @Matches(/^[a-z0-9][a-z0-9-]*$/, {

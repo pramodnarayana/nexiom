@@ -127,6 +127,13 @@
       "when": 1781111277525,
       "tag": "0018_gorgeous_alice",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1781275209402,
+      "tag": "0019_tiny_master_chief",
+      "breakpoints": true
     }
   ]
 }

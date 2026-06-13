@@ -10,7 +10,8 @@ WORKDIR /app
 # Copy lockfile and workspace files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY tsconfig.base.json ./
-# Copy all packages (since worker depends on engine, database, queue, pieces, etc.)
+COPY sdk ./sdk
+COPY plugins ./plugins
 COPY packages ./packages
 COPY engine ./engine
 COPY apps/worker ./apps/worker
@@ -34,6 +35,8 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY tsconfig.base.json ./
 COPY apps/worker/package.json ./apps/worker/
+COPY sdk ./sdk
+COPY plugins ./plugins
 COPY packages ./packages
 COPY engine ./engine
 

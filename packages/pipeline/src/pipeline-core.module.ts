@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { QueueModule } from "@soopa/queue";
 import { StorageResolverModule } from "./storage-resolver/storage-resolver.module.js";
 import { ApplicationLoaderModule } from "./sharding/application-loader.module.js";
+import { PipelineHookBrokerService } from "./sharding/pipeline-hook-broker.service.js";
 import { PiecesModule } from "@soopa/piece-registry";
 import {
   TokenManagerService,
@@ -40,6 +41,8 @@ import { NORMALIZATION_REPOSITORY_PORT } from "./shared/ports/normalization.repo
 import { DrizzleNormalizationRepositoryAdapter } from "./shared/adapters/drizzle-normalization.repository.js";
 import { TRANSACTION_MANAGER_PORT } from "./shared/ports/transaction-manager.port.js";
 import { DrizzleTransactionManagerAdapter } from "./shared/adapters/drizzle-transaction-manager.adapter.js";
+import { DEPENDENCY_SWEEPER_REPOSITORY_PORT } from "./shared/ports/dependency-sweeper.repository.port.js";
+import { DrizzleDependencySweeperRepositoryAdapter } from "./shared/adapters/drizzle-dependency-sweeper.repository.js";
 import { DeliveryService } from "./delivery/delivery.service.js";
 import { PieceOutboundDispatcher } from "./delivery/piece-outbound.dispatcher.js";
 import { DeliveryRetryService } from "./delivery/delivery-retry.service.js";
@@ -108,6 +111,10 @@ import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-ca
       useClass: DrizzleTransactionManagerAdapter,
     },
     {
+      provide: DEPENDENCY_SWEEPER_REPOSITORY_PORT,
+      useClass: DrizzleDependencySweeperRepositoryAdapter,
+    },
+    {
       provide: "IOutboundDispatcher",
       useClass: PieceOutboundDispatcher,
     },
@@ -130,32 +137,8 @@ import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-ca
     DependencySweeperService,
     RegistryReplicationService,
     
-    {
-      provide: OAuthRefreshClient,
-      useClass: RegistryOAuthRefreshClient,
-    },
-    {
-      provide: TokenManagerService,
-      useFactory: (
-        db: DrizzleDb,
-        redis: Redis,
-        crypto: IEncryptionService,
-        refreshClient: OAuthRefreshClient,
-      ) => {
-        return new TokenManagerService(
-          db,
-          new RedisDistributedLock(redis),
-          crypto,
-          refreshClient,
-        );
-      },
-      inject: [
-        DATABASE_CONNECTION,
-        "REDIS_CLIENT",
-        ENCRYPTION_SERVICE,
-        OAuthRefreshClient,
-      ],
-    },
+    PipelineHookBrokerService,
+    RegistryOAuthRefreshClient,
   ],
   exports: [
     ReplicaService,
@@ -166,7 +149,9 @@ import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-ca
     DeliveryService,
     DependencySweeperService,
     RegistryReplicationService,
-    GemHydrationService
+    GemHydrationService,
+    PipelineHookBrokerService,
+    RegistryOAuthRefreshClient
   ],
 })
 export class PipelineCoreModule {

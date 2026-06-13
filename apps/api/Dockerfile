@@ -9,7 +9,9 @@ WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY tsconfig.base.json ./
-COPY packages/identity ./packages/identity
+COPY sdk ./sdk
+COPY plugins ./plugins
+COPY packages ./packages
 COPY apps/api ./apps/api
 
 RUN pnpm install --frozen-lockfile
@@ -32,11 +34,15 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY tsconfig.base.json ./
 COPY apps/api/package.json ./apps/api/
+COPY sdk ./sdk
+COPY plugins ./plugins
+COPY packages ./packages
 # Ignore scripts to skip 'husky install' (prepare) which fails in prod
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
 # Copy built artifacts
 COPY --from=builder --chown=nodejs:nodejs /app/apps/api/dist ./apps/api/dist
+COPY --from=builder --chown=nodejs:nodejs /app/packages ./packages
 
 USER nodejs
 

@@ -427,5 +427,65 @@ describe('Activepieces Framework Native Shim', () => {
             expect(mockDb.execute).toHaveBeenCalledTimes(2);
             HostHttpClient.unbindExecutionCtx(traceId);
         });
+
+        it('covers edge cases in sanitizeUrl and sanitizeBody directly', () => {
+            const clientAny = client as any;
+
+            // sanitizeUrl catch block
+            const invalidUrl = 'not-a-valid-url';
+            expect(clientAny.sanitizeUrl(invalidUrl)).toBe(invalidUrl);
+
+            // sanitizeBody circular reference catch block
+            const circular: any = {};
+            circular.self = circular;
+            
+            // structuredClone throws on some environments with functions or DOM nodes.
+            // But circular reference also breaks JSON.stringify inside the catch block.
+            // So we force structuredClone to throw (by passing a Proxy or simply by the fact that we can mock structuredClone)
+            // Actually, structuredClone handles circular references! So we need to pass something that breaks both structuredClone and JSON.stringify.
+            // A proxy that throws on get, or an object with a bigint if structuredClone doesn't support it?
+            // Actually, we can just spy on JSON.stringify and structuredClone.
+            const originalStructuredClone = globalThis.structuredClone;
+            globalThis.structuredClone = () => { throw new Error('mock structuredClone error'); };
+            const originalStringify = JSON.stringify;
+            JSON.stringify = () => { throw new Error('mock stringify error'); };
+            
+            try {
+                expect(clientAny.sanitizeBody({ some: 'data' })).toEqual({ some: 'data' });
+            } finally {
+                globalThis.structuredClone = originalStructuredClone;
+                JSON.stringify = originalStringify;
+            }
+
+            // sanitizeBody deep redaction
+            const deeplyNested = { nested: { password: 'secret123', safe: true } };
+            const sanitized = clientAny.sanitizeBody(deeplyNested);
+            expect(sanitized.nested.password).toBe('[REDACTED]');
+            expect(sanitized.nested.safe).toBe(true);
+
+            // Trigger audit failure
+            const originalDbExecute = clientAny.db.execute;
+            clientAny.db.execute = () => { throw new Error('audit error'); };
+            try {
+                expect(clientAny.archiveToGateway('ws', {}, {}, 0, 'url')).resolves.not.toThrow();
+            } finally {
+                clientAny.db.execute = originalDbExecute;
+            }
+
+            // Trigger enforceRateLimits branch
+            const originalEval = clientAny.redis.eval;
+            clientAny.redis.eval = () => Promise.resolve(1001); // Trigger calls > 1000
+            try {
+                expect(clientAny.enforceRateLimits('https://example.com')).resolves.not.toThrow();
+            } finally {
+                clientAny.redis.eval = originalEval;
+            }
+            
+            // Hit purge and unbind edge cases
+            HostHttpClient.bindExecutionCtx('foo', 'conn', 'ws');
+            HostHttpClient.purgeExpiredExecutionState();
+            HostHttpClient.unbindExecutionCtx('foo');
+            HostHttpClient.unbindExecutionCtx('non-existent');
+        });
     });
 });

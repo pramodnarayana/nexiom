@@ -4,6 +4,10 @@ import type { IQueueService } from "@soopa/queue";
 import { z } from "zod";
 
 import { ProcessCopilotJobUseCase } from "../core/use-cases/copilot/process-copilot-job.use-case.js";
+import { NestChatStreamOrchestratorAdapter } from "../adapters/outbound/nest-chat-stream-orchestrator.adapter.js";
+import { RedisRealtimeEventPubSubAdapter } from "../adapters/outbound/redis-realtime-event-pubsub.adapter.js";
+import { NestChatPersistenceAdapter } from "../adapters/outbound/nest-chat-persistence.adapter.js";
+import { AiSdkTitleGeneratorAdapter } from "../adapters/outbound/ai-sdk-title-generator.adapter.js";
 
 const JobPayloadSchema = z.object({
   jobId: z.string(),
@@ -22,11 +26,22 @@ const JobPayloadSchema = z.object({
 @Injectable()
 export class CopilotWorker implements OnModuleInit {
   private readonly logger = new Logger(CopilotWorker.name);
+  private readonly processCopilotJobUseCase: ProcessCopilotJobUseCase;
 
   constructor(
     @Inject(QUEUE_SERVICE) private readonly queueService: IQueueService,
-    private readonly processCopilotJobUseCase: ProcessCopilotJobUseCase,
-  ) {}
+    private readonly orchestratorAdapter: NestChatStreamOrchestratorAdapter,
+    private readonly pubSubAdapter: RedisRealtimeEventPubSubAdapter,
+    private readonly persistenceAdapter: NestChatPersistenceAdapter,
+    private readonly titleGeneratorAdapter: AiSdkTitleGeneratorAdapter,
+  ) {
+    this.processCopilotJobUseCase = new ProcessCopilotJobUseCase(
+      this.orchestratorAdapter,
+      this.pubSubAdapter,
+      this.persistenceAdapter,
+      this.titleGeneratorAdapter,
+    );
+  }
 
   onModuleInit() {
     this.logger.log("Starting CopilotWorker to consume AiCopilotQueue...");

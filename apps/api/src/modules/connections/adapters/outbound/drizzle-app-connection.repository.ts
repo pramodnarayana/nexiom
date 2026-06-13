@@ -45,6 +45,7 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
     expiresAt,
     metadata,
     envType,
+    vendorTenantId,
   }: StoreOAuthConnectionOptions): Promise<ProvisionInfo> {
     return await this.db.transaction(async (tx) => {
       // Explicit update via id
@@ -59,6 +60,7 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
               metadata,
               updatedAt: new Date(),
               ...(envType !== undefined && { envType }),
+              ...(vendorTenantId !== undefined && { vendorTenantId }),
             })
             .where(
               and(
@@ -128,6 +130,7 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
             displayName,
             metadata,
             envType: envType ?? 'PRODUCTION',
+            vendorTenantId,
           })
           .returning();
 
@@ -146,8 +149,10 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
         });
 
         const schemaNameToStore = getWorkspaceSchemaName(
-          connection.id,
+          tenantId,
           providerName,
+          vendorTenantId,
+          externalId,
         );
         await tx
           .update(dataSources)
@@ -249,8 +254,10 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
 
           if (existingFailed) {
             const recoveredSchemaName = getWorkspaceSchemaName(
-              existingFailed.id,
+              tenantId,
               providerName,
+              vendorTenantId,
+              externalId,
             );
             const [updated] = await tx
               .update(dataSources)
@@ -259,6 +266,7 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
                 externalId,
                 metadata,
                 envType: envType ?? 'PRODUCTION',
+                vendorTenantId,
                 schemaName: recoveredSchemaName,
                 updatedAt: new Date(),
               })
@@ -302,7 +310,12 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
 
       const schemaName =
         connection.schemaName ??
-        getWorkspaceSchemaName(connection.id, providerName);
+        getWorkspaceSchemaName(
+          tenantId,
+          providerName,
+          vendorTenantId,
+          externalId,
+        );
 
       await tx.insert(globalRegistryOutbox).values({
         tenantId: connection.tenantId,

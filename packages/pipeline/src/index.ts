@@ -22,3 +22,4 @@ export * from './normalization/normalization.service.js';
 export * from './utils.js';
 
 export * from './shared/outbox.utils.js';
+export * from './replication/registry-token-refresh.service.js';

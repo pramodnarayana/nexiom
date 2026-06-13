@@ -66,6 +66,7 @@ export function useConnections() {
                     providerName: provider,
                     code,
                     state,
+                    vendorTenantId: vendorParams?.realmId as string | undefined,
                     vendorParams: {
                         ...(pending.vendorParams),
                         ...(vendorParams),

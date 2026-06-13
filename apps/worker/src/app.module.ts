@@ -1,6 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ScheduleModule } from "@nestjs/schedule";
-import { PipelineCoreModule } from "@soopa/pipeline";
+import { PipelineCoreModule, ApplicationLoaderModule } from "@soopa/pipeline";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { PiecesModule } from "@soopa/piece-registry";
 import { QueueModule, createQueueModuleOptions } from "@soopa/queue";
@@ -10,6 +10,8 @@ import { DatabaseModule } from "@soopa/database";
 import { DbManagerModule } from "./bootstrap/dbmanager/dbmanager.module.js";
 import { EventEmitterModule } from "@nestjs/event-emitter";
 import { EncryptionModule } from "@soopa/security";
+import { CredentialsModule } from "@soopa/credentials";
+import { RegistryOAuthRefreshClient } from "@soopa/pipeline";
 
 // Consumers
 import { CopilotWorker } from "./consumers/copilot.worker.js";
@@ -39,7 +41,9 @@ import { NestPieceRegistryAdapter } from "./adapters/outbound/nest-piece-registr
 import { NodeFsGitRepositoryAdapter } from "./adapters/outbound/node-fs-git-repository.adapter.js";
 import { NestCacheInvalidatorAdapter } from "./adapters/outbound/nest-cache-invalidator.adapter.js";
 
-// Ai Module
+import { AiEngineModule } from "@soopa/ai";
+
+import { validateEnv } from "./config/env.validation.js";
 
 @Module({
   imports: [
@@ -47,6 +51,7 @@ import { NestCacheInvalidatorAdapter } from "./adapters/outbound/nest-cache-inva
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: [".env.local", ".env", "../../.env"],
+      validate: validateEnv,
     }),
     DatabaseModule,
     DbManagerModule,
@@ -55,12 +60,17 @@ import { NestCacheInvalidatorAdapter } from "./adapters/outbound/nest-cache-inva
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
-        mode: cfg.get("INFRA_MODE") === "local" ? "local" : "kms",
+        mode: cfg.get("INFRA_MODE") === "aws" ? "kms" : "local",
         encryptionKey: cfg.get("ENCRYPTION_KEY"),
         kmsKeyId: cfg.get("KMS_KEY_ID"),
         kmsEndpoint: cfg.get("KMS_ENDPOINT"),
         region: cfg.get("KMS_REGION"),
       }),
+    }),
+    CredentialsModule.forRootAsync({
+      providers: [RegistryOAuthRefreshClient],
+      useFactory: (client: RegistryOAuthRefreshClient) => client,
+      inject: [RegistryOAuthRefreshClient],
     }),
     PiecesModule.forRoot(),
     ...(process.env.ENABLE_PLUGIN_MIGRATIONS === "true"
@@ -74,6 +84,8 @@ import { NestCacheInvalidatorAdapter } from "./adapters/outbound/nest-cache-inva
     }),
     CacheModule,
     PipelineCoreModule,
+    ApplicationLoaderModule,
+    AiEngineModule,
   ],
   controllers: [],
   providers: [

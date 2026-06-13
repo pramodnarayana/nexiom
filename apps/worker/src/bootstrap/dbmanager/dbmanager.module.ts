@@ -11,10 +11,7 @@ import { DatabaseModule } from "@soopa/database";
 import { DATABASE_CONNECTION } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
 
-import {
-  ApplicationLoaderModule,
-  PipelineHookBrokerService,
-} from "@soopa/pipeline";
+import { PipelineCoreModule, PipelineHookBrokerService } from "@soopa/pipeline";
 
 /**
  * Builds a CredentialResolver from the current process's DATABASE_URL.
@@ -64,7 +61,7 @@ function buildCredentialResolver(): CredentialResolver {
 
 @Global()
 @Module({
-  imports: [DatabaseModule, ApplicationLoaderModule],
+  imports: [DatabaseModule, PipelineCoreModule],
   providers: [
     {
       provide: DB_MANAGER,

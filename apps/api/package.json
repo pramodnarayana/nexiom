@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:drop": "tsx src/db/cli/main.ts db:drop",
-    "db:seed": "tsx src/db/cli/main.ts db:seed",
+    "db:seed": "tsx src/scripts/infra-bootstrap.ts && tsx src/scripts/admin-bootstrap.ts bootstrap",
     "db:fresh": "tsx src/db/cli/main.ts db:fresh",
     "db:reset": "tsx src/db/cli/main.ts db:reset",
     "db:migrate": "tsx src/db/cli/main.ts db:migrate",

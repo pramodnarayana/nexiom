@@ -22,6 +22,7 @@ import { ConnectionRepository } from '../repositories/connection.repository.js';
 import type { AnyProperty } from '@soopa/piece-framework';
 import { DeleteConnectionUseCase } from '../core/use-cases/delete-connection.use-case.js';
 import type { ConnectionValueBlob } from '../core/types/connection.types.js';
+import { ConfigService } from '@nestjs/config';
 
 function parseConnectionCredentials(decrypted: string): {
   clientId: string;
@@ -63,6 +64,7 @@ export class CredentialController {
     private readonly connectionRepository: ConnectionRepository,
     private readonly pieceRegistry: PieceRegistryService,
     private readonly deleteConnectionUseCase: DeleteConnectionUseCase,
+    private readonly configService: ConfigService,
     @Inject(ENCRYPTION_SERVICE) private readonly crypto: IEncryptionService,
   ) {}
 
@@ -173,6 +175,8 @@ export class CredentialController {
       `[getActiveConnections] tenantId=${tenantId}, total=${total}, returning ${activeConnections.length} rows`,
     );
 
+    const apiUrl = this.configService.get<string>('API_URL') || '';
+
     const listConnections = activeConnections.map((conn) => {
       const hasCredentials = conn.hasCredentials;
 
@@ -207,6 +211,8 @@ export class CredentialController {
         createdAt: conn.createdAt,
         updatedAt: conn.updatedAt,
         hasCredentials,
+        vendorTenantId: conn.vendorTenantId,
+        webhookUrl: `${apiUrl}/v1/webhooks/${conn.id}`,
       };
     });
 

@@ -5,10 +5,11 @@ import {
   sanitizeErrorObject,
 } from "../utils.js";
 import { DeliveryService } from "./delivery.service.js";
-import { SyncLogRepositoryPort } from "../shared/ports/sync-log.repository.port.js";
-import { ConnectionRepositoryPort } from "../shared/ports/connection.repository.port.js";
-import { StitchRepositoryPort } from "../shared/ports/stitch.repository.port.js";
-import { OutboundGatewayRepositoryPort } from "../shared/ports/outbound-gateway.repository.port.js";
+import { SyncLogRepositoryPort, SYNC_LOG_REPOSITORY_PORT } from "../shared/ports/sync-log.repository.port.js";
+import { ConnectionRepositoryPort, CONNECTION_REPOSITORY_PORT } from "../shared/ports/connection.repository.port.js";
+import { StitchRepositoryPort, STITCH_REPOSITORY_PORT } from "../shared/ports/stitch.repository.port.js";
+import { OutboundGatewayRepositoryPort, OUTBOUND_GATEWAY_REPOSITORY_PORT } from "../shared/ports/outbound-gateway.repository.port.js";
+import { TransactionManagerPort, TRANSACTION_MANAGER_PORT } from "../shared/ports/transaction-manager.port.js";
 
 @Injectable()
 export class DeliveryRetryService {
@@ -16,14 +17,16 @@ export class DeliveryRetryService {
 
   constructor(
     private readonly moduleRef: ModuleRef,
-    @Inject("SyncLogRepositoryPort")
+    @Inject(SYNC_LOG_REPOSITORY_PORT)
     private readonly syncLogRepository: SyncLogRepositoryPort,
-    @Inject("ConnectionRepositoryPort")
+    @Inject(CONNECTION_REPOSITORY_PORT)
     private readonly connectionRepository: ConnectionRepositoryPort,
-    @Inject("StitchRepositoryPort")
+    @Inject(STITCH_REPOSITORY_PORT)
     private readonly stitchRepository: StitchRepositoryPort,
-    @Inject("OutboundGatewayRepositoryPort")
+    @Inject(OUTBOUND_GATEWAY_REPOSITORY_PORT)
     private readonly outboundGatewayRepository: OutboundGatewayRepositoryPort,
+    @Inject(TRANSACTION_MANAGER_PORT)
+    private readonly transactionManager: TransactionManagerPort,
   ) {}
 
   private get deliveryService(): DeliveryService {

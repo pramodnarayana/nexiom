@@ -30,6 +30,19 @@ export const salesforceAuth = PieceAuth.OAuth2({
         if (typeof accessToken !== 'string' || accessToken.trim() === '') {
             throw new Error('Salesforce token response missing or invalid access_token');
         }
+    },
+    extractVendorTenantId: (response: Record<string, unknown>) => {
+        // Salesforce returns an 'id' URL in the OAuth token payload, e.g.:
+        // https://login.salesforce.com/id/00D5Y0000012345/0055Y0000067890
+        // The first ID (00D...) is the Org ID. The second is the User ID.
+        const idUrl = response.id || (response.data as Record<string, unknown> | undefined)?.id;
+        if (typeof idUrl === 'string' && idUrl.includes('/id/')) {
+            const parts = idUrl.split('/id/')[1]?.split('/');
+            if (parts && parts.length > 0 && parts[0]) {
+                return parts[0];
+            }
+        }
+        return undefined;
     }
 });
 /* v8 ignore stop */
