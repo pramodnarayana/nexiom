@@ -28,7 +28,7 @@ export const envValidationSchema = z
 
     // Infrastructure
     REDIS_URL: z.string().url().optional(),
-    INFRA_MODE: z.enum(["local", "aws"]).optional().default("local"),
+    INFRA_MODE: z.enum(["local", "aws", "kms"]).optional().default("local"),
   })
   .passthrough()
   .superRefine((data, ctx) => {

@@ -64,5 +64,5 @@ export const globalRegistryOutbox = pgTable('global_registry_outbox', {
         .on(table.nextRetryAt)
         .where(sql`status = 'PENDING' OR status = 'RETRY'`),
     index('registry_outbox_tenant_idx').on(table.tenantId),
-    check('registry_outbox_status_check', sql`status IN ('PENDING', 'RETRY', 'FAIL')`),
+    check('registry_outbox_status_check', sql`status IN ('PENDING', 'RETRY', 'FAIL', 'SUCCESS', 'PROCESSING')`),
 ]);

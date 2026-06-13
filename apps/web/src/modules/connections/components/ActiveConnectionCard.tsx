@@ -188,7 +188,7 @@ export function ActiveConnectionCard({ connection, provider, onDelete }: Readonl
                 className="group relative flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-6 text-center shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5 cursor-pointer"
                 onClick={() => setDetailsOpen(prev => !prev)}
                 onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
+                    if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
                         if (e.key === ' ') e.preventDefault();
                         setDetailsOpen(prev => !prev);
                     }
