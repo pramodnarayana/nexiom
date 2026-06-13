@@ -46,7 +46,8 @@ describe("DeliveryRetryService", () => {
       syncLogRepository,
       connectionRepository,
       stitchRepository,
-      outboundGatewayRepository
+      outboundGatewayRepository,
+      {} as any
     );
   });
 
