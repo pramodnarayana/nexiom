@@ -184,9 +184,17 @@ export function ActiveConnectionCard({ connection, provider, onDelete }: Readonl
 
     return (
         <>
-            <div 
+            <div
                 className="group relative flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-6 text-center shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5 cursor-pointer"
                 onClick={() => setDetailsOpen(prev => !prev)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        if (e.key === ' ') e.preventDefault();
+                        setDetailsOpen(prev => !prev);
+                    }
+                }}
+                tabIndex={0}
+                role="button"
             >
                 {/* Context Menu — top-right corner */}
                 <div className="absolute top-3 right-3 flex items-center gap-2">

@@ -16,9 +16,8 @@ export const envValidationSchema = z
     BETTER_AUTH_URL: z.string().url(),
     FRONTEND_URL: z.string().url(),
     ALLOWED_ORIGINS: z.string().optional(),
-    ENCRYPTION_KEY: z
-      .string()
-      .length(32, { message: "Encryption key must be exactly 32 characters" }),
+    ENCRYPTION_KEY: z.string().optional(),
+    KMS_KEY_ID: z.string().optional(),
     JWT_SECRET: z.string().min(32),
 
     // Identity Constants
@@ -29,8 +28,28 @@ export const envValidationSchema = z
 
     // Infrastructure
     REDIS_URL: z.string().url().optional(),
+    INFRA_MODE: z.enum(["local", "aws"]).optional().default("local"),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((data, ctx) => {
+    if (data.INFRA_MODE === "aws") {
+      if (!data.KMS_KEY_ID || data.KMS_KEY_ID.trim().length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["KMS_KEY_ID"],
+          message: "KMS_KEY_ID is required when INFRA_MODE is aws",
+        });
+      }
+    } else {
+      if (!data.ENCRYPTION_KEY || data.ENCRYPTION_KEY.length !== 32) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["ENCRYPTION_KEY"],
+          message: "ENCRYPTION_KEY must be exactly 32 characters when INFRA_MODE is local",
+        });
+      }
+    }
+  });
 
 export type EnvConfig = z.infer<typeof envValidationSchema>;
 

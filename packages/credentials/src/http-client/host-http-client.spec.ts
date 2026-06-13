@@ -428,7 +428,7 @@ describe('Activepieces Framework Native Shim', () => {
             HostHttpClient.unbindExecutionCtx(traceId);
         });
 
-        it('covers edge cases in sanitizeUrl and sanitizeBody directly', () => {
+        it('covers edge cases in sanitizeUrl and sanitizeBody directly', async () => {
             const clientAny = client as any;
 
             // sanitizeUrl catch block
@@ -467,7 +467,7 @@ describe('Activepieces Framework Native Shim', () => {
             const originalDbExecute = clientAny.db.execute;
             clientAny.db.execute = () => { throw new Error('audit error'); };
             try {
-                expect(clientAny.archiveToGateway('ws', {}, {}, 0, 'url')).resolves.not.toThrow();
+                await expect(clientAny.archiveToGateway('ws', {}, {}, 0, 'url')).resolves.not.toThrow();
             } finally {
                 clientAny.db.execute = originalDbExecute;
             }
@@ -476,7 +476,7 @@ describe('Activepieces Framework Native Shim', () => {
             const originalEval = clientAny.redis.eval;
             clientAny.redis.eval = () => Promise.resolve(1001); // Trigger calls > 1000
             try {
-                expect(clientAny.enforceRateLimits('https://example.com')).resolves.not.toThrow();
+                await expect(clientAny.enforceRateLimits('https://example.com')).resolves.not.toThrow();
             } finally {
                 clientAny.redis.eval = originalEval;
             }

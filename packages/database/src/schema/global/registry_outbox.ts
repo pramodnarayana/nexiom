@@ -8,6 +8,7 @@ import {
     index,
     integer,
     text,
+    check,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { OutboxStatus } from '../tenant/pipeline.js';
@@ -45,8 +46,11 @@ export const globalRegistryOutbox = pgTable('global_registry_outbox', {
     
     // The serialized row data from the Global DB to be upserted into the Tenant DB
     payload: jsonb('payload').notNull().default({}),
-    
-    status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
+
+    status: text('status')
+        .$type<OutboxStatus>()
+        .notNull()
+        .default('PENDING'),
     attempts: integer('attempts').notNull().default(0),
     nextRetryAt: timestamp('next_retry_at', { withTimezone: true })
         .notNull()
@@ -58,6 +62,7 @@ export const globalRegistryOutbox = pgTable('global_registry_outbox', {
 }, (table) => [
     index('registry_outbox_poll_idx')
         .on(table.nextRetryAt)
-        .where(sql`status = 'PENDING' OR status = 'FAIL'`),
+        .where(sql`status = 'PENDING' OR status = 'RETRY'`),
     index('registry_outbox_tenant_idx').on(table.tenantId),
+    check('registry_outbox_status_check', sql`status IN ('PENDING', 'RETRY', 'FAIL')`),
 ]);

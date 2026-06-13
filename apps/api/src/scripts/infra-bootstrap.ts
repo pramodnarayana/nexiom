@@ -30,13 +30,17 @@ async function seedLocalShard() {
 
   try {
     const parsedUrl = new URL(dbUrl);
-    const hostUrl = `${parsedUrl.protocol}//${parsedUrl.username}:${parsedUrl.password}@${parsedUrl.host}`;
+    // Remove credentials from stored URL - must be provided at runtime from secrets manager
+    const hostUrl = `${parsedUrl.protocol}//${parsedUrl.host}`;
+
+    const shardId = process.env.SHARD_ID || 'shard-local-1';
+    const databaseName = process.env.DB_NAME || 'platform_shard_1';
 
     await db
       .insert(schema.shardRegistry)
       .values({
-        id: 'shard-local-1',
-        databaseName: 'platform_shard_1',
+        id: shardId,
+        databaseName,
         databaseHostUrl: hostUrl,
         regionContext: 'local',
         status: 'ACTIVE',
@@ -45,17 +49,30 @@ async function seedLocalShard() {
       })
       .onConflictDoNothing();
 
-    console.log('✅ Local shard shard-local-1 registered.');
+    console.log(`✅ Local shard ${shardId} registered.`);
 
     console.log('2️⃣  Running tenant migrations on local shard...');
-    execSync(`pnpm --filter @soopa/database db:migrate:tenant`, {
-      env: {
-        ...process.env,
-        TENANT_DATABASE_URL: hostUrl + '/platform_shard_1',
-      },
-      stdio: 'inherit',
-    });
-    console.log('✅ Shard migrations complete.');
+    try {
+      // Build connection string with credentials for migration (runtime only, not stored)
+      const migrationUrl = `${parsedUrl.protocol}//${parsedUrl.username}:${parsedUrl.password}@${parsedUrl.host}/${databaseName}`;
+      execSync(`pnpm --filter @soopa/database db:migrate:tenant`, {
+        env: {
+          ...process.env,
+          TENANT_DATABASE_URL: migrationUrl,
+        },
+        stdio: 'inherit',
+      });
+      console.log('✅ Shard migrations complete.');
+    } catch (migrationError) {
+      const errMsg = migrationError instanceof Error ? migrationError.message : String(migrationError);
+      const errStack = migrationError instanceof Error ? migrationError.stack : '';
+      console.error(`❌ Migration failed for shard ${shardId}:`);
+      console.error(`  Command: pnpm --filter @soopa/database db:migrate:tenant`);
+      console.error(`  Database: ${hostUrl}/${databaseName}`);
+      console.error(`  Error: ${errMsg}`);
+      if (errStack) console.error(`  Stack: ${errStack}`);
+      throw migrationError;
+    }
 
     console.log('✅ Infrastructure Bootstrap complete.');
   } finally {

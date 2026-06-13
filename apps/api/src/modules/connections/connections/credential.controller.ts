@@ -175,7 +175,8 @@ export class CredentialController {
       `[getActiveConnections] tenantId=${tenantId}, total=${total}, returning ${activeConnections.length} rows`,
     );
 
-    const apiUrl = this.configService.get<string>('API_URL') || '';
+    const rawApiUrl = this.configService.get<string>('API_URL') || process.env.API_URL || 'http://localhost:3000';
+    const apiUrl = rawApiUrl.replace(/\/+$/, '');
 
     const listConnections = activeConnections.map((conn) => {
       const hasCredentials = conn.hasCredentials;
