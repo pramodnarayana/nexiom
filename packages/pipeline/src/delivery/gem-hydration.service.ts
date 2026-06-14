@@ -1,12 +1,12 @@
 import { Injectable, Logger, Inject } from "@nestjs/common";
-import { GlobalEntityMapRepositoryPort, GemMappingParams } from "../shared/ports/global-entity-map.repository.port.js";
+import { GlobalEntityMapRepositoryPort, GLOBAL_ENTITY_MAP_REPOSITORY_PORT, GemMappingParams } from "../shared/ports/global-entity-map.repository.port.js";
 
 @Injectable()
 export class GemHydrationService {
   private readonly logger = new Logger(GemHydrationService.name);
 
   constructor(
-    @Inject("GlobalEntityMapRepositoryPort")
+    @Inject(GLOBAL_ENTITY_MAP_REPOSITORY_PORT)
     private readonly gemRepository: GlobalEntityMapRepositoryPort,
   ) {}
 

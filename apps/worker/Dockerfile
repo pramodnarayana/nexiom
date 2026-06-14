@@ -10,7 +10,8 @@ WORKDIR /app
 # Copy lockfile and workspace files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY tsconfig.base.json ./
-# Copy all packages (since worker depends on engine, database, queue, pieces, etc.)
+COPY sdk ./sdk
+COPY plugins ./plugins
 COPY packages ./packages
 COPY engine ./engine
 COPY apps/worker ./apps/worker
@@ -18,6 +19,13 @@ COPY apps/worker ./apps/worker
 RUN pnpm install --frozen-lockfile && \
     pnpm -r --filter "@soopa/*" build && \
     pnpm --filter worker build
+
+# Dynamically extract all workspace manifests and dists (excluding plugins, as they are downloaded dynamically at runtime)
+SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
+RUN mkdir -p /pruned && \
+    cp package.json pnpm-lock.yaml pnpm-workspace.yaml /pruned/ && \
+    find apps/worker sdk packages engine -name "package.json" | tar -cf - -T - | tar -xf - -C /pruned/ && \
+    find apps/worker sdk packages engine -type d -name "dist" | tar -cf - -T - | tar -xf - -C /pruned/
 
 # Stage 2: Production
 FROM node:20-alpine AS runner
@@ -31,11 +39,8 @@ WORKDIR /app
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY tsconfig.base.json ./
-COPY apps/worker/package.json ./apps/worker/
-COPY packages ./packages
-COPY engine ./engine
+# Copy dynamically pruned manifests and entrypoints to prevent cache invalidation
+COPY --from=builder --chown=nodejs:nodejs /pruned ./
 
 # Install production dependencies
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
@@ -43,6 +48,7 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 # Copy built artifacts from builder
 COPY --from=builder --chown=nodejs:nodejs /app/apps/worker/dist ./apps/worker/dist
 COPY --from=builder --chown=nodejs:nodejs /app/packages ./packages
+COPY --from=builder --chown=nodejs:nodejs /app/sdk ./sdk
 COPY --from=builder --chown=nodejs:nodejs /app/engine ./engine
 
 USER nodejs

@@ -51,6 +51,12 @@ export interface OAuth2Auth {
      * @throws Error if the response is missing required fields.
      */
     validateConnectResponse?: (response: Record<string, unknown>) => void;
+    /**
+     * Optional piece-level extraction of the vendor's true tenant/account ID.
+     * Called after a successful token exchange to extract the unique account identifier 
+     * (e.g. Salesforce Org ID) from the token payload.
+     */
+    extractVendorTenantId?: (response: Record<string, unknown>) => string | undefined;
 }
 
 export interface CustomAuth {

@@ -116,15 +116,9 @@ importers:
       '@soopa/piece-framework':
         specifier: workspace:*
         version: link:../../sdk/framework
-      '@soopa/piece-quickbooks':
-        specifier: workspace:*
-        version: link:../../plugins/quickbooks/core
       '@soopa/piece-registry':
         specifier: workspace:*
         version: link:../../sdk/registry
-      '@soopa/piece-salesforce':
-        specifier: workspace:*
-        version: link:../../plugins/salesforce/core
       '@soopa/pipeline':
         specifier: workspace:*
         version: link:../../packages/pipeline
@@ -1463,13 +1457,13 @@ importers:
 
   plugins/domain/tms:
     dependencies:
-      '@soopa/piece-framework':
-        specifier: workspace:*
-        version: link:../../../sdk/framework
       drizzle-orm:
         specifier: 0.45.1
         version: 0.45.1(@opentelemetry/api@1.9.0)(@types/pg@8.16.0)(kysely@0.28.9)(pg@8.16.3)
     devDependencies:
+      '@soopa/piece-framework':
+        specifier: workspace:*
+        version: link:../../../sdk/framework
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.28
@@ -1479,13 +1473,13 @@ importers:
 
   plugins/quickbooks/core:
     dependencies:
-      '@soopa/piece-framework':
-        specifier: workspace:*
-        version: link:../../../sdk/framework
       dayjs:
         specifier: ^1.11.19
         version: 1.11.21
     devDependencies:
+      '@soopa/piece-framework':
+        specifier: workspace:*
+        version: link:../../../sdk/framework
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1495,13 +1489,13 @@ importers:
 
   plugins/salesforce/core:
     dependencies:
-      '@soopa/piece-framework':
-        specifier: workspace:*
-        version: link:../../../sdk/framework
       dayjs:
         specifier: ^1.11.19
         version: 1.11.21
     devDependencies:
+      '@soopa/piece-framework':
+        specifier: workspace:*
+        version: link:../../../sdk/framework
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1511,16 +1505,19 @@ importers:
 
   plugins/salesforce/revenova-piece:
     dependencies:
+      jsonata:
+        specifier: ^2.2.1
+        version: 2.2.1
+    devDependencies:
       '@soopa/domain-tms':
         specifier: workspace:*
         version: link:../../domain/tms
       '@soopa/piece-framework':
         specifier: workspace:*
         version: link:../../../sdk/framework
-      jsonata:
-        specifier: ^2.2.1
-        version: 2.2.1
-    devDependencies:
+      '@soopa/piece-salesforce':
+        specifier: workspace:*
+        version: link:../core
       '@types/jsonata':
         specifier: ^1.5.1
         version: 1.5.1
@@ -1529,14 +1526,13 @@ importers:
         version: 6.0.3
 
   plugins/salesforce/revenova-shard:
-    dependencies:
+    devDependencies:
       '@soopa/domain-tms':
         specifier: workspace:*
         version: link:../../domain/tms
       '@soopa/piece-framework':
         specifier: workspace:*
         version: link:../../../sdk/framework
-    devDependencies:
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -1569,6 +1565,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^4.0.18
         version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.28)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@20.19.28)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+      drizzle-orm:
+        specifier: 0.45.1
+        version: 0.45.1(@opentelemetry/api@1.9.0)(@types/pg@8.16.0)(kysely@0.28.9)(pg@8.16.3)
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -1596,6 +1595,9 @@ importers:
       '@soopa/dbmanager':
         specifier: workspace:*
         version: link:../../packages/dbmanager
+      '@soopa/domain-tms':
+        specifier: workspace:*
+        version: link:../../plugins/domain/tms
       '@soopa/piece-framework':
         specifier: workspace:*
         version: link:../framework

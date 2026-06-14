@@ -16,6 +16,13 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/shared/components/ui/dialog';
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from '@/shared/components/ui/sheet';
 import { type ProviderResponse, type ActiveConnectionResponse, type VendorParams, getConnectionCredentials } from '../api/connections.api';
 import { DynamicAuthForm } from './DynamicAuthForm';
 import { useConnections } from '../hooks/useConnections';
@@ -154,142 +161,128 @@ export function ActiveConnectionCard({ connection, provider, onDelete }: Readonl
 
     const webhookUrl = useMemo(() => {
         if (typeof window === 'undefined') return '';
-        // Use explicit webhook base URL if provided, otherwise derive from VITE_API_URL
-        let webhookBase = import.meta.env.VITE_WEBHOOK_BASE_URL ||
-                          (import.meta.env.VITE_API_URL ?
-                           import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '') :
-                           window.location.origin);
-        // Strip trailing slashes to prevent double-slash when appending /webhooks path
-        webhookBase = webhookBase.replace(/\/+$/, '');
-        return `${webhookBase}/webhooks/${connection.id}`;
-    }, [connection.id]);
+        
+        // If the backend provided a fully qualified absolute URL, use it directly
+        if (connection.webhookUrl && connection.webhookUrl.startsWith('http')) {
+            return connection.webhookUrl;
+        }
+
+        // Determine the base URL (VITE_API_URL, or fallback to window.location.origin)
+        let base = import.meta.env.VITE_API_URL || window.location.origin;
+        base = base.replace(/\/+$/, ''); // Remove trailing slashes
+        
+        // If backend provided a relative path, append it to the base
+        if (connection.webhookUrl && connection.webhookUrl.startsWith('/')) {
+            return `${base}${connection.webhookUrl}`;
+        }
+        
+        // Fallback default format
+        return `${base}/v1/webhooks/${connection.id}`;
+    }, [connection.id, connection.webhookUrl]);
+
+    const [detailsOpen, setDetailsOpen] = useState(false);
 
     return (
-        <div className="group relative flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-6 text-center shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5">
-            {/* Context Menu — top-right corner */}
-            <div className="absolute top-3 right-3 flex items-center gap-2">
-                <Badge
-                    variant="outline"
-                    className={`text-[10px] px-1.5 py-0 ${connection.envType === 'SANDBOX' ? 'border-amber-400 text-amber-600' : 'border-green-500 text-green-700'}`}
-                >
-                    {connection.envType}
-                </Badge>
-                <Badge variant={statusInfo.variant} className="text-[10px] px-1.5 py-0">
-                    {statusInfo.label}
-                </Badge>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-6 w-6">
-                            <MoreVertical className="h-4 w-4" />
-                            <span className="sr-only">Manage connection</span>
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => void handleOpenManage()} disabled={loadingManage || reconnecting || !provider}>
-                            {loadingManage ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                                <Settings className="mr-2 h-4 w-4" />
-                            )}
-                            Manage
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => void handleReconnect()} disabled={reconnecting || loadingManage || !provider}>
-                            {reconnecting ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                            )}
-                            Reconnect
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                            className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
-                            disabled={deleting || reconnecting || loadingManage}
-                            onClick={async () => {
-                                try {
-                                    setDeleting(true);
-                                    await remove(connection.id);
-                                    // Notify parent to refresh its connection list
-                                    if (onDelete) {
-                                        await onDelete(connection.id);
-                                    }
-                                } finally {
-                                    setDeleting(false);
-                                }
-                            }}
-                        >
-                            {deleting ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                                <Trash2 className="mr-2 h-4 w-4" />
-                            )}
-                            Delete
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
-
-            {/* Logo */}
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white border border-border shadow-sm overflow-hidden mt-2">
-                {(() => {
-                    if (!provider?.logoUrl) return <Plug2 className="h-7 w-7 text-muted-foreground" />;
-                    if (imgError) return <span className="text-2xl font-bold text-muted-foreground">{provider.displayName.charAt(0)}</span>;
-                    return (
-                        <img
-                            src={provider.logoUrl}
-                            alt={`${provider.displayName} logo`}
-                            className="h-9 w-9 object-contain"
-                            onError={() => setImgError(true)}
-                        />
-                    );
-                })()}
-            </div>
-
-
-
-            {/* Name + category */}
-            <div className="w-full pb-2">
-                <p className="font-semibold text-sm text-foreground truncate px-4" title={connection.displayName}>{connection.displayName}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{provider?.displayName || connection.appName}</p>
-                
-                <div className="px-4 mt-3">
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        className="w-full text-[11px] h-7 bg-secondary/50 hover:bg-secondary border border-border/50 text-muted-foreground hover:text-foreground transition-all"
-                        onClick={async (e) => {
-                            e.stopPropagation();
-                            if (!navigator.clipboard) {
-                                toast({
-                                    title: "Copy Failed",
-                                    description: "Clipboard API is not available in this browser.",
-                                    variant: "destructive"
-                                });
-                                return;
-                            }
-                            try {
-                                await navigator.clipboard.writeText(webhookUrl);
-                                toast({
-                                    title: "Webhook Copied",
-                                    description: "URL is ready to be pasted into the vendor platform."
-                                });
-                            } catch (err) {
-                                console.error('Failed to copy webhook URL:', err);
-                                toast({
-                                    title: "Copy Failed",
-                                    description: "Could not copy to clipboard. Please copy manually.",
-                                    variant: "destructive"
-                                });
-                            }
-                        }}
+        <>
+            <div
+                className="group relative flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-6 text-center shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5 cursor-pointer"
+                onClick={() => setDetailsOpen(prev => !prev)}
+                onKeyDown={(e) => {
+                    if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                        if (e.key === ' ') e.preventDefault();
+                        setDetailsOpen(prev => !prev);
+                    }
+                }}
+                tabIndex={0}
+                role="button"
+            >
+                {/* Context Menu — top-right corner */}
+                <div className="absolute top-3 right-3 flex items-center gap-2">
+                    <Badge
+                        variant="outline"
+                        className={`text-[10px] px-1.5 py-0 ${connection.envType === 'SANDBOX' ? 'border-amber-400 text-amber-600' : 'border-green-500 text-green-700'}`}
                     >
-                        Copy Webhook URL
-                    </Button>
+                        {connection.envType}
+                    </Badge>
+                    <Badge variant={statusInfo.variant} className="text-[10px] px-1.5 py-0">
+                        {statusInfo.label}
+                    </Badge>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => e.stopPropagation()}>
+                                <MoreVertical className="h-4 w-4" />
+                                <span className="sr-only">Manage connection</span>
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuItem onClick={() => void handleOpenManage()} disabled={loadingManage || reconnecting || !provider}>
+                                {loadingManage ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Settings className="mr-2 h-4 w-4" />
+                                )}
+                                Manage
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void handleReconnect()} disabled={reconnecting || loadingManage || !provider}>
+                                {reconnecting ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <RefreshCw className="mr-2 h-4 w-4" />
+                                )}
+                                Reconnect
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
+                                disabled={deleting || reconnecting || loadingManage}
+                                onClick={async () => {
+                                    try {
+                                        setDeleting(true);
+                                        await remove(connection.id);
+                                        if (onDelete) {
+                                            await onDelete(connection.id);
+                                        }
+                                    } finally {
+                                        setDeleting(false);
+                                    }
+                                }}
+                            >
+                                {deleting ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                )}
+                                Delete
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+
+                {/* Logo */}
+                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white border border-border shadow-sm overflow-hidden mt-2">
+                    {(() => {
+                        if (!provider?.logoUrl) return <Plug2 className="h-7 w-7 text-muted-foreground" />;
+                        if (imgError) return <span className="text-2xl font-bold text-muted-foreground">{provider.displayName.charAt(0)}</span>;
+                        return (
+                            <img
+                                src={provider.logoUrl}
+                                alt={`${provider.displayName} logo`}
+                                className="h-9 w-9 object-contain"
+                                onError={() => setImgError(true)}
+                            />
+                        );
+                    })()}
+                </div>
+
+                {/* Name + category */}
+                <div className="w-full pb-2">
+                    <p className="font-semibold text-sm text-foreground truncate px-4" title={connection.displayName}>{connection.displayName}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{provider?.displayName || connection.appName}</p>
                 </div>
             </div>
 
             <Dialog open={manageOpen} onOpenChange={setManageOpen}>
-                <DialogContent className="sm:max-w-[480px] w-full">
+                <DialogContent className="sm:max-w-[480px] w-full" onClick={(e) => e.stopPropagation()}>
                     <DialogHeader>
                         <DialogTitle>Manage {provider?.displayName}</DialogTitle>
                         <DialogDescription>
@@ -308,6 +301,104 @@ export function ActiveConnectionCard({ connection, provider, onDelete }: Readonl
                     )}
                 </DialogContent>
             </Dialog>
-        </div>
+
+            {/* Separate Sheet for Connection Details */}
+            <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
+                <SheetContent side="right" className="w-[400px] sm:w-[540px] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                    <SheetHeader className="mb-6">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border shadow-sm overflow-hidden bg-white shrink-0">
+                                {(() => {
+                                    if (!provider?.logoUrl) return <Plug2 className="h-5 w-5 text-muted-foreground" />;
+                                    if (imgError) return <span className="text-lg font-bold text-muted-foreground">{provider.displayName.charAt(0)}</span>;
+                                    return <img src={provider.logoUrl} alt="logo" className="h-6 w-6 object-contain" />;
+                                })()}
+                            </div>
+                            <div>
+                                <SheetTitle className="text-left text-lg">{connection.displayName}</SheetTitle>
+                                <SheetDescription className="text-left">
+                                    {provider?.displayName || connection.appName} Integration
+                                </SheetDescription>
+                            </div>
+                        </div>
+                    </SheetHeader>
+
+                    <div className="flex flex-col gap-6">
+                        {/* Status & Environment */}
+                        <div className="flex items-center gap-4">
+                            <div className="flex flex-col gap-1">
+                                <span className="text-xs text-muted-foreground font-medium">Status</span>
+                                <Badge variant={statusInfo.variant} className="w-fit">{statusInfo.label}</Badge>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <span className="text-xs text-muted-foreground font-medium">Environment</span>
+                                <Badge variant="outline" className={`w-fit ${connection.envType === 'SANDBOX' ? 'border-amber-400 text-amber-600' : 'border-green-500 text-green-700'}`}>
+                                    {connection.envType}
+                                </Badge>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <span className="text-xs text-muted-foreground font-medium">Created</span>
+                                <span className="text-sm">{new Date(connection.createdAt).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+
+                        <div className="w-full h-px bg-border/50" />
+
+                        {/* Identifiers */}
+                        <div className="flex flex-col gap-4">
+                            <h3 className="font-semibold text-sm">Identifiers</h3>
+                            
+                            <div className="flex flex-col gap-1.5">
+                                <span className="text-xs font-medium text-muted-foreground">Internal Connection ID</span>
+                                <code className="text-xs bg-secondary/50 p-2 rounded-md break-all border border-border/50">
+                                    {connection.id}
+                                </code>
+                            </div>
+
+                            {connection.vendorTenantId && (
+                                <div className="flex flex-col gap-1.5">
+                                    <span className="text-xs font-medium text-muted-foreground">Vendor Tenant ID (Realm / Org ID)</span>
+                                    <code className="text-xs bg-secondary/50 p-2 rounded-md break-all border border-border/50">
+                                        {connection.vendorTenantId}
+                                    </code>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="w-full h-px bg-border/50" />
+
+                        {/* Webhooks */}
+                        <div className="flex flex-col gap-4">
+                            <h3 className="font-semibold text-sm">Webhooks</h3>
+                            <p className="text-sm text-muted-foreground">
+                                Use this URL to configure real-time event subscriptions in the vendor's developer console.
+                            </p>
+                            
+                            <div className="flex flex-col gap-2">
+                                <span className="text-xs font-medium text-muted-foreground">Target URL</span>
+                                <div className="flex gap-2 items-start">
+                                    <code className="flex-1 text-xs bg-secondary/50 p-2 rounded-md break-all border border-border/50">
+                                        {webhookUrl}
+                                    </code>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        className="shrink-0 h-[34px]"
+                                        onClick={async () => {
+                                            if (navigator.clipboard) {
+                                                await navigator.clipboard.writeText(webhookUrl);
+                                                toast({ title: "Webhook Copied!" });
+                                            }
+                                        }}
+                                    >
+                                        Copy
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </SheetContent>
+            </Sheet>
+        </>
     );
 }

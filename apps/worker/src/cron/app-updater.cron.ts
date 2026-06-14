@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { CheckPieceUpdatesUseCase } from "../core/use-cases/app-installer/check-piece-updates.use-case.js";
 import { NestPieceRegistryAdapter } from "../adapters/outbound/nest-piece-registry.adapter.js";
-import { DrizzleWorkspacePiecesRepositoryAdapter } from "../adapters/outbound/drizzle-workspace-pieces.repository.js";
+import { DrizzleGlobalPiecesRepositoryAdapter } from "../adapters/outbound/drizzle-global-pieces.repository.js";
 import { NestQueuePublisherAdapter } from "../adapters/outbound/nest-queue.publisher.js";
 
 @Injectable()
@@ -10,17 +10,20 @@ export class AppUpdaterCron {
   private readonly logger = new Logger(AppUpdaterCron.name);
 
   constructor(
-    private readonly repositoryAdapter: DrizzleWorkspacePiecesRepositoryAdapter,
-    private readonly registryAdapter: NestPieceRegistryAdapter,
-    private readonly queuePublisherAdapter: NestQueuePublisherAdapter,
+    private readonly repository: DrizzleGlobalPiecesRepositoryAdapter,
+    private readonly registry: NestPieceRegistryAdapter,
+    private readonly queuePublisher: NestQueuePublisherAdapter,
   ) {}
 
-  @Cron(CronExpression.EVERY_12_HOURS)
-  async checkUpdates() {
+  @Cron(CronExpression.EVERY_HOUR)
+  async handleCron() {
+    this.logger.log("Checking for app updates...");
+
     const useCase = new CheckPieceUpdatesUseCase(
-      this.repositoryAdapter,
-      this.registryAdapter,
-      this.queuePublisherAdapter,
+      this.repository,
+      this.registry,
+      this.queuePublisher,
+      new Logger(CheckPieceUpdatesUseCase.name),
     );
 
     try {

@@ -5,15 +5,20 @@
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "lint": "eslint ."
   },
-  "dependencies": {
+  "devDependencies": {
+    "typescript": "^5.7.3",
     "@soopa/domain-tms": "workspace:*",
     "@soopa/piece-framework": "workspace:*"
-  },
-  "devDependencies": {
-    "typescript": "^5.7.3"
   }
 }

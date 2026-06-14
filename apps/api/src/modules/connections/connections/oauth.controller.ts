@@ -541,6 +541,37 @@ export class OAuthController {
 
     const envType = deriveEnvType(vendorParams);
 
+    // Extract vendorTenantId from frontend callback param OR from token payload via Piece Framework
+    const pieceDef = this.pieceRegistry.getPiece(body.providerName);
+    const authDef = pieceDef?.auth;
+    let extractedVendorTenantId: string | undefined;
+    if (
+      authDef &&
+      'extractVendorTenantId' in authDef &&
+      typeof authDef.extractVendorTenantId === 'function'
+    ) {
+      try {
+        extractedVendorTenantId = authDef.extractVendorTenantId(tokens);
+      } catch (e) {
+        this.logger.warn(
+          `Failed to extract vendorTenantId for ${body.providerName}: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
+
+    // Prefer provider-extracted vendorTenantId; validate if both present
+    if (
+      extractedVendorTenantId &&
+      body.vendorTenantId &&
+      extractedVendorTenantId !== body.vendorTenantId
+    ) {
+      throw new BadRequestException(
+        `vendorTenantId mismatch: extracted="${extractedVendorTenantId}" vs supplied="${body.vendorTenantId}"`,
+      );
+    }
+    const finalVendorTenantId =
+      extractedVendorTenantId ?? body.vendorTenantId ?? undefined;
+
     const stringifiedValue = JSON.stringify(valueBlob);
     await this.storeOAuthConnectionUseCase.execute({
       id: body.dataSourceId,
@@ -553,6 +584,7 @@ export class OAuthController {
       expiresAt,
       metadata: mergedMetadata,
       envType,
+      vendorTenantId: finalVendorTenantId,
     });
 
     return {

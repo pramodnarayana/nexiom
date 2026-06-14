@@ -1,13 +1,12 @@
 {
   "name": "@soopa/application-salesforce-revenova",
-  "version": "0.1.0",
-  "type": "module",
-  "private": true,
+  "version": "0.6.7",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
@@ -18,13 +17,18 @@
     "clean": "rm -rf dist",
     "lint": "eslint ."
   },
-  "dependencies": {
-    "@soopa/domain-tms": "workspace:*",
-    "@soopa/piece-framework": "workspace:*",
-    "jsonata": "^2.2.1"
-  },
   "devDependencies": {
+    "@soopa/piece-framework": "workspace:*",
+    "@soopa/domain-tms": "workspace:*",
+    "@soopa/piece-salesforce": "workspace:*",
     "@types/jsonata": "^1.5.1",
     "typescript": "^6.0.3"
-  }
+  },
+  "dependencies": {
+    "jsonata": "^2.2.1"
+  },
+  "files": [
+    "dist",
+    "mappings"
+  ]
 }

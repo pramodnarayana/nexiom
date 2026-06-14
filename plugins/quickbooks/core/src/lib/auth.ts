@@ -4,10 +4,6 @@ export const quickbooksAuth = PieceAuth.OAuth2({
     description: 'You can find Company ID under **settings->Additional Info**.',
     required: true,
     props: {
-        companyId: Property.ShortText({
-            displayName: 'Company ID',
-            required: true,
-        }),
         environment: Property.StaticDropdown({
             displayName: 'Environment',
             description: 'Choose environment',

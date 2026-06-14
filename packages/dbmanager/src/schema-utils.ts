@@ -4,16 +4,25 @@ import { createHash } from 'node:crypto';
  * Computes the deterministic physical PostgreSQL schema name for a tenant's workspace connection.
  * Used for Tenant-per-Database physical isolation.
  *
- * @param connectionId The UUID of the app_connection
+ * @param tenantId The UUID of the tenant
  * @param appName The provider/app name (e.g., "salesforce", "quickbooks")
+ * @param vendorTenantId The unique identifier of the 3rd party account (e.g. Realm ID, Org ID)
+ * @param externalId The fallback deterministic identifier based on the user's display name
  * @returns The isolated schema name (e.g., "ws_salesforce_8f3a9b...")
  */
 export function getWorkspaceSchemaName(
-  connectionId: string,
+  tenantId: string,
   appName: string,
+  vendorTenantId?: string,
+  externalId?: string,
 ): string {
+  // If we have the true vendor ID, use it! Otherwise fallback to the external ID (which is derived from Display Name)
+  const deterministicKey = vendorTenantId 
+    ? `${tenantId}-${vendorTenantId}` 
+    : `${tenantId}-${externalId ?? 'unknown'}`;
+
   const hashedSuffix = createHash('sha256')
-    .update(connectionId)
+    .update(deterministicKey)
     .digest('hex')
     .substring(0, 16);
 

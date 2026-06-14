@@ -2,7 +2,6 @@ import type { NormalizerFn, NormalizedRecord } from '@soopa/piece-framework';
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import jsonata from 'jsonata';
 import type { Expression } from 'jsonata';
 
@@ -12,8 +11,6 @@ import type { Expression } from 'jsonata';
 // Converts Salesforce/RTMS API field names into the TMS canonical data model
 // using a dynamically loaded JSONata expression.
 // ---------------------------------------------------------------------------
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Pre-compile the JSONata expression on module load.
 // In the future, this will be fetched from MappingsService Redis cache.

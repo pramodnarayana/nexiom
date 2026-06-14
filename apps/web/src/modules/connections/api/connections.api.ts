@@ -38,6 +38,8 @@ export interface ActiveConnectionResponse {
     envType: 'PRODUCTION' | 'SANDBOX';
     hasCredentials?: boolean;
     metadata?: Record<string, unknown>;
+    vendorTenantId?: string;
+    webhookUrl?: string;
     expiresAt?: string;
     createdAt: string;
 }

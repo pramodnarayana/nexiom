@@ -59,7 +59,24 @@ export class PieceLoaderService {
     expectedName: string,
   ): Promise<Piece | null> {
     try {
-      const mod = await this.resolver.resolve(packageName);
+      let mod = await this.resolver.resolve(packageName);
+
+      // Inversion of Control (IoC): Inject host APIs if the plugin exports a register function.
+      let registerFn = mod.register;
+      if (typeof registerFn !== 'function' && mod.default && typeof (mod.default as any).register === 'function') {
+         registerFn = (mod.default as any).register;
+      }
+
+      if (typeof registerFn === 'function') {
+        const registeredPiece = registerFn();
+        if (this.isPiece(registeredPiece)) {
+          // Wrap it so extractPiece finds it easily
+          mod = { default: registeredPiece };
+        } else {
+          this.logger.warn(`Plugin ${packageName} exported register() but it did not return a valid Piece.`);
+        }
+      }
+
       const piece = this.extractPiece(mod, expectedName);
       if (!piece) {
         this.logger.warn(
@@ -67,8 +84,8 @@ export class PieceLoaderService {
         );
       }
       return piece;
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+    } catch (err: any) {
+      const msg = err && err.stack ? err.stack : String(err);
       this.logger.error(
         `Failed to import piece package "${packageName}": ${msg}`,
       );

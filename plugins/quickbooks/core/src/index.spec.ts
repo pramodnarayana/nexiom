@@ -1,15 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { quickbooks } from './index.js';
+import { register } from './index.js';
 import { NativeFetchAdapter, QuickBooksFetchError } from './adapters/native-fetch.adapter.js';
 
 describe('quickbooks piece', () => {
     let getSpy: ReturnType<typeof vi.spyOn>;
     let postSpy: ReturnType<typeof vi.spyOn>;
+    let quickbooks: ReturnType<typeof register>;
 
     beforeEach(() => {
         vi.clearAllMocks();
         getSpy = vi.spyOn(NativeFetchAdapter.prototype, 'get');
         postSpy = vi.spyOn(NativeFetchAdapter.prototype, 'post');
+        quickbooks = register();
     });
 
     describe('executeAction', () => {

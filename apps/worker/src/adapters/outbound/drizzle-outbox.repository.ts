@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, getTableName } from "drizzle-orm";
 import type { DrizzleDb } from "@soopa/database";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 import { randomUUID } from "crypto";
@@ -28,7 +28,7 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
     batchSize: number,
   ): Promise<OutboxRow[]> {
     const claimToken = randomUUID();
-    const tableName = this.table._.name;
+    const tableName = getTableName(this.table);
 
     // Use raw SQL identifier for schema scoping
     const claimed = await this.db.transaction(async (tx) => {
@@ -103,9 +103,7 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
   ): Promise<void> {
     const condition = this.buildCondition(rowId, claimToken);
 
-    // Fallback logic for older tables like global_registry_outbox which don't use RETRY status
-    const status =
-      this.table._.name === "global_registry_outbox" ? "PENDING" : "RETRY";
+    const status = "RETRY";
 
     await this.db.transaction(async (tx) => {
       await tx.execute(
@@ -131,9 +129,7 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
   ): Promise<void> {
     const condition = this.buildCondition(rowId, claimToken);
 
-    // Fallback logic for global_registry_outbox
-    const status =
-      this.table._.name === "global_registry_outbox" ? "FAILED" : "FAIL";
+    const status = "FAIL";
 
     await this.db.transaction(async (tx) => {
       await tx.execute(
@@ -155,7 +151,7 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
         return sql`${this.table.id} = ${rowId} AND ${this.table.status} = 'PROCESSING' AND ${this.table.claimToken} = ${claimToken}`;
       } else {
         throw new Error(
-          `claimToken is required for tokenized table ${this.table._.name} but was null/undefined`,
+          `claimToken is required for tokenized table ${getTableName(this.table)} but was null/undefined`,
         );
       }
     }

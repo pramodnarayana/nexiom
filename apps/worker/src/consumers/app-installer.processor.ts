@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, Inject } from "@nestjs/common";
+import { Injectable, OnModuleInit, Inject, Logger } from "@nestjs/common";
 import {
   QUEUE_SERVICE,
   QueueName,
@@ -7,25 +7,28 @@ import {
 } from "@soopa/queue";
 import { InstallPieceUseCase } from "../core/use-cases/app-installer/install-piece.use-case.js";
 import { NestPieceRegistryAdapter } from "../adapters/outbound/nest-piece-registry.adapter.js";
-import { DrizzleWorkspacePiecesRepositoryAdapter } from "../adapters/outbound/drizzle-workspace-pieces.repository.js";
+import { DrizzleGlobalPiecesRepositoryAdapter } from "../adapters/outbound/drizzle-global-pieces.repository.js";
 
 @Injectable()
 export class AppInstallerProcessor implements OnModuleInit {
+  private readonly logger = new Logger(InstallPieceUseCase.name);
+
   constructor(
     @Inject(QUEUE_SERVICE) private readonly queueService: IQueueService,
     private readonly registryAdapter: NestPieceRegistryAdapter,
-    private readonly repositoryAdapter: DrizzleWorkspacePiecesRepositoryAdapter,
+    private readonly repositoryAdapter: DrizzleGlobalPiecesRepositoryAdapter,
   ) {}
 
   onModuleInit() {
+    const useCase = new InstallPieceUseCase(
+      this.registryAdapter,
+      this.repositoryAdapter,
+      this.logger,
+    );
+
     this.queueService.consume(
       QueueName.PluginInstallQueue,
       async (event: PluginInstallEvent) => {
-        const useCase = new InstallPieceUseCase(
-          this.registryAdapter,
-          this.repositoryAdapter,
-        );
-
         await useCase.execute({
           packageName: event.packageName,
           version: event.version,

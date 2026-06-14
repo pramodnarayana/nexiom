@@ -29,15 +29,9 @@ import {
 import { QueueModule } from '@soopa/queue';
 import { SchedulerModule } from '../scheduler/scheduler.module.js';
 
-import { WorkspacePiecesController } from './workspace-pieces.controller.js';
-
 @Module({
   imports: [DatabaseModule, QueueModule, SchedulerModule],
-  controllers: [
-    WorkspacesController,
-    WorkspaceConnectionsController,
-    WorkspacePiecesController,
-  ],
+  controllers: [WorkspacesController, WorkspaceConnectionsController],
   providers: [
     CapacityManagerService,
 

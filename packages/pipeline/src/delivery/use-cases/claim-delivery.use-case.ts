@@ -4,8 +4,14 @@ import { IOutboundGatewayPort } from "../../shared/domain.js";
 import { DeliveryRetryService } from "../delivery-retry.service.js";
 import { sanitizeErrorObject } from "../../utils.js";
 import { MAX_DELIVERY_ATTEMPTS } from "../delivery.service.js";
-import { ConnectionRepositoryPort } from "../../shared/ports/connection.repository.port.js";
-import { OutboundGatewayRepositoryPort } from "../../shared/ports/outbound-gateway.repository.port.js";
+import {
+  ConnectionRepositoryPort,
+  CONNECTION_REPOSITORY_PORT,
+} from "../../shared/ports/connection.repository.port.js";
+import {
+  OutboundGatewayRepositoryPort,
+  OUTBOUND_GATEWAY_REPOSITORY_PORT,
+} from "../../shared/ports/outbound-gateway.repository.port.js";
 
 export interface ClaimDeliveryInput {
   traceId: string;
@@ -63,9 +69,9 @@ export class ClaimDeliveryUseCase {
 
   constructor(
     private readonly storageResolver: StorageResolverService,
-    @Inject("ConnectionRepositoryPort")
+    @Inject(CONNECTION_REPOSITORY_PORT)
     private readonly connectionPort: ConnectionRepositoryPort,
-    @Inject("OutboundGatewayRepositoryPort")
+    @Inject(OUTBOUND_GATEWAY_REPOSITORY_PORT)
     private readonly outboundGatewayRepository: OutboundGatewayRepositoryPort,
     @Inject(forwardRef(() => DeliveryRetryService))
     private readonly retryService: DeliveryRetryService,

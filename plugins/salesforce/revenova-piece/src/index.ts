@@ -1,9 +1,8 @@
 /* v8 ignore start */
-import { registerReplicaExtractor, registerNormalizer, registerAppWebhookResponse, registerNormalizedWriter, registerTargetBuilder, registerDomainProvisioner } from '@soopa/piece-framework';
+import type { Piece, AppsConnectorDb } from '@soopa/piece-framework';
+import { PieceCategory } from '@soopa/piece-framework';
 import { upsertRevenovaObject } from './upsertRevenovaObject.js';
 import { normalizeRevenovaToTms } from './normalizeRevenovaToTms.js';
-import { tmsNormalizedWriter, tmsTargetBuilder, provisionTmsTables } from '@soopa/domain-tms';
-import type { AppsConnectorDb } from '@soopa/piece-framework';
 
 const SALESFORCE_OUTBOUND_ACK = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
   <soapenv:Body>
@@ -13,16 +12,21 @@ const SALESFORCE_OUTBOUND_ACK = `<soapenv:Envelope xmlns:soapenv="http://schemas
   </soapenv:Body>
 </soapenv:Envelope>`;
 
-export function initializeRevenovaApplicationRegistry() {
-    registerReplicaExtractor('salesforce', 'revenova', upsertRevenovaObject);
-    registerNormalizer('salesforce', 'revenova', normalizeRevenovaToTms);
-    registerNormalizedWriter('salesforce', 'revenova', tmsNormalizedWriter);
-    registerTargetBuilder('salesforce', 'revenova', tmsTargetBuilder);
-    registerDomainProvisioner('salesforce', (db, schemaName) =>
-        provisionTmsTables(db as AppsConnectorDb, schemaName)
+import * as frameworkApi from '@soopa/piece-framework';
+import * as domainTmsApi from '@soopa/domain-tms';
+
+import { createSalesforcePiece } from '@soopa/piece-salesforce';
+
+export function register(): Piece {
+    frameworkApi.registerReplicaExtractor('salesforce', 'revenova', upsertRevenovaObject);
+    frameworkApi.registerNormalizer('salesforce', 'revenova', normalizeRevenovaToTms);
+    frameworkApi.registerNormalizedWriter('salesforce', 'revenova', domainTmsApi.tmsNormalizedWriter);
+    frameworkApi.registerTargetBuilder('salesforce', 'revenova', domainTmsApi.tmsTargetBuilder);
+    frameworkApi.registerDomainProvisioner('salesforce', (db, schemaName) =>
+        domainTmsApi.provisionTmsTables(db as AppsConnectorDb, schemaName)
     );
 
-    registerAppWebhookResponse((body, headers) => {
+    frameworkApi.registerAppWebhookResponse((body, headers) => {
         // Normalize content-type to lowercase for case-insensitive comparison
         const contentType = (headers['content-type'] || (typeof body === 'object' && body && 'contentType' in body ? String(body.contentType) : '')).toLowerCase();
 
@@ -55,8 +59,14 @@ export function initializeRevenovaApplicationRegistry() {
         
         return null;
     });
-}
 
-// Invoke at module load time to ensure handlers are registered before lookups
-initializeRevenovaApplicationRegistry();
+    return createSalesforcePiece({
+        name: 'salesforce-revenova',
+        displayName: 'Revenova',
+        description: 'Connect to Revenova TMS to map loads and stops.',
+        logoUrl: 'https://cdn.activepieces.com/pieces/salesforce.png',
+        categories: [PieceCategory.SALES_AND_CRM],
+        appProfile: 'revenova'
+    });
+}
 /* v8 ignore stop */

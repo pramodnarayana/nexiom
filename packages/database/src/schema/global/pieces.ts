@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, boolean, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, boolean, timestamp, jsonb, text } from 'drizzle-orm/pg-core';
 
 /**
  * Canonical registry of all Piece integrations available in the platform.
@@ -17,6 +17,21 @@ export const pieces = pgTable('pieces', {
 
     /** Human-readable label shown in the UI e.g. "QuickBooks Online" */
     displayName: varchar('display_name', { length: 255 }).notNull(),
+
+    /** Short description of what the piece does */
+    description: text('description'),
+
+    /** Categories for filtering in the UI (e.g. ['CRM', 'Marketing']) */
+    categories: jsonb('categories').$type<string[]>(),
+
+    /** The type of authentication used (e.g. 'OAUTH2', 'BASIC', 'API_KEY') */
+    authType: varchar('auth_type', { length: 100 }),
+
+    /** The UI schema defining the authentication fields/props needed */
+    authSchema: jsonb('auth_schema').$type<Record<string, unknown>>(),
+
+    /** Aliases or specialized profiles for this piece */
+    aliases: jsonb('aliases').$type<Record<string, unknown>[]>(),
 
     /** CDN URL of the piece's logo for the connection selector UI */
     logoUrl: varchar('logo_url', { length: 1024 }),

@@ -26,6 +26,7 @@
 		"@soopa/database": "workspace:*",
 		"@soopa/dbmanager": "workspace:*",
 		"@soopa/credentials": "workspace:*",
+		"@soopa/domain-tms": "workspace:*",
 		"@soopa/piece-framework": "workspace:*",
 		"@soopa/queue": "workspace:*",
 		"live-plugin-manager": "^1.1.0",

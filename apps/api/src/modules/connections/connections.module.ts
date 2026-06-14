@@ -1,4 +1,5 @@
 import { Module, Global } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   TokenManagerService,
   OAuthRefreshClient,
@@ -109,27 +110,37 @@ import { DeleteConnectionUseCase } from './core/use-cases/delete-connection.use-
     },
     {
       provide: GetAuthorizationUrlUseCase,
-      useFactory: (pieceRegistry: PieceRegistryPort) => {
-        return new GetAuthorizationUrlUseCase(
-          pieceRegistry,
-          process.env.FRONTEND_URL || 'http://localhost:3000',
-        );
+      useFactory: (
+        pieceRegistry: PieceRegistryPort,
+        configService: ConfigService,
+      ) => {
+        // Enterprise-grade: Fetch strongly-typed config instead of naked process.env
+        const apiUrl =
+          configService.get<string>('API_URL') || 'http://localhost:3000/api';
+        const apiBaseUrl = apiUrl.replace(/\/api\/?$/, '');
+
+        return new GetAuthorizationUrlUseCase(pieceRegistry, apiBaseUrl);
       },
-      inject: [NestPieceRegistryAdapter],
+      inject: [NestPieceRegistryAdapter, ConfigService],
     },
     {
       provide: ExchangeOAuthTokenUseCase,
       useFactory: (
         pieceRegistry: PieceRegistryPort,
         oauthClient: OAuthClientPort,
+        configService: ConfigService,
       ) => {
+        const apiUrl =
+          configService.get<string>('API_URL') || 'http://localhost:3000/api';
+        const apiBaseUrl = apiUrl.replace(/\/api\/?$/, '');
+
         return new ExchangeOAuthTokenUseCase(
           pieceRegistry,
           oauthClient,
-          process.env.FRONTEND_URL || 'http://localhost:3000',
+          apiBaseUrl,
         );
       },
-      inject: [NestPieceRegistryAdapter, HttpOAuthClientAdapter],
+      inject: [NestPieceRegistryAdapter, HttpOAuthClientAdapter, ConfigService],
     },
     {
       provide: DeleteConnectionUseCase,

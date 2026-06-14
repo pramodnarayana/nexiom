@@ -6,6 +6,8 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { EncryptionModule } from '@soopa/security';
+import { CredentialsModule } from '@soopa/credentials';
+import { RegistryOAuthRefreshClient } from '@soopa/pipeline';
 import { UsersModule } from '../modules/identity/users/users.module.js';
 import { TenantsModule } from '../modules/identity/tenants/tenants.module.js';
 import { AuthModule } from '@soopa/auth';
@@ -39,11 +41,14 @@ import { MappingsModule } from '../modules/mappings/mappings.module.js';
 import { GitopsModule } from '../modules/gitops/gitops.module.js';
 import { PluginsModule } from '../modules/plugins/plugins.module.js';
 
+import { validateEnv } from '../config/env.validation.js';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env.local', '.env', '../../.env'],
+      validate: validateEnv,
     }),
     // ObservabilityModule must be first so pino is active before all other modules
     // bootstrap and emit their own startup logs.
@@ -53,7 +58,7 @@ import { PluginsModule } from '../modules/plugins/plugins.module.js';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
-        mode: cfg.get('INFRA_MODE') === 'local' ? 'local' : 'kms',
+        mode: cfg.get('INFRA_MODE') === 'aws' ? 'kms' : 'local',
         encryptionKey: cfg.get('ENCRYPTION_KEY'),
         kmsKeyId: cfg.get('KMS_KEY_ID'),
         kmsEndpoint: cfg.get('KMS_ENDPOINT'),
@@ -71,6 +76,11 @@ import { PluginsModule } from '../modules/plugins/plugins.module.js';
     // Global cron scheduler — required for PollerService and DlqProcessorService
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot({ global: true }),
+    CredentialsModule.forRootAsync({
+      providers: [RegistryOAuthRefreshClient],
+      useFactory: (client: RegistryOAuthRefreshClient) => client,
+      inject: [RegistryOAuthRefreshClient],
+    }),
     IdentityModule.registerAsync({
       imports: [
         ConfigModule,

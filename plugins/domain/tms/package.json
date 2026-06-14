@@ -2,7 +2,6 @@
   "name": "@soopa/domain-tms",
   "version": "0.1.0",
   "type": "module",
-  "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -18,13 +17,11 @@
     "clean": "rm -rf dist",
     "lint": "eslint ."
   },
-  "dependencies": {
-    "@soopa/piece-framework": "workspace:*"
-  },
   "peerDependencies": {
     "drizzle-orm": "^0.45.1"
   },
   "devDependencies": {
+    "@soopa/piece-framework": "workspace:*",
     "@types/node": "^20.0.0",
     "typescript": "^6.0.3"
   }

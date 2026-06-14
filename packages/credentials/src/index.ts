@@ -14,6 +14,7 @@ export * from './oauth/redis-lock.js';
 
 // Events
 export * from './events/index.js';
+export * from './credentials.module.js';
 export * from './interfaces/event-publisher.interface.js';
 export * from './services/credentials-event-publisher.service.js';
 
