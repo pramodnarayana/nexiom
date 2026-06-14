@@ -1,9 +1,6 @@
 {
   "name": "@soopa/application-salesforce-revenova",
   "version": "0.6.7",
-  "publishConfig": {
-    "registry": "${NPM_PUBLISH_REGISTRY}"
-  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -20,15 +17,15 @@
     "clean": "rm -rf dist",
     "lint": "eslint ."
   },
-  "dependencies": {
-    "jsonata": "^2.2.1",
-    "@soopa/domain-tms": "workspace:*",
-    "@soopa/piece-salesforce": "workspace:*"
-  },
   "devDependencies": {
     "@soopa/piece-framework": "workspace:*",
+    "@soopa/domain-tms": "workspace:*",
+    "@soopa/piece-salesforce": "workspace:*",
     "@types/jsonata": "^1.5.1",
     "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "jsonata": "^2.2.1"
   },
   "files": [
     "dist",

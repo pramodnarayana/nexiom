@@ -1457,9 +1457,6 @@ importers:
 
   plugins/domain/tms:
     dependencies:
-      '@soopa/piece-framework':
-        specifier: workspace:*
-        version: link:../../../sdk/framework
       drizzle-orm:
         specifier: 0.45.1
         version: 0.45.1(@opentelemetry/api@1.9.0)(@types/pg@8.16.0)(kysely@0.28.9)(pg@8.16.3)
@@ -1473,13 +1470,13 @@ importers:
 
   plugins/quickbooks/core:
     dependencies:
-      '@soopa/piece-framework':
-        specifier: workspace:*
-        version: link:../../../sdk/framework
       dayjs:
         specifier: ^1.11.19
         version: 1.11.21
     devDependencies:
+      '@soopa/piece-framework':
+        specifier: workspace:*
+        version: link:../../../sdk/framework
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1489,13 +1486,13 @@ importers:
 
   plugins/salesforce/core:
     dependencies:
-      '@soopa/piece-framework':
-        specifier: workspace:*
-        version: link:../../../sdk/framework
       dayjs:
         specifier: ^1.11.19
         version: 1.11.21
     devDependencies:
+      '@soopa/piece-framework':
+        specifier: workspace:*
+        version: link:../../../sdk/framework
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1505,19 +1502,19 @@ importers:
 
   plugins/salesforce/revenova-piece:
     dependencies:
-      '@soopa/domain-tms':
-        specifier: workspace:*
-        version: link:../../domain/tms
-      '@soopa/piece-salesforce':
-        specifier: workspace:*
-        version: link:../core
       jsonata:
         specifier: ^2.2.1
         version: 2.2.1
     devDependencies:
+      '@soopa/domain-tms':
+        specifier: workspace:*
+        version: link:../../domain/tms
       '@soopa/piece-framework':
         specifier: workspace:*
         version: link:../../../sdk/framework
+      '@soopa/piece-salesforce':
+        specifier: workspace:*
+        version: link:../core
       '@types/jsonata':
         specifier: ^1.5.1
         version: 1.5.1
@@ -1526,14 +1523,13 @@ importers:
         version: 6.0.3
 
   plugins/salesforce/revenova-shard:
-    dependencies:
+    devDependencies:
       '@soopa/domain-tms':
         specifier: workspace:*
         version: link:../../domain/tms
       '@soopa/piece-framework':
         specifier: workspace:*
         version: link:../../../sdk/framework
-    devDependencies:
       typescript:
         specifier: ^5.7.3
         version: 5.9.3

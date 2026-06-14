@@ -2,9 +2,6 @@
   "name": "@soopa/domain-tms",
   "version": "0.1.0",
   "type": "module",
-  "publishConfig": {
-    "registry": "${NPM_PUBLISH_REGISTRY}"
-  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -20,7 +17,7 @@
     "clean": "rm -rf dist",
     "lint": "eslint ."
   },
-  "dependencies": {
+  "devDependencies": {
     "@soopa/piece-framework": "workspace:*"
   },
   "peerDependencies": {

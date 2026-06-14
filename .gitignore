@@ -47,3 +47,4 @@ n8n-reference/
 
 # TypeScript Build Info
 *.tsbuildinfo
+verdaccio/storage/
