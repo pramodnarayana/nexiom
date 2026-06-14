@@ -17,13 +17,11 @@
     "clean": "rm -rf dist",
     "lint": "eslint ."
   },
-  "devDependencies": {
-    "@soopa/piece-framework": "workspace:*"
-  },
   "peerDependencies": {
     "drizzle-orm": "^0.45.1"
   },
   "devDependencies": {
+    "@soopa/piece-framework": "workspace:*",
     "@types/node": "^20.0.0",
     "typescript": "^6.0.3"
   }
