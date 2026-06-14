@@ -322,17 +322,38 @@ function describeConfig(
 /* v8 ignore start */
 import * as frameworkApi from '@soopa/piece-framework';
 
+/**
+ * Shared helper to resolve company/realm ID and environment from various input formats.
+ * Supports: companyId, realmId, realm_id, vendorParams.companyId, and numeric IDs.
+ */
+function resolveCompanyIdAndEnvironment(credentials: Record<string, unknown>): {
+  companyId: string;
+  environment: 'test' | 'production';
+} {
+  const vendorParams = (credentials['vendorParams'] as Record<string, unknown> | undefined) || {};
+  const rawId = credentials['companyId'] ?? credentials['realmId'] ?? credentials['realm_id'] ?? vendorParams['companyId'];
+
+  let companyId = '';
+  if (typeof rawId === 'string') {
+    companyId = rawId.trim();
+  } else if (typeof rawId === 'number' && Number.isFinite(rawId)) {
+    companyId = String(rawId).trim();
+  }
+
+  if (!companyId || companyId === '') {
+    throw new Error('QuickBooks companyId/realmId is required but not found in credentials');
+  }
+
+  const env = resolveEnvironment(vendorParams);
+  return { companyId, environment: env };
+}
+
 export function register(): import('@soopa/piece-framework').Piece {
   const customApiAction = frameworkApi.createCustomApiCallAction({
     auth: quickbooksAuth,
     baseUrl: (auth: QuickBooksAuth) => {
-      const companyId = auth.props?.['companyId'];
-      if (!companyId || typeof companyId !== 'string' || companyId.trim() === '') {
-        throw new Error('QuickBooks authentication missing or invalid companyId');
-      }
-
-      const env = resolveEnvironment(auth.props);
-      const apiUrl = quickbooksCommon.getApiUrl(companyId, env === 'test');
+      const { companyId, environment } = resolveCompanyIdAndEnvironment(auth.props || {});
+      const apiUrl = quickbooksCommon.getApiUrl(companyId, environment === 'test');
       return apiUrl;
     },
     authMapping: async (auth: QuickBooksAuth) => {
@@ -367,18 +388,8 @@ export function register(): import('@soopa/piece-framework').Piece {
       return null;
     },
     executeAction: async (objectType: string, payload: Record<string, unknown>, credentials: Record<string, unknown>): Promise<VendorResponse> => {
-      const vendorParams = (credentials['vendorParams'] as Record<string, unknown> | undefined) || {};
-      const rawRealmId = credentials['realmId'] ?? credentials['realm_id'] ?? vendorParams['companyId'];
-      let realmId = '';
-      if (typeof rawRealmId === 'string') {
-        realmId = rawRealmId.trim();
-      } else if (typeof rawRealmId === 'number' && Number.isFinite(rawRealmId)) {
-        realmId = String(rawRealmId).trim();
-      }
-
-      if (!realmId || realmId === '') {
-        throw new Error('QuickBooks realmId is required but not found in credentials. Check realmId, realm_id, or vendorParams.companyId.');
-      }
+      const { companyId, environment } = resolveCompanyIdAndEnvironment(credentials);
+      const useSandbox = environment === 'test';
 
       const rawAccessToken = credentials['access_token'] ?? credentials['accessToken'];
       let accessToken = '';
@@ -389,13 +400,10 @@ export function register(): import('@soopa/piece-framework').Piece {
       if (!accessToken || accessToken === '') {
         throw new Error('QuickBooks accessToken is required but not found in credentials. Check access_token or accessToken fields.');
       }
-      
-      const env = resolveEnvironment(vendorParams);
-      const useSandbox = env === 'test';
-      
-      let baseUrl = quickbooksCommon.getApiUrl(realmId, useSandbox);
+
+      let baseUrl = quickbooksCommon.getApiUrl(companyId, useSandbox);
       if (credentials['base_url']) {
-        baseUrl = `${credentials['base_url'] as string}/v3/company/${encodeURIComponent(realmId)}`;
+        baseUrl = `${credentials['base_url'] as string}/v3/company/${encodeURIComponent(companyId)}`;
       }
       const url = `${baseUrl}/${objectType.toLowerCase()}`;
 

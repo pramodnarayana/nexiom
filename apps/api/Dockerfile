@@ -18,6 +18,7 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm --filter api build
 
 # Dynamically extract all workspace manifests and dists (excluding plugins, as they are downloaded dynamically at runtime)
+SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
 RUN mkdir -p /pruned && \
     cp package.json pnpm-lock.yaml pnpm-workspace.yaml /pruned/ && \
     find apps/api sdk packages -name "package.json" | tar -cf - -T - | tar -xf - -C /pruned/ && \

@@ -2,13 +2,14 @@
   "name": "@soopa/application-salesforce-revenova",
   "version": "0.6.7",
   "publishConfig": {
-    "registry": "http://localhost:4873"
+    "registry": "${NPM_PUBLISH_REGISTRY}"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
@@ -25,7 +26,6 @@
     "@soopa/piece-salesforce": "workspace:*"
   },
   "devDependencies": {
-    "@soopa/domain-tms": "workspace:*",
     "@soopa/piece-framework": "workspace:*",
     "@types/jsonata": "^1.5.1",
     "typescript": "^6.0.3"

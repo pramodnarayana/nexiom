@@ -5,7 +5,7 @@ import type {
   GlobalPiecesRepositoryPort,
   PieceMetadata,
 } from "../../core/ports/outbound/app-installer-ports.js";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 
 @Injectable()
 export class DrizzleGlobalPiecesRepositoryAdapter implements GlobalPiecesRepositoryPort {
@@ -60,7 +60,7 @@ export class DrizzleGlobalPiecesRepositoryAdapter implements GlobalPiecesReposit
         version: pieces.version,
       })
       .from(pieces)
-      .where(sql`${pieces.enabled} = true`);
+      .where(eq(pieces.enabled, true));
 
     return results;
   }

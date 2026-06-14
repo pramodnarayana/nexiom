@@ -1,7 +1,7 @@
-import "dotenv/config";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module.js";
 import { Logger } from "nestjs-pino";
+import { ConfigService } from "@nestjs/config";
 
 async function bootstrap() {
   try {
@@ -17,9 +17,11 @@ async function bootstrap() {
     app.enableShutdownHooks();
 
     logger.log(`Soopa Worker application started and listening to queues...`);
-    if (process.env.WORKER_LOG_FILE) {
+    const configService = app.get(ConfigService);
+    const workerLogFile = configService.get<string>("WORKER_LOG_FILE");
+    if (workerLogFile) {
       logger.log(
-        `Logging output is also being redirected to ${process.env.WORKER_LOG_FILE}`,
+        `Logging output is also being redirected to ${workerLogFile}`,
       );
     }
   } catch (err: unknown) {

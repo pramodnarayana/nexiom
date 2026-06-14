@@ -6,6 +6,7 @@
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
+      "require": "./dist/src/index.js",
       "import": "./dist/src/index.js",
       "default": "./dist/src/index.js"
     }
@@ -19,11 +20,11 @@
     "test:cov": "vitest run --coverage"
   },
   "devDependencies": {
-    "@soopa/piece-framework": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.0.18"
   },
   "dependencies": {
+    "@soopa/piece-framework": "workspace:*",
     "dayjs": "^1.11.19"
   },
   "files": [

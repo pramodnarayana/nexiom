@@ -26,6 +26,7 @@
 		"@soopa/database": "workspace:*",
 		"@soopa/dbmanager": "workspace:*",
 		"@soopa/credentials": "workspace:*",
+		"@soopa/domain-tms": "workspace:*",
 		"@soopa/piece-framework": "workspace:*",
 		"@soopa/queue": "workspace:*",
 		"live-plugin-manager": "^1.1.0",
@@ -34,7 +35,6 @@
 	},
 	"devDependencies": {
 		"@nestjs/testing": "^11.1.11",
-		"@soopa/domain-tms": "workspace:*",
 		"typescript": "^5.7.3",
 		"vitest": "^4.0.18"
 	},

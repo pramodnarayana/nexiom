@@ -83,7 +83,13 @@ export type EnvConfig = z.infer<typeof envValidationSchema>;
  * Throws a clear error if validation fails.
  */
 export function validateEnv(config: Record<string, unknown>): EnvConfig {
-  const parsed = envValidationSchema.safeParse(config);
+  // Preprocess to inject default INFRA_MODE if missing
+  const configWithDefaults = {
+    ...config,
+    INFRA_MODE: config.INFRA_MODE || "local",
+  };
+
+  const parsed = envValidationSchema.safeParse(configWithDefaults);
 
   if (!parsed.success) {
     console.error("❌ Invalid environment variables:");

@@ -3,15 +3,15 @@
   "version": "0.1.0",
   "type": "module",
   "publishConfig": {
-    "registry": "http://localhost:4873"
+    "registry": "${NPM_PUBLISH_REGISTRY}"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
       "require": "./dist/index.js",
+      "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },

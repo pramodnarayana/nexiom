@@ -72,10 +72,9 @@ export class InstallPieceUseCase {
         typeof piece.name !== "string" ||
         typeof piece.displayName !== "string"
       ) {
-        this.logger.warn(
-          `Could not find exported piece object in ${command.packageName}`,
+        throw new Error(
+          `Could not find exported piece object in ${command.packageName} - piece is missing required name or displayName fields`,
         );
-        return;
       }
 
       await this.repository.upsertPiece({
@@ -84,9 +83,11 @@ export class InstallPieceUseCase {
         logoUrl: typeof piece.logoUrl === "string" ? piece.logoUrl : undefined,
         description:
           typeof piece.description === "string" ? piece.description : undefined,
-        categories: Array.isArray(piece.categories)
-          ? piece.categories
-          : undefined,
+        categories:
+          Array.isArray(piece.categories) &&
+          piece.categories.every((c) => typeof c === "string")
+            ? piece.categories
+            : undefined,
         authType:
           piece.auth && typeof piece.auth === "object" && "type" in piece.auth
             ? (piece.auth.type as string)
@@ -95,7 +96,11 @@ export class InstallPieceUseCase {
           piece.auth && typeof piece.auth === "object" && "props" in piece.auth
             ? (piece.auth.props as Record<string, unknown>)
             : undefined,
-        aliases: Array.isArray(piece.aliases) ? piece.aliases : undefined,
+        aliases:
+          Array.isArray(piece.aliases) &&
+          piece.aliases.every((a) => typeof a === "string")
+            ? piece.aliases
+            : undefined,
         packageName: command.packageName,
         version: pluginInfo.version,
       });

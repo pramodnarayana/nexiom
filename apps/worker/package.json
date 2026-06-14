@@ -22,7 +22,6 @@
     "db:seed": "tsx ../api/src/db/cli/main.ts db:seed",
     "db:fresh": "tsx ../api/src/db/cli/main.ts db:fresh",
     "db:reset": "tsx ../api/src/db/cli/main.ts db:reset",
-    "db:seed:pieces": "tsx src/scripts/seed-pieces.ts",
     "db:provision:local": "tsx ../api/src/db/cli/main.ts db:provision:local",
     "db:check-role": "tsx ../api/src/db/cli/main.ts db:check-role",
     "test:watch": "vitest",

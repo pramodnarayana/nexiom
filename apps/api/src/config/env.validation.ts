@@ -27,12 +27,12 @@ const baseSchema = z.object({
 
   // Infrastructure
   REDIS_URL: z.string().url().optional(),
-  INFRA_MODE: z.enum(['local', 'aws', 'kms']).default('local'),
+  INFRA_MODE: z.enum(['local', 'aws']).default('local'),
 
   // Webhooks & NPM
   GITOPS_WEBHOOK_SECRET: z.string().optional(),
   NPM_WEBHOOK_SECRET: z.string().optional(),
-  NPM_REGISTRY_URL: z.string().optional(),
+  NPM_REGISTRY_URL: z.string().url().optional(),
 
   // Scheduler / Windmill
   WINDMILL_ENABLED: z.coerce.boolean().default(false),
@@ -55,7 +55,7 @@ const baseSchema = z.object({
 });
 
 const localInfraSchema = baseSchema.extend({
-  INFRA_MODE: z.literal('local'),
+  INFRA_MODE: z.literal('local').default('local'),
   ENCRYPTION_KEY: z
     .string()
     .length(32, { message: 'Encryption key must be exactly 32 characters' }),
@@ -63,9 +63,9 @@ const localInfraSchema = baseSchema.extend({
 });
 
 const awsInfraSchema = baseSchema.extend({
-  INFRA_MODE: z.enum(['aws', 'kms']),
+  INFRA_MODE: z.literal('aws'),
   KMS_KEY_ID: z.string().min(1, {
-    message: 'KMS_KEY_ID is required when INFRA_MODE is aws or kms',
+    message: 'KMS_KEY_ID is required when INFRA_MODE is aws',
   }),
   ENCRYPTION_KEY: z.string().optional(),
 });
@@ -82,7 +82,13 @@ export type EnvConfig = z.infer<typeof envValidationSchema>;
  * Throws a clear error if validation fails.
  */
 export function validateEnv(config: Record<string, unknown>): EnvConfig {
-  const parsed = envValidationSchema.safeParse(config);
+  // Preprocess to inject default INFRA_MODE if missing
+  const configWithDefaults = {
+    ...config,
+    INFRA_MODE: config.INFRA_MODE || 'local',
+  };
+
+  const parsed = envValidationSchema.safeParse(configWithDefaults);
 
   if (!parsed.success) {
     console.error('❌ Invalid environment variables:');

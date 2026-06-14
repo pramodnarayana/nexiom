@@ -1473,13 +1473,13 @@ importers:
 
   plugins/quickbooks/core:
     dependencies:
+      '@soopa/piece-framework':
+        specifier: workspace:*
+        version: link:../../../sdk/framework
       dayjs:
         specifier: ^1.11.19
         version: 1.11.21
     devDependencies:
-      '@soopa/piece-framework':
-        specifier: workspace:*
-        version: link:../../../sdk/framework
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1596,6 +1596,9 @@ importers:
       '@soopa/dbmanager':
         specifier: workspace:*
         version: link:../../packages/dbmanager
+      '@soopa/domain-tms':
+        specifier: workspace:*
+        version: link:../../plugins/domain/tms
       '@soopa/piece-framework':
         specifier: workspace:*
         version: link:../framework
@@ -1618,9 +1621,6 @@ importers:
       '@nestjs/testing':
         specifier: ^11.1.11
         version: 11.1.11(@nestjs/common@11.1.11(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.11)(@nestjs/platform-express@11.1.11)
-      '@soopa/domain-tms':
-        specifier: workspace:*
-        version: link:../../plugins/domain/tms
       typescript:
         specifier: ^5.7.3
         version: 5.9.3

@@ -25,7 +25,10 @@ export class PluginManagerService implements OnModuleInit {
     @Inject(QUEUE_SERVICE) private readonly queueService: IQueueService,
     private readonly configService: ConfigService,
   ) {
-    this.pluginsPath = PluginManagerService.PLUGINS_PATH;
+    const isDev = this.configService.get<string>('NODE_ENV') === 'development' || this.configService.get<string>('DEV_MODE') === 'true';
+    const appDataDir = this.configService.get<string>('APP_DATA_DIR') || (isDev ? process.cwd() : path.join(os.homedir(), '.soopa'));
+    this.pluginsPath = this.configService.get<string>('PLUGINS_PATH') || (isDev ? path.join(os.tmpdir(), 'soopa-plugins') : path.join(appDataDir, 'plugins'));
+
     const registryUrl = this.configService.get<string>('NPM_REGISTRY_URL') || process.env.NPM_REGISTRY_URL || 'https://registry.npmjs.org/';
     this.logger.log(`Initializing Live Plugin Manager at: ${this.pluginsPath}`);
     this.logger.log(`Using NPM registry: ${registryUrl}`);
@@ -146,13 +149,28 @@ export class PluginManagerService implements OnModuleInit {
     try {
       // live-plugin-manager executes the plugin in a custom CommonJS context
       // and natively intercepts `require('@soopa/piece-framework')` to map it to our hostRequire
-      return this.manager.require(packageName) as Record<string, unknown>;
+      const moduleExports = this.manager.require(packageName) as Record<string, unknown>;
+
+      // Verify the piece loaded successfully
+      if (!moduleExports || typeof moduleExports !== 'object') {
+        throw new Error(`Piece ${packageName} loaded but did not export a valid module object`);
+      }
+
+      this.logger.debug(`Successfully loaded piece ${packageName} from ${pluginInfo.location}`);
+      return moduleExports;
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       const stack = error instanceof Error ? error.stack : '';
-      this.logger.error(`Failed to load piece package ${packageName} via CommonJS interception — ${reason}`);
+      this.logger.error(
+        `Failed to load piece package ${packageName} via CommonJS interception — ${reason}. ` +
+        `Ensure the package has a valid "require" export condition in package.json and exports CommonJS-compatible code.`
+      );
       if (stack) this.logger.debug(stack);
-      throw error;
+      throw new Error(
+        `Failed to require piece ${packageName}: ${reason}. ` +
+        `Location: ${pluginInfo.location}. ` +
+        `Verify the package exports a valid CommonJS module.`
+      );
     }
   }
 }
