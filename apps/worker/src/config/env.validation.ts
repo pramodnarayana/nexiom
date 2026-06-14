@@ -86,7 +86,7 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
   // Preprocess to inject default INFRA_MODE if missing
   const configWithDefaults = {
     ...config,
-    INFRA_MODE: config.INFRA_MODE || "local",
+    INFRA_MODE: config.INFRA_MODE ?? "local",
   };
 
   const parsed = envValidationSchema.safeParse(configWithDefaults);

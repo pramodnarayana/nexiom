@@ -328,7 +328,7 @@ import * as frameworkApi from '@soopa/piece-framework';
  */
 function resolveCompanyIdAndEnvironment(credentials: Record<string, unknown>): {
   companyId: string;
-  environment: 'test' | 'production';
+  environment: 'test' | 'login';
 } {
   const vendorParams = (credentials['vendorParams'] as Record<string, unknown> | undefined) || {};
   const rawId = credentials['companyId'] ?? credentials['realmId'] ?? credentials['realm_id'] ?? vendorParams['companyId'];
