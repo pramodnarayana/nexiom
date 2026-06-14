@@ -11,6 +11,8 @@ import { DrizzleGlobalPiecesRepositoryAdapter } from "../adapters/outbound/drizz
 
 @Injectable()
 export class AppInstallerProcessor implements OnModuleInit {
+  private readonly logger = new Logger(InstallPieceUseCase.name);
+
   constructor(
     @Inject(QUEUE_SERVICE) private readonly queueService: IQueueService,
     private readonly registryAdapter: NestPieceRegistryAdapter,
@@ -18,15 +20,15 @@ export class AppInstallerProcessor implements OnModuleInit {
   ) {}
 
   onModuleInit() {
+    const useCase = new InstallPieceUseCase(
+      this.registryAdapter,
+      this.repositoryAdapter,
+      this.logger,
+    );
+
     this.queueService.consume(
       QueueName.PluginInstallQueue,
       async (event: PluginInstallEvent) => {
-        const useCase = new InstallPieceUseCase(
-          this.registryAdapter,
-          this.repositoryAdapter,
-          new Logger(InstallPieceUseCase.name),
-        );
-
         await useCase.execute({
           packageName: event.packageName,
           version: event.version,

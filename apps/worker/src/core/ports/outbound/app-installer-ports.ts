@@ -34,7 +34,6 @@ export interface PieceRegistryPort {
   getLatestVersion(packageName: string): Promise<string>;
 
   requirePiece(packageName: string): Promise<Record<string, unknown>>;
-  requirePiece(packageName: string): Promise<Record<string, unknown>>;
 }
 
 export interface LoggerPort {

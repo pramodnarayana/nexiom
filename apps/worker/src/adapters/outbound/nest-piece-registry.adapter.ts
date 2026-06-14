@@ -37,7 +37,7 @@ export class NestPieceRegistryAdapter implements PieceRegistryPort {
     return response.data.version;
   }
 
-  async requirePiece(packageName: string): Promise<unknown> {
+  async requirePiece(packageName: string): Promise<Record<string, unknown>> {
     return this.pluginManager.requirePiece(packageName);
   }
 }

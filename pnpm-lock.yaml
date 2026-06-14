@@ -1489,13 +1489,13 @@ importers:
 
   plugins/salesforce/core:
     dependencies:
+      '@soopa/piece-framework':
+        specifier: workspace:*
+        version: link:../../../sdk/framework
       dayjs:
         specifier: ^1.11.19
         version: 1.11.21
     devDependencies:
-      '@soopa/piece-framework':
-        specifier: workspace:*
-        version: link:../../../sdk/framework
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

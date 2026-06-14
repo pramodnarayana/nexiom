@@ -133,7 +133,7 @@ describe("App Installer Subdomain", () => {
             type: "OAUTH2",
             props: { clientId: "xyz" },
           },
-          aliases: ["old-piece-name"],
+          aliases: [{ name: "old-piece-name" }],
         },
       });
 
@@ -150,7 +150,7 @@ describe("App Installer Subdomain", () => {
       expect(registered?.categories).toEqual(["CRM", "Sales"]);
       expect(registered?.authType).toBe("OAUTH2");
       expect(registered?.authSchema).toEqual({ clientId: "xyz" });
-      expect(registered?.aliases).toEqual(["old-piece-name"]);
+      expect(registered?.aliases).toEqual([{ name: "old-piece-name" }]);
     });
 
     it("should handle auto-registration failure if no valid piece object is found", async () => {
@@ -164,10 +164,12 @@ describe("App Installer Subdomain", () => {
 
       const useCase = new InstallPieceUseCase(registry, repository, logger);
 
-      await useCase.execute({
-        packageName: "test-package-invalid",
-        version: "1.0.0",
-      });
+      await expect(
+        useCase.execute({
+          packageName: "test-package-invalid",
+          version: "1.0.0",
+        }),
+      ).rejects.toThrow("Could not find exported piece object");
 
       const registered = repository.pieces.get("missing-display-name");
       expect(registered).toBeUndefined();

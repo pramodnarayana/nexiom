@@ -60,7 +60,10 @@ import { validateEnv } from "./config/env.validation.js";
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
-        mode: cfg.get("INFRA_MODE") === "aws" ? "kms" : "local",
+        mode:
+          cfg.get("INFRA_MODE") === "aws" || cfg.get("INFRA_MODE") === "kms"
+            ? "kms"
+            : "local",
         encryptionKey: cfg.get("ENCRYPTION_KEY"),
         kmsKeyId: cfg.get("KMS_KEY_ID"),
         kmsEndpoint: cfg.get("KMS_ENDPOINT"),

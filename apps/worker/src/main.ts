@@ -20,9 +20,7 @@ async function bootstrap() {
     const configService = app.get(ConfigService);
     const workerLogFile = configService.get<string>("WORKER_LOG_FILE");
     if (workerLogFile) {
-      logger.log(
-        `Logging output is also being redirected to ${workerLogFile}`,
-      );
+      logger.log(`Logging output is also being redirected to ${workerLogFile}`);
     }
   } catch (err: unknown) {
     console.error(

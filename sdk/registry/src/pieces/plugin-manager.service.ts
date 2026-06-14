@@ -15,11 +15,6 @@ export class PluginManagerService implements OnModuleInit {
   private readonly logger = new Logger(PluginManagerService.name);
   private manager: PluginManager;
   private readonly pluginsPath: string;
-  public static readonly PLUGINS_PATH = (() => {
-    const isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
-    const appDataDir = process.env.APP_DATA_DIR || (isDev ? process.cwd() : path.join(os.homedir(), '.soopa'));
-    return process.env.PLUGINS_PATH || (isDev ? path.join(os.tmpdir(), 'soopa-plugins') : path.join(appDataDir, 'plugins'));
-  })();
 
   constructor(
     @Inject(QUEUE_SERVICE) private readonly queueService: IQueueService,
