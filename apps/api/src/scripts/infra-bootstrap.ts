@@ -64,10 +64,16 @@ async function seedLocalShard() {
       });
       console.log('✅ Shard migrations complete.');
     } catch (migrationError) {
-      const errMsg = migrationError instanceof Error ? migrationError.message : String(migrationError);
-      const errStack = migrationError instanceof Error ? migrationError.stack : '';
+      const errMsg =
+        migrationError instanceof Error
+          ? migrationError.message
+          : String(migrationError);
+      const errStack =
+        migrationError instanceof Error ? migrationError.stack : '';
       console.error(`❌ Migration failed for shard ${shardId}:`);
-      console.error(`  Command: pnpm --filter @soopa/database db:migrate:tenant`);
+      console.error(
+        `  Command: pnpm --filter @soopa/database db:migrate:tenant`,
+      );
       console.error(`  Database: ${hostUrl}/${databaseName}`);
       console.error(`  Error: ${errMsg}`);
       if (errStack) console.error(`  Stack: ${errStack}`);

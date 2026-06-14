@@ -1,55 +1,80 @@
 import { z } from "zod";
 
-export const envValidationSchema = z
-  .object({
-    // Base Settings
-    NODE_ENV: z
-      .enum(["development", "production", "test"])
-      .default("development"),
-    API_URL: z.string().url().optional(),
+const baseSchema = z.object({
+  // Base Settings
+  NODE_ENV: z
+    .enum(["development", "production", "test"])
+    .default("development"),
+  API_URL: z.string().url().optional(),
 
-    // Database
-    DATABASE_URL: z.string().url(),
+  // Database
+  DATABASE_URL: z.string().url(),
 
-    // Authentication & Security
-    BETTER_AUTH_SECRET: z.string().min(16),
-    BETTER_AUTH_URL: z.string().url(),
-    FRONTEND_URL: z.string().url(),
-    ALLOWED_ORIGINS: z.string().optional(),
-    ENCRYPTION_KEY: z.string().optional(),
-    KMS_KEY_ID: z.string().optional(),
-    JWT_SECRET: z.string().min(32),
+  // Authentication & Security
+  BETTER_AUTH_SECRET: z.string().min(16),
+  BETTER_AUTH_URL: z.string().url(),
+  FRONTEND_URL: z.string().url(),
+  ALLOWED_ORIGINS: z.string().optional(),
+  JWT_SECRET: z.string().min(32),
 
-    // Identity Constants
-    SYSTEM_TENANT_ID: z.string().uuid(),
-    OWNER_ROLE_ID: z.string().min(1),
-    ADMIN_ROLE_ID: z.string().min(1),
-    MEMBER_ROLE_ID: z.string().min(1),
+  // Identity Constants
+  SYSTEM_TENANT_ID: z.string().uuid(),
+  OWNER_ROLE_ID: z.string().min(1),
+  ADMIN_ROLE_ID: z.string().min(1),
+  MEMBER_ROLE_ID: z.string().min(1),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
 
-    // Infrastructure
-    REDIS_URL: z.string().url().optional(),
-    INFRA_MODE: z.enum(["local", "aws", "kms"]).optional().default("local"),
-  })
-  .passthrough()
-  .superRefine((data, ctx) => {
-    if (data.INFRA_MODE === "aws") {
-      if (!data.KMS_KEY_ID || data.KMS_KEY_ID.trim().length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["KMS_KEY_ID"],
-          message: "KMS_KEY_ID is required when INFRA_MODE is aws",
-        });
-      }
-    } else {
-      if (!data.ENCRYPTION_KEY || data.ENCRYPTION_KEY.length !== 32) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["ENCRYPTION_KEY"],
-          message: "ENCRYPTION_KEY must be exactly 32 characters when INFRA_MODE is local",
-        });
-      }
-    }
-  });
+  // Infrastructure
+  REDIS_URL: z.string().url().optional(),
+
+  // Webhooks
+  GITOPS_WEBHOOK_SECRET: z.string().optional(),
+  NPM_WEBHOOK_SECRET: z.string().optional(),
+
+  // Scheduler / Windmill
+  WINDMILL_ENABLED: z.coerce.boolean().default(false),
+  WINDMILL_BASE_URL: z.string().url().optional(),
+  WINDMILL_WORKSPACE: z.string().optional(),
+  WINDMILL_TOKEN: z.string().optional(),
+  WINDMILL_INTERNAL_SECRET: z.string().optional(),
+  WINDMILL_CALLBACK_URL: z.string().optional(),
+
+  // Observability
+  LOG_LEVEL: z.string().default("info"),
+  OPENOBSERVE_URL: z.string().optional(),
+  OPENOBSERVE_ORG: z.string().optional(),
+  OPENOBSERVE_STREAM: z.string().optional(),
+  OPENOBSERVE_TOKEN: z.string().optional(),
+
+  // Plugins
+  PLUGINS_PATH: z.string().optional(),
+  DISABLE_LOCAL_SYNC: z.string().optional(),
+  NPM_REGISTRY_URL: z.string().url().optional(),
+});
+
+const localInfraSchema = baseSchema.extend({
+  INFRA_MODE: z.literal("local").default("local"),
+  ENCRYPTION_KEY: z.string().length(32),
+});
+
+const awsInfraSchema = baseSchema.extend({
+  INFRA_MODE: z.literal("aws"),
+  KMS_KEY_ID: z.string().min(1),
+  ENCRYPTION_KEY: z.string().optional(),
+});
+
+const kmsInfraSchema = baseSchema.extend({
+  INFRA_MODE: z.literal("kms"),
+  KMS_KEY_ID: z.string().min(1),
+  ENCRYPTION_KEY: z.string().optional(),
+});
+
+export const envValidationSchema = z.discriminatedUnion("INFRA_MODE", [
+  localInfraSchema,
+  awsInfraSchema,
+  kmsInfraSchema,
+]);
 
 export type EnvConfig = z.infer<typeof envValidationSchema>;
 
@@ -62,7 +87,7 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
 
   if (!parsed.success) {
     console.error("❌ Invalid environment variables:");
-    parsed.error.issues.forEach((issue) => {
+    parsed.error.issues.forEach((issue: z.ZodIssue) => {
       console.error(`  - ${issue.path.join(".")}: ${issue.message}`);
     });
     throw new Error("Environment validation failed");

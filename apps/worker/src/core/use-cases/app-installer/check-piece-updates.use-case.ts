@@ -1,29 +1,28 @@
-import { Logger } from "@nestjs/common";
 import { QueueName } from "@soopa/queue";
 import * as semver from "semver";
 import type { QueuePublisherPort } from "../../ports/outbound/queue-publisher.port.js";
 import type {
   PieceRegistryPort,
-  WorkspacePiecesRepositoryPort,
+  GlobalPiecesRepositoryPort,
+  LoggerPort,
 } from "../../ports/outbound/app-installer-ports.js";
 
 export class CheckPieceUpdatesUseCase {
-  private readonly logger = new Logger(CheckPieceUpdatesUseCase.name);
-
   constructor(
-    private readonly repository: WorkspacePiecesRepositoryPort,
+    private readonly repository: GlobalPiecesRepositoryPort,
     private readonly registry: PieceRegistryPort,
     private readonly queuePublisher: QueuePublisherPort,
+    private readonly logger: LoggerPort,
   ) {}
 
   async execute(): Promise<void> {
     this.logger.log("Running App Auto-Updater Use Case...");
 
-    const installedApps = await this.repository.getAllInstalledPieces();
+    const installedApps = await this.repository.getAllGlobalPieces();
     const registryCache = new Map<string, string>();
 
     for (const app of installedApps) {
-      if (!app.currentVersion) continue;
+      if (!app.version) continue;
 
       let latestVersion = registryCache.get(app.packageName);
 
@@ -37,13 +36,11 @@ export class CheckPieceUpdatesUseCase {
         }
       }
 
-      if (latestVersion && this.isNewer(app.currentVersion, latestVersion)) {
+      if (latestVersion && this.isNewer(app.version, latestVersion)) {
         try {
           await this.queuePublisher.send(QueueName.PluginInstallQueue, {
             packageName: app.packageName,
             version: latestVersion,
-            workspaceId: app.workspaceId,
-            pieceId: app.pieceId,
             requestMetadata: {
               source: "app-updater-cron",
               webhookReceivedAt: new Date().toISOString(),
@@ -51,12 +48,12 @@ export class CheckPieceUpdatesUseCase {
           });
 
           this.logger.log(
-            `Enqueued auto-update for ${app.packageName} from ${app.currentVersion} to ${latestVersion} for workspace ${app.workspaceId}`,
+            `Enqueued auto-update for ${app.packageName} from ${app.version} to ${latestVersion}`,
           );
         } catch (queueError) {
           this.logger.error(
-            `Failed to enqueue update for ${app.packageName} (workspace ${app.workspaceId})`,
-            queueError,
+            `Failed to enqueue update for ${app.packageName}`,
+            queueError instanceof Error ? queueError.stack : String(queueError),
           );
         }
       }
@@ -65,18 +62,15 @@ export class CheckPieceUpdatesUseCase {
 
   private isNewer(localVersion: string, remoteVersion: string): boolean {
     try {
-      // Parse versions using valid/parse to preserve prerelease tags
       const parsedLocal = semver.valid(localVersion);
       const parsedRemote = semver.valid(remoteVersion);
 
       if (!parsedLocal || !parsedRemote) {
-        // Fall back to string comparison if versions are invalid
         return remoteVersion > localVersion;
       }
 
       return semver.gt(parsedRemote, parsedLocal);
     } catch (_err) {
-      // Fall back to string comparison on error
       return remoteVersion > localVersion;
     }
   }

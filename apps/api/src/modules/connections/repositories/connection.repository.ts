@@ -7,6 +7,7 @@ import {
   SAVEPOINT_MANAGER,
   credentials,
   AppConnectionStatus,
+  pieces,
 } from '@soopa/database';
 import type { DrizzleDb, ISavePointManager } from '@soopa/database';
 import { eq, and, desc, count, sql } from 'drizzle-orm';
@@ -21,6 +22,23 @@ export class ConnectionRepository extends BaseRepository<typeof dataSources> {
     @Inject(SAVEPOINT_MANAGER) savepointManager: ISavePointManager,
   ) {
     super(db, savepointManager, dataSources);
+  }
+
+  async getEnabledPieces(ctx?: RepositoryContext) {
+    const exec = this.getExecutor(ctx);
+    return exec
+      .select({
+        name: pieces.name,
+        displayName: pieces.displayName,
+        description: pieces.description,
+        categories: pieces.categories,
+        authType: pieces.authType,
+        authSchema: pieces.authSchema,
+        aliases: pieces.aliases,
+        logoUrl: pieces.logoUrl,
+      })
+      .from(pieces)
+      .where(eq(pieces.enabled, true));
   }
 
   async findActiveByTenant(

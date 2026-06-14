@@ -19,7 +19,6 @@ import { AuthContext, type RequestAuthContext, AuthGuard } from '@soopa/auth';
 import { ENCRYPTION_SERVICE, type IEncryptionService } from '@soopa/security';
 import { PieceRegistryService } from '@soopa/piece-registry';
 import { ConnectionRepository } from '../repositories/connection.repository.js';
-import type { AnyProperty } from '@soopa/piece-framework';
 import { DeleteConnectionUseCase } from '../core/use-cases/delete-connection.use-case.js';
 import type { ConnectionValueBlob } from '../core/types/connection.types.js';
 import { ConfigService } from '@nestjs/config';
@@ -69,37 +68,54 @@ export class CredentialController {
   ) {}
 
   @Get('providers')
-  getProviders() {
+  async getProviders() {
     try {
-      const providers = this.pieceRegistry
-        .getAllPieces()
+      const dbPieces = await this.connectionRepository.getEnabledPieces();
+      const providers = dbPieces
         .map((piece) => {
-          const authProps =
-            piece.auth && 'props' in piece.auth
-              ? (piece.auth.props as Record<string, AnyProperty>)
-              : undefined;
+          const registeredPiece = this.pieceRegistry.getPiece(piece.name);
+          if (!registeredPiece) {
+            return [];
+          }
+
+          const authProps = piece.authSchema as
+            | Record<string, unknown>
+            | undefined;
+          const categories = piece.categories as string[] | undefined;
+          const aliases = piece.aliases as
+            | Record<string, unknown>[]
+            | undefined;
 
           const baseProvider = {
             name: piece.name,
             displayName: piece.displayName,
             description: piece.description,
             logoUrl: piece.logoUrl,
-            authType: piece.auth.type,
-            category: piece.categories?.[0] ?? 'Other',
+            authType: piece.authType,
+            category: categories?.[0] ?? 'Other',
             uiSchema: authProps,
           };
 
           const result = [baseProvider];
 
-          if (piece.aliases) {
-            for (const alias of piece.aliases) {
+          if (aliases && Array.isArray(aliases)) {
+            for (const alias of aliases) {
               result.push({
-                name: alias.name,
-                displayName: alias.displayName,
-                description: alias.description || piece.description,
-                logoUrl: alias.logoUrl || piece.logoUrl,
-                authType: piece.auth.type,
-                category: alias.category || baseProvider.category,
+                name: String(alias.name),
+                displayName: String(alias.displayName),
+                description:
+                  typeof alias.description === 'string'
+                    ? alias.description
+                    : piece.description,
+                logoUrl:
+                  typeof alias.logoUrl === 'string'
+                    ? alias.logoUrl
+                    : piece.logoUrl,
+                authType: piece.authType,
+                category:
+                  typeof alias.category === 'string'
+                    ? alias.category
+                    : baseProvider.category,
                 uiSchema: authProps,
               });
             }
@@ -108,6 +124,7 @@ export class CredentialController {
           return result;
         })
         .flat();
+
       this.logger.debug(
         'GET PROVIDERS',
         providers.map((p) => p.name),
@@ -175,7 +192,10 @@ export class CredentialController {
       `[getActiveConnections] tenantId=${tenantId}, total=${total}, returning ${activeConnections.length} rows`,
     );
 
-    const rawApiUrl = this.configService.get<string>('API_URL') || process.env.API_URL || 'http://localhost:3000';
+    const rawApiUrl =
+      this.configService.get<string>('API_URL') ||
+      process.env.API_URL ||
+      'http://localhost:3000';
     const apiUrl = rawApiUrl.replace(/\/+$/, '');
 
     const listConnections = activeConnections.map((conn) => {

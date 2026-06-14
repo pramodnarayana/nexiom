@@ -1,16 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { salesforce } from './index.js';
+import { register } from './index.js';
 import { NativeFetchAdapter, SalesforceFetchError } from './adapters/native-fetch.adapter.js';
 import { SalesforceCredentials } from './domain/salesforce-credentials.value.js';
 
 describe('salesforce piece', () => {
     let getSpy: ReturnType<typeof vi.spyOn>;
     let postSpy: ReturnType<typeof vi.spyOn>;
+    let salesforce: ReturnType<typeof register>;
 
     beforeEach(() => {
         vi.clearAllMocks();
         getSpy = vi.spyOn(NativeFetchAdapter.prototype, 'get');
         postSpy = vi.spyOn(NativeFetchAdapter.prototype, 'post');
+        salesforce = register();
     });
 
     const credentials = {

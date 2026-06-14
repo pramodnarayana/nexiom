@@ -1,35 +1,37 @@
 {
-	"name": "@soopa/piece-salesforce",
-	"version": "0.5.1",
-	"type": "module",
-	"main": "dist/index.js",
-	"types": "dist/index.d.ts",
-	"exports": {
-		".": {
-			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js",
-			"default": "./dist/index.js"
-		},
-		"./trigger": {
-			"types": "./dist/lib/trigger/index.d.ts",
-			"import": "./dist/lib/trigger/index.js",
-			"default": "./dist/lib/trigger/index.js"
-		}
-	},
-	"scripts": {
-		"dev": "tsc -p tsconfig.lib.json --watch --preserveWatchOutput",
-		"build": "tsc -p tsconfig.lib.json",
-		"clean": "rm -rf dist",
-		"test": "vitest run",
-		"lint": "eslint .",
-		"test:cov": "vitest run --coverage"
-	},
-	"devDependencies": {
-		"typescript": "^6.0.3",
-		"vitest": "^4.0.18"
-	},
-	"dependencies": {
-		"@soopa/piece-framework": "workspace:*",
-		"dayjs": "^1.11.19"
-	}
+  "name": "@soopa/piece-salesforce",
+  "version": "0.6.7",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./trigger": {
+      "types": "./dist/lib/trigger/index.d.ts",
+      "import": "./dist/lib/trigger/index.js",
+      "default": "./dist/lib/trigger/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsc -p tsconfig.lib.json --watch --preserveWatchOutput",
+    "build": "tsc -p tsconfig.lib.json",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "test:cov": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@soopa/piece-framework": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.19"
+  },
+  "files": [
+    "dist"
+  ]
 }

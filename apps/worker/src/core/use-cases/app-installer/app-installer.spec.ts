@@ -1,187 +1,320 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { QueueName } from "@soopa/queue";
 import { InstallPieceUseCase } from "./install-piece.use-case.js";
 import { CheckPieceUpdatesUseCase } from "./check-piece-updates.use-case.js";
+import { QueueName } from "@soopa/queue";
 import {
   FakePieceRegistry,
-  FakeWorkspacePiecesRepository,
+  FakeGlobalPiecesRepository,
+  FakeLoggerPort,
 } from "../../fakes/fake-app-installer-ports.js";
 import { FakeQueuePublisher } from "../../fakes/fake-queue.publisher.js";
 
-describe("App Installer Use Cases", () => {
+describe("App Installer Subdomain", () => {
   let registry: FakePieceRegistry;
-  let repository: FakeWorkspacePiecesRepository;
+  let repository: FakeGlobalPiecesRepository;
   let queuePublisher: FakeQueuePublisher;
+  let logger: FakeLoggerPort;
 
   beforeEach(() => {
     registry = new FakePieceRegistry();
-    repository = new FakeWorkspacePiecesRepository();
+    repository = new FakeGlobalPiecesRepository();
     queuePublisher = new FakeQueuePublisher();
+    logger = new FakeLoggerPort();
   });
 
   describe("InstallPieceUseCase", () => {
-    let useCase: InstallPieceUseCase;
+    it("should successfully install a piece and register it globally", async () => {
+      registry.requireMocks.set("test-package", {
+        piece: {
+          name: "test-piece",
+          displayName: "Test Piece",
+          logoUrl: "http://logo",
+        },
+      });
 
-    beforeEach(() => {
-      useCase = new InstallPieceUseCase(registry, repository);
-    });
+      const useCase = new InstallPieceUseCase(registry, repository, logger);
 
-    it("should install a piece and mark it installed in the workspace", async () => {
       await useCase.execute({
-        packageName: "@soopa/salesforce",
-        version: "1.0.0",
-        workspaceId: "ws-1",
-        pieceId: "piece-1",
-      });
-
-      expect(registry.installed).toHaveLength(1);
-      expect(registry.installed[0]).toEqual({
-        packageName: "@soopa/salesforce",
+        packageName: "test-package",
         version: "1.0.0",
       });
 
-      const dbStatus = repository.pieces.get("ws-1:piece-1");
-      expect(dbStatus?.status).toBe("INSTALLED");
-      expect(dbStatus?.version).toBe("1.0.0");
+      expect(registry.installed).toContainEqual({
+        packageName: "test-package",
+        version: "1.0.0",
+      });
+
+      const registered = repository.pieces.get("test-piece");
+      expect(registered).toBeDefined();
+      expect(registered?.version).toBe("1.0.0");
     });
 
-    it("should mark as failed if installation throws", async () => {
+    it("should fail gracefully if installation fails", async () => {
       registry.shouldFail = true;
+
+      const useCase = new InstallPieceUseCase(registry, repository, logger);
 
       await expect(
         useCase.execute({
-          packageName: "@soopa/salesforce",
+          packageName: "test-package",
           version: "1.0.0",
-          workspaceId: "ws-1",
-          pieceId: "piece-1",
         }),
-      ).rejects.toThrow("Failed to install @soopa/salesforce");
-
-      const dbStatus = repository.pieces.get("ws-1:piece-1");
-      expect(dbStatus?.status).toBe("FAILED");
-      expect(dbStatus?.failed).toBe(true);
+      ).rejects.toThrow("Failed to install test-package");
     });
 
-    it("should gracefully handle DB errors when attempting to mark as failed", async () => {
-      registry.shouldFail = true;
-      // Inject a mock that throws an error when markFailed is called
-      repository.markFailed = async () => {
-        await Promise.resolve();
-        throw new Error("DB Error");
-      };
+    it("should successfully extract piece using moduleExports.register()", async () => {
+      registry.requireMocks.set("test-package-register", {
+        register: () => ({
+          name: "test-piece-register",
+          displayName: "Test Piece Register",
+        }),
+      });
+
+      const useCase = new InstallPieceUseCase(registry, repository, logger);
+
+      await useCase.execute({
+        packageName: "test-package-register",
+        version: "1.0.0",
+      });
+
+      const registered = repository.pieces.get("test-piece-register");
+      expect(registered).toBeDefined();
+    });
+
+    it("should successfully extract piece using moduleExports.default.register()", async () => {
+      registry.requireMocks.set("test-package-default-register", {
+        default: {
+          register: () => ({
+            name: "test-piece-default-register",
+            displayName: "Test Piece Default",
+          }),
+        },
+      });
+
+      const useCase = new InstallPieceUseCase(registry, repository, logger);
+
+      await useCase.execute({
+        packageName: "test-package-default-register",
+        version: "1.0.0",
+      });
+
+      const registered = repository.pieces.get("test-piece-default-register");
+      expect(registered).toBeDefined();
+    });
+
+    it("should successfully extract piece directly from moduleExports.default object", async () => {
+      registry.requireMocks.set("test-package-default-object", {
+        default: {
+          name: "test-piece-default-object",
+          displayName: "Test Piece Default Object",
+        },
+      });
+
+      const useCase = new InstallPieceUseCase(registry, repository, logger);
+
+      await useCase.execute({
+        packageName: "test-package-default-object",
+        version: "1.0.0",
+      });
+
+      const registered = repository.pieces.get("test-piece-default-object");
+      expect(registered).toBeDefined();
+    });
+
+    it("should successfully extract and register all optional fields (description, categories, auth, aliases)", async () => {
+      registry.requireMocks.set("test-package-full", {
+        piece: {
+          name: "test-piece-full",
+          displayName: "Test Piece Full",
+          logoUrl: "http://logo",
+          description: "A piece with all fields",
+          categories: ["CRM", "Sales"],
+          auth: {
+            type: "OAUTH2",
+            props: { clientId: "xyz" },
+          },
+          aliases: ["old-piece-name"],
+        },
+      });
+
+      const useCase = new InstallPieceUseCase(registry, repository, logger);
+
+      await useCase.execute({
+        packageName: "test-package-full",
+        version: "1.0.0",
+      });
+
+      const registered = repository.pieces.get("test-piece-full");
+      expect(registered).toBeDefined();
+      expect(registered?.description).toBe("A piece with all fields");
+      expect(registered?.categories).toEqual(["CRM", "Sales"]);
+      expect(registered?.authType).toBe("OAUTH2");
+      expect(registered?.authSchema).toEqual({ clientId: "xyz" });
+      expect(registered?.aliases).toEqual(["old-piece-name"]);
+    });
+
+    it("should handle auto-registration failure if no valid piece object is found", async () => {
+      registry.requireMocks.set("test-package-invalid", {
+        default: {
+          register: () => ({
+            name: "missing-display-name",
+          }),
+        },
+      });
+
+      const useCase = new InstallPieceUseCase(registry, repository, logger);
+
+      await useCase.execute({
+        packageName: "test-package-invalid",
+        version: "1.0.0",
+      });
+
+      const registered = repository.pieces.get("missing-display-name");
+      expect(registered).toBeUndefined();
+    });
+
+    it("should fail gracefully if global piece auto-registration throws", async () => {
+      registry.requireMocks.set("test-package-error", {
+        register: () => {
+          throw new Error("Initialization error");
+        },
+      });
+
+      const useCase = new InstallPieceUseCase(registry, repository, logger);
 
       await expect(
         useCase.execute({
-          packageName: "@soopa/salesforce",
+          packageName: "test-package-error",
           version: "1.0.0",
-          workspaceId: "ws-1",
-          pieceId: "piece-1",
         }),
-      ).rejects.toThrow("Failed to install @soopa/salesforce");
+      ).rejects.toThrow("Initialization error");
     });
   });
 
   describe("CheckPieceUpdatesUseCase", () => {
-    let useCase: CheckPieceUpdatesUseCase;
+    it("should detect newer versions and enqueue updates", async () => {
+      repository.pieces.set("test-piece", {
+        name: "test-piece",
+        displayName: "Test",
+        packageName: "test-package",
+        version: "1.0.0",
+      });
 
-    beforeEach(() => {
-      useCase = new CheckPieceUpdatesUseCase(
+      registry.latestVersions.set("test-package", "1.1.0");
+
+      const useCase = new CheckPieceUpdatesUseCase(
         repository,
         registry,
         queuePublisher,
+        logger,
       );
-    });
-
-    it("should enqueue plugin install events for pieces with newer versions", async () => {
-      repository.installedPieces = [
-        {
-          workspaceId: "ws-1",
-          pieceId: "piece-1",
-          packageName: "@soopa/salesforce",
-          currentVersion: "1.0.0",
-        },
-        {
-          workspaceId: "ws-2",
-          pieceId: "piece-2",
-          packageName: "@soopa/github",
-          currentVersion: "2.5.0",
-        },
-      ];
-
-      registry.latestVersions.set("@soopa/salesforce", "1.1.0");
-      registry.latestVersions.set("@soopa/github", "2.5.0"); // Same version
 
       await useCase.execute();
 
-      expect(queuePublisher.messages).toHaveLength(1);
-      expect(queuePublisher.messages[0].queueName).toBe(
-        QueueName.PluginInstallQueue,
+      expect(queuePublisher.messages.length).toBe(1);
+      const msg = queuePublisher.messages[0];
+      expect(msg.queueName).toBe(QueueName.PluginInstallQueue);
+      const payload = msg.payload as Record<string, unknown>;
+      expect(payload.packageName).toBe("test-package");
+      expect(payload.version).toBe("1.1.0");
+    });
+
+    it("should not enqueue update if versions are same", async () => {
+      repository.pieces.set("test-piece", {
+        name: "test-piece",
+        displayName: "Test",
+        packageName: "test-package",
+        version: "1.0.0",
+      });
+
+      registry.latestVersions.set("test-package", "1.0.0");
+
+      const useCase = new CheckPieceUpdatesUseCase(
+        repository,
+        registry,
+        queuePublisher,
+        logger,
       );
 
-      const payload = queuePublisher.messages[0]
-        .payload as import("@soopa/queue").PluginInstallEvent;
-      expect(payload.packageName).toBe("@soopa/salesforce");
-      expect(payload.version).toBe("1.1.0");
-      expect(payload.workspaceId).toBe("ws-1");
+      await useCase.execute();
+
+      expect(queuePublisher.messages.length).toBe(0);
     });
 
-    it("should ignore apps if getting latest version from registry fails", async () => {
-      repository.installedPieces = [
-        {
-          workspaceId: "ws-1",
-          pieceId: "piece-1",
-          packageName: "@soopa/salesforce",
-          currentVersion: "1.0.0",
-        },
-      ];
+    it("should skip piece if version is missing", async () => {
+      repository.pieces.set("test-piece", {
+        name: "test-piece",
+        displayName: "Test",
+        packageName: "test-package",
+        version: undefined as unknown as string,
+      });
 
-      // Not setting it in registry will cause FakePieceRegistry to throw "not found"
-      await expect(useCase.execute()).resolves.not.toThrow();
-
-      expect(queuePublisher.messages).toHaveLength(0);
+      const useCase = new CheckPieceUpdatesUseCase(
+        repository,
+        registry,
+        queuePublisher,
+        logger,
+      );
+      await useCase.execute();
+      expect(queuePublisher.messages.length).toBe(0);
     });
 
-    it("should continue if queue publisher fails to enqueue an update", async () => {
-      repository.installedPieces = [
-        {
-          workspaceId: "ws-1",
-          pieceId: "piece-1",
-          packageName: "@soopa/salesforce",
-          currentVersion: "1.0.0",
-        },
-        {
-          workspaceId: "ws-2",
-          pieceId: "piece-2",
-          packageName: "@soopa/github",
-          currentVersion: "2.0.0",
-        },
-      ];
+    it("should ignore and continue if registry fails to fetch latest version", async () => {
+      repository.pieces.set("test-piece", {
+        name: "test-piece",
+        displayName: "Test",
+        packageName: "test-package",
+        version: "1.0.0",
+      });
+      registry.shouldFail = true;
 
-      registry.latestVersions.set("@soopa/salesforce", "1.1.0");
-      registry.latestVersions.set("@soopa/github", "2.1.0");
+      const useCase = new CheckPieceUpdatesUseCase(
+        repository,
+        registry,
+        queuePublisher,
+        logger,
+      );
+      await useCase.execute();
+      expect(queuePublisher.messages.length).toBe(0);
+    });
+
+    it("should gracefully handle queue publisher failures", async () => {
+      repository.pieces.set("test-piece", {
+        name: "test-piece",
+        displayName: "Test",
+        packageName: "test-package",
+        version: "1.0.0",
+      });
+      registry.latestVersions.set("test-package", "1.1.0");
       queuePublisher.shouldFail = true;
 
-      await expect(useCase.execute()).resolves.not.toThrow();
+      const useCase = new CheckPieceUpdatesUseCase(
+        repository,
+        registry,
+        queuePublisher,
+        logger,
+      );
+      await useCase.execute();
+      expect(queuePublisher.messages.length).toBe(0);
     });
 
-    it("should fall back to string comparison if versions are invalid semver", async () => {
-      repository.installedPieces = [
-        {
-          workspaceId: "ws-1",
-          pieceId: "piece-1",
-          packageName: "@soopa/salesforce",
-          currentVersion: "not-a-version",
-        },
-      ];
+    it("should handle non-semver versions using string fallback", async () => {
+      repository.pieces.set("test-piece", {
+        name: "test-piece",
+        displayName: "Test",
+        packageName: "test-package",
+        version: "v1-alpha",
+      });
+      registry.latestVersions.set("test-package", "v1-beta");
 
-      registry.latestVersions.set("@soopa/salesforce", "still-not-a-version");
-
+      const useCase = new CheckPieceUpdatesUseCase(
+        repository,
+        registry,
+        queuePublisher,
+        logger,
+      );
       await useCase.execute();
-
-      expect(queuePublisher.messages).toHaveLength(1);
-      const payload = queuePublisher.messages[0]
-        .payload as import("@soopa/queue").PluginInstallEvent;
-      expect(payload.version).toBe("still-not-a-version");
+      expect(queuePublisher.messages.length).toBe(1);
     });
   });
 });

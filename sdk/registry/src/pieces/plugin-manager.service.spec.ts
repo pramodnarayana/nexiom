@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { Mocked } from 'vitest';
+import { ConfigService } from '@nestjs/config';
 import { PluginManagerService } from './plugin-manager.service.js';
 import type { IQueueService } from '@soopa/queue';
 import * as fs from 'fs';
@@ -43,6 +44,7 @@ vi.mock('node:child_process', () => {
 describe('PluginManagerService', () => {
   let service: PluginManagerService;
   let queueService: Mocked<IQueueService>;
+  let mockConfigService: Mocked<ConfigService>;
   
   beforeEach(() => {
     queueService = {
@@ -50,7 +52,14 @@ describe('PluginManagerService', () => {
       consume: vi.fn(),
     } as unknown as Mocked<IQueueService>;
 
-    service = new PluginManagerService(queueService);
+    mockConfigService = {
+      get: vi.fn().mockImplementation((key: string) => {
+        if (key === 'PLUGINS_DIRECTORY') return './plugins';
+        return undefined;
+      })
+    } as unknown as Mocked<ConfigService>;
+
+    service = new PluginManagerService(queueService, mockConfigService);
   });
 
   describe('initializePlugins', () => {

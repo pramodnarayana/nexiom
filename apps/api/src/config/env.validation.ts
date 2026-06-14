@@ -22,10 +22,36 @@ const baseSchema = z.object({
   OWNER_ROLE_ID: z.string().min(1),
   ADMIN_ROLE_ID: z.string().min(1),
   MEMBER_ROLE_ID: z.string().min(1),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
 
   // Infrastructure
   REDIS_URL: z.string().url().optional(),
   INFRA_MODE: z.enum(['local', 'aws', 'kms']).default('local'),
+
+  // Webhooks & NPM
+  GITOPS_WEBHOOK_SECRET: z.string().optional(),
+  NPM_WEBHOOK_SECRET: z.string().optional(),
+  NPM_REGISTRY_URL: z.string().optional(),
+
+  // Scheduler / Windmill
+  WINDMILL_ENABLED: z.coerce.boolean().default(false),
+  WINDMILL_BASE_URL: z.string().url().optional(),
+  WINDMILL_WORKSPACE: z.string().optional(),
+  WINDMILL_TOKEN: z.string().optional(),
+  WINDMILL_INTERNAL_SECRET: z.string().optional(),
+  WINDMILL_CALLBACK_URL: z.string().optional(),
+
+  // Observability
+  LOG_LEVEL: z.string().default('info'),
+  OPENOBSERVE_URL: z.string().optional(),
+  OPENOBSERVE_ORG: z.string().optional(),
+  OPENOBSERVE_STREAM: z.string().optional(),
+  OPENOBSERVE_TOKEN: z.string().optional(),
+
+  // Plugins
+  PLUGINS_PATH: z.string().optional(),
+  DISABLE_LOCAL_SYNC: z.string().optional(),
 });
 
 const localInfraSchema = baseSchema.extend({
@@ -38,16 +64,16 @@ const localInfraSchema = baseSchema.extend({
 
 const awsInfraSchema = baseSchema.extend({
   INFRA_MODE: z.enum(['aws', 'kms']),
-  KMS_KEY_ID: z.string().min(1, { message: 'KMS_KEY_ID is required when INFRA_MODE is aws or kms' }),
+  KMS_KEY_ID: z.string().min(1, {
+    message: 'KMS_KEY_ID is required when INFRA_MODE is aws or kms',
+  }),
   ENCRYPTION_KEY: z.string().optional(),
 });
 
-export const envValidationSchema = z
-  .discriminatedUnion('INFRA_MODE', [
-    localInfraSchema,
-    awsInfraSchema,
-  ])
-  .passthrough();
+export const envValidationSchema = z.discriminatedUnion('INFRA_MODE', [
+  localInfraSchema,
+  awsInfraSchema,
+]);
 
 export type EnvConfig = z.infer<typeof envValidationSchema>;
 
@@ -60,7 +86,7 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
 
   if (!parsed.success) {
     console.error('❌ Invalid environment variables:');
-    parsed.error.issues.forEach((issue) => {
+    parsed.error.issues.forEach((issue: z.ZodIssue) => {
       console.error(`  - ${issue.path.join('.')}: ${issue.message}`);
     });
     throw new Error('Environment validation failed');

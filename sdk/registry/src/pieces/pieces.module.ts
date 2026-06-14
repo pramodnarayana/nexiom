@@ -7,7 +7,7 @@ import { PieceLoaderService } from './piece-loader.service.js';
 import { PIECE_RESOLVER } from './piece-resolver.port.js';
 import { ProductionPieceResolver } from './production-piece-resolver.js';
 import { DevelopmentPieceResolver } from './development-piece-resolver.js';
-import { WorkspaceSyncService } from './workspace-sync.service.js';
+import { LocalDevPluginSyncService } from './local-dev-plugin-sync.service.js';
 import { PluginManagerService } from './plugin-manager.service.js';
 import { ExecutionWorkerService } from './execution-worker.service.js';
 import { MigrationWorkerService } from './migration-worker.service.js';
@@ -23,11 +23,11 @@ const PIECES_FACTORY_PROVIDER = {
     db: DrizzleDb,
     loader: PieceLoaderService,
     pluginManager: PluginManagerService,
-    workspaceSync: WorkspaceSyncService,
+    localSync: LocalDevPluginSyncService,
   ): Promise<Piece[]> => {
     const isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
     if (isDev) {
-      await workspaceSync.initialize();
+      await localSync.initialize();
     } else {
       await pluginManager.initializePlugins();
     }
@@ -35,18 +35,19 @@ const PIECES_FACTORY_PROVIDER = {
     // 2. Load pieces from DB
     return loader.loadEnabledPieces(db);
   },
-  inject: [DATABASE_CONNECTION, PieceLoaderService, PluginManagerService, WorkspaceSyncService],
+  inject: [DATABASE_CONNECTION, PieceLoaderService, PluginManagerService, LocalDevPluginSyncService],
 };
 
 const CORE_PROVIDERS = [
   ProductionPieceResolver,
   DevelopmentPieceResolver,
-  WorkspaceSyncService,
+  LocalDevPluginSyncService,
   {
     provide: PIECE_RESOLVER,
     useFactory: (devResolver: DevelopmentPieceResolver, prodResolver: ProductionPieceResolver) => {
       const isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
-      return isDev ? devResolver : prodResolver;
+      const disableSync = process.env.DISABLE_LOCAL_SYNC === 'true';
+      return (isDev && !disableSync) ? devResolver : prodResolver;
     },
     inject: [DevelopmentPieceResolver, ProductionPieceResolver],
   },
@@ -62,7 +63,7 @@ const CORE_EXPORTS = [
   PieceRegistryService,
   PieceLoaderService,
   PluginManagerService,
-  WorkspaceSyncService,
+  LocalDevPluginSyncService,
   ExecutionWorkerService,
   PIECES,
 ];

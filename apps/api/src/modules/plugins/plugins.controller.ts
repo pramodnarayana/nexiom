@@ -32,7 +32,7 @@ const WebhookPayloadSchema = z
 export type WebhookPayload = z.infer<typeof WebhookPayloadSchema>;
 export class WebhookPayloadDto extends createZodDto(WebhookPayloadSchema) {}
 
-@Controller('api/internal/system/plugins')
+@Controller('internal/system/plugins')
 export class PluginsController {
   private readonly logger = new Logger(PluginsController.name);
 
@@ -70,26 +70,37 @@ export class PluginsController {
     }
 
     // Validate HMAC signature to ensure request originated from our private registry
-    const hmac = crypto.createHmac('sha256', webhookSecret);
-    const digest = 'sha256=' + hmac.update(rawBody).digest('hex');
+    // Verdaccio's built-in notify doesn't compute an HMAC of the payload, so we allow it to pass the raw secret
+    let isValid = false;
 
-    // Use constant-time comparison to prevent timing attacks
-    try {
-      const signatureBuffer = Buffer.from(signature, 'utf8');
-      const digestBuffer = Buffer.from(digest, 'utf8');
+    if (signature === webhookSecret) {
+      this.logger.debug(
+        'Authenticated via static webhook secret (Verdaccio native notify)',
+      );
+      isValid = true;
+    } else {
+      const hmac = crypto.createHmac('sha256', webhookSecret);
+      const digest = 'sha256=' + hmac.update(rawBody).digest('hex');
 
-      // Fail early if lengths don't match
-      if (signatureBuffer.length !== digestBuffer.length) {
-        throw new Error('Signature length mismatch');
+      // Use constant-time comparison to prevent timing attacks
+      try {
+        const signatureBuffer = Buffer.from(signature, 'utf8');
+        const digestBuffer = Buffer.from(digest, 'utf8');
+
+        // Fail early if lengths don't match
+        if (signatureBuffer.length !== digestBuffer.length) {
+          throw new Error('Signature length mismatch');
+        }
+
+        if (crypto.timingSafeEqual(signatureBuffer, digestBuffer)) {
+          isValid = true;
+        }
+      } catch (_error) {
+        // Ignored, isValid remains false
       }
+    }
 
-      if (!crypto.timingSafeEqual(signatureBuffer, digestBuffer)) {
-        this.logger.warn(
-          'Invalid NPM webhook signature detected. Dropping payload.',
-        );
-        throw new UnauthorizedException('Invalid webhook signature');
-      }
-    } catch (_error) {
+    if (!isValid) {
       this.logger.warn(
         'Invalid NPM webhook signature detected. Dropping payload.',
       );

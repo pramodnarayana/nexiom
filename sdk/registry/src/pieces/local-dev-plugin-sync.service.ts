@@ -5,8 +5,8 @@ import * as fs from 'fs';
 import { PIECE_REPOSITORY, type IPieceRepository } from './piece-repository.port.js';
 
 @Injectable()
-export class WorkspaceSyncService implements OnModuleInit {
-  private readonly logger = new Logger(WorkspaceSyncService.name);
+export class LocalDevPluginSyncService implements OnModuleInit {
+  private readonly logger = new Logger(LocalDevPluginSyncService.name);
   private workspacePieces = new Map<string, string>();
   private initialized = false;
 
@@ -22,7 +22,9 @@ export class WorkspaceSyncService implements OnModuleInit {
     if (this.initialized) return;
 
     const isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
-    if (!isDev) {
+    const disableSync = process.env.DISABLE_LOCAL_SYNC === 'true';
+    
+    if (!isDev || disableSync) {
       this.initialized = true;
       return;
     }
@@ -93,6 +95,7 @@ export class WorkspaceSyncService implements OnModuleInit {
         }
       }
       this.initialized = true;
+      this.logger.log(`Startup Sync: Found ${this.workspacePieces.size} pieces: ${Array.from(this.workspacePieces.keys()).join(', ')}`);
     } catch (err) {
       this.logger.warn(`Startup Sync: Failed to scan workspace plugins directory: ${err}`);
     }

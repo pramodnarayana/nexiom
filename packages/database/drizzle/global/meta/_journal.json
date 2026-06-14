@@ -134,6 +134,20 @@
       "when": 1781275209402,
       "tag": "0019_tiny_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1781353894534,
+      "tag": "0020_secret_red_hulk",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1781417445468,
+      "tag": "0021_wakeful_firelord",
+      "breakpoints": true
     }
   ]
 }

@@ -48,7 +48,7 @@ export const salesforceAuth = PieceAuth.OAuth2({
                         return orgId;
                     }
                 }
-            } catch (e) {
+            } catch {
                 // Invalid URL, return undefined
             }
         }

@@ -560,9 +560,13 @@ export class OAuthController {
     }
 
     // Prefer provider-extracted vendorTenantId; validate if both present
-    if (extractedVendorTenantId && body.vendorTenantId && extractedVendorTenantId !== body.vendorTenantId) {
+    if (
+      extractedVendorTenantId &&
+      body.vendorTenantId &&
+      extractedVendorTenantId !== body.vendorTenantId
+    ) {
       throw new BadRequestException(
-        `vendorTenantId mismatch: extracted="${extractedVendorTenantId}" vs supplied="${body.vendorTenantId}"`
+        `vendorTenantId mismatch: extracted="${extractedVendorTenantId}" vs supplied="${body.vendorTenantId}"`,
       );
     }
     const finalVendorTenantId =

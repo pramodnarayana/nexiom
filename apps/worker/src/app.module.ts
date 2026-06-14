@@ -36,7 +36,7 @@ import { NestChatStreamOrchestratorAdapter } from "./adapters/outbound/nest-chat
 import { RedisRealtimeEventPubSubAdapter } from "./adapters/outbound/redis-realtime-event-pubsub.adapter.js";
 import { NestChatPersistenceAdapter } from "./adapters/outbound/nest-chat-persistence.adapter.js";
 import { AiSdkTitleGeneratorAdapter } from "./adapters/outbound/ai-sdk-title-generator.adapter.js";
-import { DrizzleWorkspacePiecesRepositoryAdapter } from "./adapters/outbound/drizzle-workspace-pieces.repository.js";
+import { DrizzleGlobalPiecesRepositoryAdapter } from "./adapters/outbound/drizzle-global-pieces.repository.js";
 import { NestPieceRegistryAdapter } from "./adapters/outbound/nest-piece-registry.adapter.js";
 import { NodeFsGitRepositoryAdapter } from "./adapters/outbound/node-fs-git-repository.adapter.js";
 import { NestCacheInvalidatorAdapter } from "./adapters/outbound/nest-cache-invalidator.adapter.js";
@@ -97,7 +97,7 @@ import { validateEnv } from "./config/env.validation.js";
     RedisRealtimeEventPubSubAdapter,
     NestChatPersistenceAdapter,
     AiSdkTitleGeneratorAdapter,
-    DrizzleWorkspacePiecesRepositoryAdapter,
+    DrizzleGlobalPiecesRepositoryAdapter,
     NestPieceRegistryAdapter,
     NodeFsGitRepositoryAdapter,
     NestCacheInvalidatorAdapter,
