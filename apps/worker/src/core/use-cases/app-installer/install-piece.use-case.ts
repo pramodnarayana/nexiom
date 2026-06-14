@@ -98,7 +98,9 @@ export class InstallPieceUseCase {
             : undefined,
         aliases:
           Array.isArray(piece.aliases) &&
-          piece.aliases.every((a) => typeof a === "object" && a !== null)
+          piece.aliases.every(
+            (a) => typeof a === "object" && a !== null && !Array.isArray(a),
+          )
             ? piece.aliases
             : undefined,
         packageName: command.packageName,

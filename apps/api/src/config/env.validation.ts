@@ -27,7 +27,7 @@ const baseSchema = z.object({
 
   // Infrastructure
   REDIS_URL: z.string().url().optional(),
-  INFRA_MODE: z.enum(['local', 'aws']).default('local'),
+  INFRA_MODE: z.enum(['local', 'aws', 'kms']).default('local'),
 
   // Webhooks & NPM
   GITOPS_WEBHOOK_SECRET: z.string().optional(),
@@ -70,9 +70,18 @@ const awsInfraSchema = baseSchema.extend({
   ENCRYPTION_KEY: z.string().optional(),
 });
 
+const kmsInfraSchema = baseSchema.extend({
+  INFRA_MODE: z.literal('kms'),
+  KMS_KEY_ID: z.string().min(1, {
+    message: 'KMS_KEY_ID is required when INFRA_MODE is kms',
+  }),
+  ENCRYPTION_KEY: z.string().optional(),
+});
+
 export const envValidationSchema = z.discriminatedUnion('INFRA_MODE', [
   localInfraSchema,
   awsInfraSchema,
+  kmsInfraSchema,
 ]);
 
 export type EnvConfig = z.infer<typeof envValidationSchema>;
