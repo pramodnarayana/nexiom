@@ -124,6 +124,15 @@ export class PluginsController {
       };
     }
 
+    const ignoredPackages = ['@soopa/piece-framework', '@soopa/domain-tms'];
+    if (ignoredPackages.includes(packageName)) {
+      return {
+        status: 'ignored',
+        reason:
+          'Core framework packages are statically injected and cannot be hot-loaded',
+      };
+    }
+
     this.logger.log(
       `Persisting durable install job for ${packageName}@${version}...`,
     );

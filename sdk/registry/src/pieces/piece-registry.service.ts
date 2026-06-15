@@ -66,6 +66,22 @@ export class PieceRegistryService {
     return this.getPiece(appName)?.triggers[triggerName];
   }
 
+  /**
+   * Dynamically registers or updates a piece in the in-memory registry.
+   * This is used by the hot-reloader to make new pieces available without restarting the process.
+   */
+  registerPiece(piece: Piece): void {
+    this.registry.set(piece.name, piece);
+    
+    if (piece.aliases) {
+      for (const alias of piece.aliases) {
+        this.aliasToBaseName.set(alias.name, piece.name);
+      }
+    }
+    
+    this.logger.log(`Hot-loaded piece schema into memory: ${piece.name}`);
+  }
+
   getAllPieces(): Piece[] {
     return [...this.registry.values()];
   }

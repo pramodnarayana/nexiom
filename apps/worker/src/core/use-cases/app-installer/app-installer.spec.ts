@@ -8,6 +8,7 @@ import {
   FakeLoggerPort,
 } from "../../fakes/fake-app-installer-ports.js";
 import { FakeQueuePublisher } from "../../fakes/fake-queue.publisher.js";
+import { FakeRealtimeEventPubSub } from "../../fakes/fake-copilot-ports.js";
 
 describe("App Installer Subdomain", () => {
   let registry: FakePieceRegistry;
@@ -32,7 +33,12 @@ describe("App Installer Subdomain", () => {
         },
       });
 
-      const useCase = new InstallPieceUseCase(registry, repository, logger);
+      const useCase = new InstallPieceUseCase(
+        registry,
+        repository,
+        new FakeRealtimeEventPubSub(),
+        logger,
+      );
 
       await useCase.execute({
         packageName: "test-package",
@@ -52,7 +58,12 @@ describe("App Installer Subdomain", () => {
     it("should fail gracefully if installation fails", async () => {
       registry.shouldFail = true;
 
-      const useCase = new InstallPieceUseCase(registry, repository, logger);
+      const useCase = new InstallPieceUseCase(
+        registry,
+        repository,
+        new FakeRealtimeEventPubSub(),
+        logger,
+      );
 
       await expect(
         useCase.execute({
@@ -70,7 +81,12 @@ describe("App Installer Subdomain", () => {
         }),
       });
 
-      const useCase = new InstallPieceUseCase(registry, repository, logger);
+      const useCase = new InstallPieceUseCase(
+        registry,
+        repository,
+        new FakeRealtimeEventPubSub(),
+        logger,
+      );
 
       await useCase.execute({
         packageName: "test-package-register",
@@ -91,7 +107,12 @@ describe("App Installer Subdomain", () => {
         },
       });
 
-      const useCase = new InstallPieceUseCase(registry, repository, logger);
+      const useCase = new InstallPieceUseCase(
+        registry,
+        repository,
+        new FakeRealtimeEventPubSub(),
+        logger,
+      );
 
       await useCase.execute({
         packageName: "test-package-default-register",
@@ -110,7 +131,12 @@ describe("App Installer Subdomain", () => {
         },
       });
 
-      const useCase = new InstallPieceUseCase(registry, repository, logger);
+      const useCase = new InstallPieceUseCase(
+        registry,
+        repository,
+        new FakeRealtimeEventPubSub(),
+        logger,
+      );
 
       await useCase.execute({
         packageName: "test-package-default-object",
@@ -137,7 +163,12 @@ describe("App Installer Subdomain", () => {
         },
       });
 
-      const useCase = new InstallPieceUseCase(registry, repository, logger);
+      const useCase = new InstallPieceUseCase(
+        registry,
+        repository,
+        new FakeRealtimeEventPubSub(),
+        logger,
+      );
 
       await useCase.execute({
         packageName: "test-package-full",
@@ -162,7 +193,12 @@ describe("App Installer Subdomain", () => {
         },
       });
 
-      const useCase = new InstallPieceUseCase(registry, repository, logger);
+      const useCase = new InstallPieceUseCase(
+        registry,
+        repository,
+        new FakeRealtimeEventPubSub(),
+        logger,
+      );
 
       await expect(
         useCase.execute({
@@ -182,7 +218,12 @@ describe("App Installer Subdomain", () => {
         },
       });
 
-      const useCase = new InstallPieceUseCase(registry, repository, logger);
+      const useCase = new InstallPieceUseCase(
+        registry,
+        repository,
+        new FakeRealtimeEventPubSub(),
+        logger,
+      );
 
       await expect(
         useCase.execute({

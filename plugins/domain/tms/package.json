@@ -2,18 +2,20 @@
   "name": "@soopa/domain-tms",
   "version": "0.1.0",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "require": "./dist/index.cjs",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.lib.json",
-    "dev": "tsc -p tsconfig.lib.json --watch --preserveWatchOutput",
+    "build": "tsup src/index.ts --format cjs,esm && tsc -p tsconfig.lib.json --emitDeclarationOnly",
+    "dev": "tsup src/index.ts --format cjs,esm --watch",
     "clean": "rm -rf dist",
     "lint": "eslint ."
   },
@@ -23,6 +25,7 @@
   "devDependencies": {
     "@soopa/piece-framework": "workspace:*",
     "@types/node": "^20.0.0",
+    "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   }
 }

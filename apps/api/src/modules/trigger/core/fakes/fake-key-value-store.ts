@@ -93,4 +93,16 @@ export class FakeKeyValueStore implements IKeyValueStore {
       new Error('FakeKeyValueStore: hdel not implemented in fake'),
     );
   }
+
+  scan(
+    _cursor: string,
+    _matchOption: 'MATCH',
+    _matchPattern: string,
+    _countOption: 'COUNT',
+    _count: number,
+  ): Promise<[string, string[]]> {
+    return Promise.reject(
+      new Error('FakeKeyValueStore: scan not implemented in fake'),
+    );
+  }
 }

@@ -8,4 +8,5 @@ export interface IKeyValueStore {
   hget(key: string, field: string): Promise<string | null>;
   hset(key: string, field: string, value: string | Buffer | number): Promise<number>;
   hdel(key: string, ...fields: string[]): Promise<number>;
+  scan(cursor: string, matchOption: 'MATCH', matchPattern: string, countOption: 'COUNT', count: number): Promise<[string, string[]]>;
 }

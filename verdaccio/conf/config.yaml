@@ -21,3 +21,12 @@ packages:
     unpublish: $all
     proxy: npmjs
 logs: { type: stdout, format: pretty, level: http }
+
+notify:
+  - method: POST
+    headers:
+      - "Content-Type": "application/json"
+      - "x-npm-signature": "local_test_secret"
+    endpoint: "http://host.docker.internal:3000/api/internal/system/plugins/webhook"
+    content: '{"name":"{{name}}", "version":"{{version}}"}'
+

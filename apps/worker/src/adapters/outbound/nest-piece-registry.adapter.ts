@@ -14,12 +14,12 @@ export class NestPieceRegistryAdapter implements PieceRegistryPort {
   async installPiece(
     packageName: string,
     version: string,
-  ): Promise<{ version: string }> {
-    const pluginInfo = await this.pluginManager.installPiece(
-      packageName,
-      version,
-    );
-    return { version: pluginInfo.version };
+  ): Promise<{
+    version: string;
+    location: string;
+    moduleExports: Record<string, unknown>;
+  }> {
+    return await this.pluginManager.installPiece(packageName, version);
   }
 
   async getLatestVersion(packageName: string): Promise<string> {
@@ -35,9 +35,5 @@ export class NestPieceRegistryAdapter implements PieceRegistryPort {
       { timeout: 5000 },
     );
     return response.data.version;
-  }
-
-  async requirePiece(packageName: string): Promise<Record<string, unknown>> {
-    return this.pluginManager.requirePiece(packageName);
   }
 }

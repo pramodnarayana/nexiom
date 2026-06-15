@@ -5,10 +5,11 @@ import {
 } from './piece-registry.service.js';
 import { PieceLoaderService } from './piece-loader.service.js';
 import { PIECE_RESOLVER } from './piece-resolver.port.js';
-import { ProductionPieceResolver } from './production-piece-resolver.js';
-import { DevelopmentPieceResolver } from './development-piece-resolver.js';
+import { LocalFilePieceResolver } from './local-file.piece-resolver.js';
+import { NpmRegistryPieceResolver } from './npm-registry.piece-resolver.js';
 import { LocalDevPluginSyncService } from './local-dev-plugin-sync.service.js';
 import { PluginManagerService } from './plugin-manager.service.js';
+import { PluginSandbox } from './sandbox.js';
 import { ExecutionWorkerService } from './execution-worker.service.js';
 import { MigrationWorkerService } from './migration-worker.service.js';
 import { PIECE_REPOSITORY } from './piece-repository.port.js';
@@ -16,6 +17,8 @@ import { DrizzlePieceRepository } from './drizzle-piece.repository.js';
 import { DATABASE_CONNECTION } from '@soopa/database';
 import type { DrizzleDb } from '@soopa/database';
 import type { Piece } from '@soopa/piece-framework';
+import { PluginHotReloaderService } from './plugin-hot-reloader.service.js';
+import { CacheModule } from '@soopa/cache';
 
 const PIECES_FACTORY_PROVIDER = {
   provide: PIECES,
@@ -39,17 +42,17 @@ const PIECES_FACTORY_PROVIDER = {
 };
 
 const CORE_PROVIDERS = [
-  ProductionPieceResolver,
-  DevelopmentPieceResolver,
+  LocalFilePieceResolver,
+  NpmRegistryPieceResolver,
   LocalDevPluginSyncService,
   {
     provide: PIECE_RESOLVER,
-    useFactory: (devResolver: DevelopmentPieceResolver, prodResolver: ProductionPieceResolver) => {
+    useFactory: (devResolver: LocalFilePieceResolver, prodResolver: NpmRegistryPieceResolver) => {
       const isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
       const disableSync = process.env.DISABLE_LOCAL_SYNC === 'true';
       return (isDev && !disableSync) ? devResolver : prodResolver;
     },
-    inject: [DevelopmentPieceResolver, ProductionPieceResolver],
+    inject: [LocalFilePieceResolver, NpmRegistryPieceResolver],
   },
   { provide: PIECE_REPOSITORY, useClass: DrizzlePieceRepository },
   PieceLoaderService,
@@ -57,6 +60,7 @@ const CORE_PROVIDERS = [
   PieceRegistryService,
   PluginManagerService,
   ExecutionWorkerService,
+  PluginHotReloaderService,
 ];
 
 const CORE_EXPORTS = [
@@ -65,6 +69,7 @@ const CORE_EXPORTS = [
   PluginManagerService,
   LocalDevPluginSyncService,
   ExecutionWorkerService,
+  PluginHotReloaderService,
   PIECES,
 ];
 
@@ -94,6 +99,7 @@ export class PiecesModule {
     return {
       global: true,
       module: PiecesModule,
+      imports: [CacheModule],
       providers: CORE_PROVIDERS,
       exports: CORE_EXPORTS,
     };

@@ -19,12 +19,12 @@
   },
   "devDependencies": {
     "@soopa/piece-framework": "workspace:*",
-    "@soopa/domain-tms": "workspace:*",
-    "@soopa/piece-salesforce": "workspace:*",
     "@types/jsonata": "^1.5.1",
     "typescript": "^6.0.3"
   },
   "dependencies": {
+    "@soopa/domain-tms": "workspace:*",
+    "@soopa/piece-salesforce": "workspace:*",
     "jsonata": "^2.2.1"
   },
   "files": [

@@ -29,11 +29,17 @@ export interface PieceRegistryPort {
   installPiece(
     packageName: string,
     version: string,
-  ): Promise<{ version: string }>;
+  ): Promise<{
+    version: string;
+    location: string;
+    moduleExports: Record<string, unknown>;
+  }>;
 
   getLatestVersion(packageName: string): Promise<string>;
+}
 
-  requirePiece(packageName: string): Promise<Record<string, unknown>>;
+export interface SystemEventPubSubPort {
+  publishSystemEvent(event: string, payload: unknown): Promise<void>;
 }
 
 export interface LoggerPort {

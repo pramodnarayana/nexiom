@@ -26,4 +26,8 @@ export class RedisRealtimeEventPubSubAdapter implements RealtimeEventPubSubPort 
       JSON.stringify({ type: "done", payload: "done" }),
     );
   }
+
+  async publishSystemEvent(event: string, payload: unknown): Promise<void> {
+    await this.redis.publish(event, JSON.stringify(payload));
+  }
 }
