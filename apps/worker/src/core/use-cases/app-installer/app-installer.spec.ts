@@ -34,6 +34,7 @@ describe("App Installer Subdomain", () => {
       });
 
       const pubsub = new FakeRealtimeEventPubSub();
+      const publishSpy = vi.spyOn(pubsub, "publishSystemEvent");
       const useCase = new InstallPieceUseCase(
         registry,
         repository,
@@ -55,7 +56,7 @@ describe("App Installer Subdomain", () => {
       expect(registered).toBeDefined();
       expect(registered?.version).toBe("1.0.0");
 
-      expect(pubsub.publishSystemEvent).toHaveBeenCalledWith(
+      expect(publishSpy).toHaveBeenCalledWith(
         "system:plugins:reloaded",
         expect.objectContaining({
           packageName: "test-package",
@@ -68,6 +69,7 @@ describe("App Installer Subdomain", () => {
       registry.shouldFail = true;
 
       const pubsub = new FakeRealtimeEventPubSub();
+      const publishSpy = vi.spyOn(pubsub, "publishSystemEvent");
       const useCase = new InstallPieceUseCase(
         registry,
         repository,
@@ -82,7 +84,7 @@ describe("App Installer Subdomain", () => {
         }),
       ).rejects.toThrow("Failed to install test-package");
 
-      expect(pubsub.publishSystemEvent).not.toHaveBeenCalled();
+      expect(publishSpy).not.toHaveBeenCalled();
     });
 
     it("should successfully extract piece using moduleExports.register()", async () => {
@@ -94,6 +96,7 @@ describe("App Installer Subdomain", () => {
       });
 
       const pubsub = new FakeRealtimeEventPubSub();
+      const publishSpy = vi.spyOn(pubsub, "publishSystemEvent");
       const useCase = new InstallPieceUseCase(
         registry,
         repository,
@@ -109,7 +112,7 @@ describe("App Installer Subdomain", () => {
       const registered = repository.pieces.get("test-piece-register");
       expect(registered).toBeDefined();
 
-      expect(pubsub.publishSystemEvent).toHaveBeenCalledWith(
+      expect(publishSpy).toHaveBeenCalledWith(
         "system:plugins:reloaded",
         expect.objectContaining({
           packageName: "test-package-register",
@@ -129,6 +132,7 @@ describe("App Installer Subdomain", () => {
       });
 
       const pubsub = new FakeRealtimeEventPubSub();
+      const publishSpy = vi.spyOn(pubsub, "publishSystemEvent");
       const useCase = new InstallPieceUseCase(
         registry,
         repository,
@@ -144,7 +148,7 @@ describe("App Installer Subdomain", () => {
       const registered = repository.pieces.get("test-piece-default-register");
       expect(registered).toBeDefined();
 
-      expect(pubsub.publishSystemEvent).toHaveBeenCalledWith(
+      expect(publishSpy).toHaveBeenCalledWith(
         "system:plugins:reloaded",
         expect.objectContaining({
           packageName: "test-package-default-register",
@@ -162,6 +166,7 @@ describe("App Installer Subdomain", () => {
       });
 
       const pubsub = new FakeRealtimeEventPubSub();
+      const publishSpy = vi.spyOn(pubsub, "publishSystemEvent");
       const useCase = new InstallPieceUseCase(
         registry,
         repository,
@@ -177,7 +182,7 @@ describe("App Installer Subdomain", () => {
       const registered = repository.pieces.get("test-piece-default-object");
       expect(registered).toBeDefined();
 
-      expect(pubsub.publishSystemEvent).toHaveBeenCalledWith(
+      expect(publishSpy).toHaveBeenCalledWith(
         "system:plugins:reloaded",
         expect.objectContaining({
           packageName: "test-package-default-object",
@@ -203,6 +208,7 @@ describe("App Installer Subdomain", () => {
       });
 
       const pubsub = new FakeRealtimeEventPubSub();
+      const publishSpy = vi.spyOn(pubsub, "publishSystemEvent");
       const useCase = new InstallPieceUseCase(
         registry,
         repository,
@@ -223,7 +229,7 @@ describe("App Installer Subdomain", () => {
       expect(registered?.authSchema).toEqual({ clientId: "xyz" });
       expect(registered?.aliases).toEqual([{ name: "old-piece-name" }]);
 
-      expect(pubsub.publishSystemEvent).toHaveBeenCalledWith(
+      expect(publishSpy).toHaveBeenCalledWith(
         "system:plugins:reloaded",
         expect.objectContaining({
           packageName: "test-package-full",
@@ -242,6 +248,7 @@ describe("App Installer Subdomain", () => {
       });
 
       const pubsub = new FakeRealtimeEventPubSub();
+      const publishSpy = vi.spyOn(pubsub, "publishSystemEvent");
       const useCase = new InstallPieceUseCase(
         registry,
         repository,
@@ -259,7 +266,7 @@ describe("App Installer Subdomain", () => {
       const registered = repository.pieces.get("missing-display-name");
       expect(registered).toBeUndefined();
 
-      expect(pubsub.publishSystemEvent).not.toHaveBeenCalled();
+      expect(publishSpy).not.toHaveBeenCalled();
     });
 
     it("should fail gracefully if global piece auto-registration throws", async () => {
@@ -270,6 +277,7 @@ describe("App Installer Subdomain", () => {
       });
 
       const pubsub = new FakeRealtimeEventPubSub();
+      const publishSpy = vi.spyOn(pubsub, "publishSystemEvent");
       const useCase = new InstallPieceUseCase(
         registry,
         repository,
@@ -284,7 +292,7 @@ describe("App Installer Subdomain", () => {
         }),
       ).rejects.toThrow("Initialization error");
 
-      expect(pubsub.publishSystemEvent).not.toHaveBeenCalled();
+      expect(publishSpy).not.toHaveBeenCalled();
     });
   });
 

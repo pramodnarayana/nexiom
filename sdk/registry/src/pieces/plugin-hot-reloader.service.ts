@@ -163,7 +163,7 @@ export class PluginHotReloaderService implements OnModuleInit, OnModuleDestroy {
       }
 
       this.pieceRegistry.registerPiece(piece);
-      this.logger.log(`Hot-reloaded piece: ${piece.name} (${packageName}@${version})`);
+      this.logger.log(`Hot-reloaded piece: ${piece.name} (${packageName}@${resolvedVersion})`);
     } catch (error: unknown) {
       this.logger.error(
         `Failed to hot-load ${packageName}@${version}`,

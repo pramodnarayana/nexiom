@@ -10,7 +10,7 @@ vi.mock('module', async () => {
     ...actual,
     createRequire: () => {
       const req: any = (id: string) => {
-        if (id === 'fs') return { readFileSync: () => 'mocked-fs' };
+        if (id === 'path') return { join: () => 'mocked-path' };
         return {};
       };
       req.resolve = (id: string) => {
@@ -87,10 +87,10 @@ describe('sandbox', () => {
     });
 
     it('should return native modules directly', () => {
-      vi.spyOn(fs, 'readFileSync').mockReturnValue('const fs = require("fs"); module.exports = { fs };');
+      vi.spyOn(fs, 'readFileSync').mockReturnValue('const path = require("path"); module.exports = { path };');
       const result = PluginSandbox.evaluateModule('/test/index.js', {});
-      expect(result.fs).toBeDefined();
-      expect((result.fs as any).readFileSync()).toBe('mocked-fs');
+      expect(result.path).toBeDefined();
+      expect((result.path as any).join()).toBe('mocked-path');
     });
   });
 });

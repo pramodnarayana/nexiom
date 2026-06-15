@@ -71,6 +71,25 @@ export class PieceRegistryService {
    * This is used by the hot-reloader to make new pieces available without restarting the process.
    */
   registerPiece(piece: Piece): void {
+    // Validate piece name doesn't collide with existing aliases mapped to other pieces
+    const baseForName = this.aliasToBaseName.get(piece.name);
+    if (baseForName && baseForName !== piece.name) {
+      throw new Error(`Name conflict: Piece name "${piece.name}" is already used as an alias for piece "${baseForName}"`);
+    }
+
+    // Validate new aliases don't collide with existing aliases mapped to other pieces
+    if (piece.aliases) {
+      for (const alias of piece.aliases) {
+        const existingBaseName = this.aliasToBaseName.get(alias.name);
+        if (existingBaseName && existingBaseName !== piece.name) {
+          throw new Error(
+            `Alias conflict: "${alias.name}" is already mapped to piece "${existingBaseName}", cannot map to "${piece.name}"`,
+          );
+        }
+      }
+    }
+
+    // All validations passed, mutate state
     this.registry.set(piece.name, piece);
 
     // Remove stale aliases from previous versions of this piece
@@ -84,15 +103,9 @@ export class PieceRegistryService {
       this.aliasToBaseName.delete(alias);
     }
 
-    // Register new aliases and check for conflicts
+    // Register new aliases
     if (piece.aliases) {
       for (const alias of piece.aliases) {
-        const existingBaseName = this.aliasToBaseName.get(alias.name);
-        if (existingBaseName && existingBaseName !== piece.name) {
-          throw new Error(
-            `Alias conflict: "${alias.name}" is already mapped to piece "${existingBaseName}", cannot map to "${piece.name}"`,
-          );
-        }
         this.aliasToBaseName.set(alias.name, piece.name);
       }
     }

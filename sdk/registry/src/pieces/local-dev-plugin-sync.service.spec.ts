@@ -108,6 +108,36 @@ describe('local-dev-plugin-sync.service', () => {
     expect(mockPieceRepo.upsertPiece).not.toHaveBeenCalled();
   });
 
+  it('should extract piece if default is an object with register()', async () => {
+    const tempFile = '/tmp/soopa-mock-plugin-default-register.mjs';
+    fs.writeFileSync(tempFile, 'export default { register: () => ({ name: "mock-piece-def-reg", displayName: "Mock", logoUrl: "http" }) };');
+    const pkg = { name: '@soopa/test-piece-2', version: '1.0.0', main: tempFile };
+    vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify(pkg));
+
+    await service.initialize();
+    expect(mockPieceRepo.upsertPiece).toHaveBeenCalledWith(expect.objectContaining({ name: 'mock-piece-def-reg' }));
+    
+    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+  });
+
+  it('should catch error when natively importing piece', async () => {
+    const tempFile = '/tmp/soopa-mock-plugin-throw.cjs';
+    fs.writeFileSync(tempFile, 'throw new Error("Cannot import");');
+    const pkg = { name: '@soopa/test-piece-3', version: '1.0.0', main: tempFile };
+    vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify(pkg));
+
+    await service.initialize();
+    expect(mockPieceRepo.upsertPiece).not.toHaveBeenCalled();
+    
+    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+  });
+
+  it('should catch error if scanning workspace plugins directory fails', async () => {
+    vi.spyOn(fs.promises, 'readdir').mockRejectedValueOnce(new Error('Fatal Error'));
+    await service.initialize();
+    expect(mockPieceRepo.upsertPiece).not.toHaveBeenCalled();
+  });
+
   it('returns workspace piece path if initialized', async () => {
     // Manually populate map for coverage
     (service as any).workspacePieces.set('@soopa/test', '/path');

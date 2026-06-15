@@ -67,8 +67,8 @@ export class PluginSandbox {
         return scopedRequire(id);
       }
 
-      // 4. Allow native addons and JSON files
-      if (resolvedPath.endsWith('.node') || resolvedPath.endsWith('.json')) {
+      // 4. Allow JSON files
+      if (resolvedPath.endsWith('.json')) {
         return scopedRequire(id);
       }
 
@@ -76,11 +76,6 @@ export class PluginSandbox {
       // This ensures files inside the plugin ALSO get the static dependencies.
       return this.evaluateModule(resolvedPath, staticDependencies, moduleCache);
     };
-
-    sandboxRequire.resolve = scopedRequire.resolve;
-    sandboxRequire.cache = scopedRequire.cache;
-    sandboxRequire.extensions = scopedRequire.extensions;
-    sandboxRequire.main = scopedRequire.main;
 
     const wrapper = [
       '(function (exports, require, module, __filename, __dirname) { ',

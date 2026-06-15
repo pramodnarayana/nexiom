@@ -9,11 +9,10 @@ import {
 
 // Mock child_process and sandbox
 vi.mock('child_process', () => ({
-  exec: vi.fn<any>((cmd: any, optionsOrCallback: any, cb: any) => {
-    if (typeof optionsOrCallback === 'function') {
-      optionsOrCallback(null, { stdout: 'success', stderr: '' });
-    } else if (typeof cb === 'function') {
-      cb(null, { stdout: 'success', stderr: '' });
+  execFile: vi.fn<any>((cmd: any, args: any, optionsOrCallback: any, cb: any) => {
+    const callback = typeof cb === 'function' ? cb : (typeof optionsOrCallback === 'function' ? optionsOrCallback : (typeof args === 'function' ? args : null));
+    if (callback) {
+      callback(null, { stdout: 'success', stderr: '' });
     }
   }),
 }));
@@ -161,7 +160,7 @@ describe('plugin-manager.service', () => {
 
     it('should execute ensurePiece from memory cache', async () => {
       const child_process = await import('child_process');
-      const execSpy = vi.spyOn(child_process, 'exec');
+      const execSpy = vi.spyOn(child_process, 'execFile');
       execSpy.mockClear();
 
       // First install it to populate the memory cache
@@ -185,7 +184,7 @@ describe('plugin-manager.service', () => {
       }));
 
       const child_process = await import('child_process');
-      const execSpy = vi.spyOn(child_process, 'exec');
+      const execSpy = vi.spyOn(child_process, 'execFile');
       execSpy.mockClear();
 
       const result = await service.installPiece('@soopa/existing-piece', '1.0.0');
@@ -197,9 +196,10 @@ describe('plugin-manager.service', () => {
     it('should throw error if npm install fails', async () => {
       vi.spyOn(fs.promises, 'writeFile').mockResolvedValueOnce(undefined);
       const child_process = await import('child_process');
-      vi.spyOn(child_process, 'exec').mockImplementationOnce((cmd, opts, cb) => {
-        if (typeof cb === 'function') {
-          (cb as any)(new Error('NPM FAILED'), { stdout: '', stderr: 'npm ERR!' });
+      vi.spyOn(child_process, 'execFile').mockImplementationOnce((cmd, args, opts, cb) => {
+        const callback = typeof cb === 'function' ? cb : (typeof opts === 'function' ? opts : (typeof args === 'function' ? args : null));
+        if (callback) {
+          (callback as any)(new Error('NPM FAILED'), { stdout: '', stderr: 'npm ERR!' });
         }
         return {} as any;
       });
@@ -207,14 +207,50 @@ describe('plugin-manager.service', () => {
       await expect(service.installPiece('@soopa/fail-piece', '1.0.0')).rejects.toThrow('NPM FAILED');
     });
 
+    it('should ignore EEXIST error if concurrent installation occurs', async () => {
+      vi.spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined);
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({ name: 'test', main: 'index.js' }));
+      const child_process = await import('child_process');
+      vi.spyOn(child_process, 'execFile').mockImplementation((cmd, args, opts, cb) => {
+        const callback = typeof cb === 'function' ? cb : (typeof opts === 'function' ? opts : (typeof args === 'function' ? args : null));
+        if (callback) {
+          (callback as any)(null, { stdout: 'success', stderr: '' });
+        }
+        return {} as any;
+      });
+      vi.spyOn(fs.promises, 'rename').mockRejectedValueOnce(Object.assign(new Error('EEXIST'), { code: 'EEXIST' }));
+      const rmSpy = vi.spyOn(fs.promises, 'rm').mockResolvedValue(undefined);
+
+      const result = await service.installPiece('@soopa/concurrent-piece', '1.0.0');
+      
+      expect(result.version).toBe('1.0.0');
+      expect(rmSpy).toHaveBeenCalled();
+    });
+
+    it('should throw if rename fails with non-EEXIST error', async () => {
+      vi.spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined);
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({ name: 'test', main: 'index.js' }));
+      const child_process = await import('child_process');
+      vi.spyOn(child_process, 'execFile').mockImplementation((cmd, args, opts, cb) => {
+        const callback = typeof cb === 'function' ? cb : (typeof opts === 'function' ? opts : (typeof args === 'function' ? args : null));
+        if (callback) {
+          (callback as any)(null, { stdout: 'success', stderr: '' });
+        }
+        return {} as any;
+      });
+      vi.spyOn(fs.promises, 'rename').mockRejectedValueOnce(Object.assign(new Error('EPERM'), { code: 'EPERM' }));
+      
+      await expect(service.installPiece('@soopa/eperm-piece', '1.0.0')).rejects.toThrow('EPERM');
+    });
+
     it('should resolve latest version using npm view', async () => {
       vi.spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined);
       vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({ name: 'test', main: 'index.js' }));
       const child_process = await import('child_process');
-      vi.spyOn(child_process, 'exec').mockImplementation((cmd, opts, cb) => {
-        const callback = typeof opts === 'function' ? opts : cb;
-        if (typeof callback === 'function') {
-          if (cmd.includes('npm view')) {
+      vi.spyOn(child_process, 'execFile').mockImplementation((cmd, args, opts, cb) => {
+        const callback = typeof cb === 'function' ? cb : (typeof opts === 'function' ? opts : (typeof args === 'function' ? args : null));
+        if (callback) {
+          if (args && args.includes('view')) {
             (callback as any)(null, { stdout: '2.0.0', stderr: '' });
           } else {
             (callback as any)(null, { stdout: 'success', stderr: '' });
@@ -229,9 +265,9 @@ describe('plugin-manager.service', () => {
 
     it('should throw if npm view fails', async () => {
       const child_process = await import('child_process');
-      vi.spyOn(child_process, 'exec').mockImplementationOnce((cmd, opts, cb) => {
-        const callback = typeof opts === 'function' ? opts : cb;
-        if (typeof callback === 'function') {
+      vi.spyOn(child_process, 'execFile').mockImplementationOnce((cmd, args, opts, cb) => {
+        const callback = typeof cb === 'function' ? cb : (typeof opts === 'function' ? opts : (typeof args === 'function' ? args : null));
+        if (callback) {
           (callback as any)(new Error('NPM VIEW FAILED'), { stdout: '', stderr: '' });
         }
         return {} as any;

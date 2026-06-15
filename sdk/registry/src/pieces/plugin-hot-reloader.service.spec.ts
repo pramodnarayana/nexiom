@@ -77,7 +77,7 @@ describe('plugin-hot-reloader.service', () => {
       expect(mockPubSub.onMessage).toHaveBeenCalledWith(expect.any(Function));
     });
 
-    it('should destroy and quit redis', async () => {
+    it('should initialize and destroy module without errors', async () => {
       await service.onModuleInit();
       await service.onModuleDestroy();
     });
