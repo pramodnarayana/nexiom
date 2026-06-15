@@ -87,7 +87,8 @@ describe('plugin-hot-reloader.service', () => {
       const messageHandler = mockPubSub.onMessage.mock.calls[0][0];
 
       mockPluginManager.ensurePiece.mockResolvedValueOnce({
-        moduleExports: { piece: { name: 'test', displayName: 'Test', auth: {}, categories: [] } }
+        moduleExports: { piece: { name: 'test', displayName: 'Test', auth: {}, categories: [] } },
+        version: '1.0'
       });
 
       await messageHandler('system:plugins:reloaded', JSON.stringify({ packageName: 'test', version: '1.0' }));

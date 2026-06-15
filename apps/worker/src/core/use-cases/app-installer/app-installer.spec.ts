@@ -56,6 +56,7 @@ describe("App Installer Subdomain", () => {
       expect(registered?.version).toBe("1.0.0");
 
       expect(pubsub.publishSystemEvent).toHaveBeenCalledWith(
+        "system:plugins:reloaded",
         expect.objectContaining({
           packageName: "test-package",
           version: "1.0.0",
@@ -109,6 +110,7 @@ describe("App Installer Subdomain", () => {
       expect(registered).toBeDefined();
 
       expect(pubsub.publishSystemEvent).toHaveBeenCalledWith(
+        "system:plugins:reloaded",
         expect.objectContaining({
           packageName: "test-package-register",
           version: "1.0.0",
@@ -143,6 +145,7 @@ describe("App Installer Subdomain", () => {
       expect(registered).toBeDefined();
 
       expect(pubsub.publishSystemEvent).toHaveBeenCalledWith(
+        "system:plugins:reloaded",
         expect.objectContaining({
           packageName: "test-package-default-register",
           version: "1.0.0",
@@ -175,6 +178,7 @@ describe("App Installer Subdomain", () => {
       expect(registered).toBeDefined();
 
       expect(pubsub.publishSystemEvent).toHaveBeenCalledWith(
+        "system:plugins:reloaded",
         expect.objectContaining({
           packageName: "test-package-default-object",
           version: "1.0.0",
@@ -220,6 +224,7 @@ describe("App Installer Subdomain", () => {
       expect(registered?.aliases).toEqual([{ name: "old-piece-name" }]);
 
       expect(pubsub.publishSystemEvent).toHaveBeenCalledWith(
+        "system:plugins:reloaded",
         expect.objectContaining({
           packageName: "test-package-full",
           version: "1.0.0",
