@@ -1,6 +1,6 @@
 import { Injectable, Inject, OnModuleDestroy, Logger } from '@nestjs/common';
 import type { Redis } from 'ioredis';
-import { REDIS_CLIENT } from './cache.module.js';
+import { REDIS_CLIENT } from './constants.js';
 import type { IPubSub } from './pub-sub.interface.js';
 
 @Injectable()
