@@ -29,4 +29,3 @@ notify:
       - "x-npm-signature": "local_test_secret"
     endpoint: "http://host.docker.internal:3000/api/internal/system/plugins/webhook"
     content: '{"name":"{{name}}", "version":"{{version}}"}'
-

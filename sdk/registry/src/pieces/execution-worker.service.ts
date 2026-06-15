@@ -63,7 +63,9 @@ export class ExecutionWorkerService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     this.logger.log('Draining Piscina Worker Pool...');
-    await this.pool.destroy();
+    if (this.pool) {
+      await this.pool.destroy();
+    }
   }
 
   /**

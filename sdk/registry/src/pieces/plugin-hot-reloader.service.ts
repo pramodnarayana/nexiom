@@ -86,7 +86,7 @@ export class PluginHotReloaderService implements OnModuleInit, OnModuleDestroy {
   private readonly installQueues = new Map<string, Promise<void>>();
 
   constructor(
-    @Inject('PUB_SUB_CLIENT') private readonly pubsub: IPubSub,
+    @Inject(PUB_SUB_CLIENT) private readonly pubsub: IPubSub,
     private readonly pluginManager: PluginManagerService,
     private readonly pieceRegistry: PieceRegistryService,
   ) {}
@@ -121,6 +121,13 @@ export class PluginHotReloaderService implements OnModuleInit, OnModuleDestroy {
       const previous = this.installQueues.get(packageName) ?? Promise.resolve();
       const next = previous.then(() => this.hotLoadPiece(packageName, version));
       this.installQueues.set(packageName, next);
+
+      // Clean up the queue entry after the promise settles to prevent memory leaks
+      next.finally(() => {
+        if (this.installQueues.get(packageName) === next) {
+          this.installQueues.delete(packageName);
+        }
+      });
 
       // Prevent unhandled-rejection — hotLoadPiece already logs and swallows errors.
       next.catch(() => {});

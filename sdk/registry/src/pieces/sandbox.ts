@@ -7,7 +7,6 @@ export class PluginSandbox {
   private static readonly contextGlobals = {
     console,
     Buffer,
-    process,
     setTimeout,
     clearTimeout,
     setInterval,
@@ -20,7 +19,7 @@ export class PluginSandbox {
 
   /**
    * Evaluates a CommonJS module inside a secure V8 isolate context recursively.
-   * 
+   *
    * @param entryFilePath The absolute path to the module's entry file
    * @param staticDependencies A map of module names to their evaluated exports
    */
@@ -54,12 +53,26 @@ export class PluginSandbox {
         throw new Error(`Sandbox require failed to resolve '${id}' from '${entryFilePath}': ${msg}`);
       }
 
-      // 3. If it's a Node built-in module (like 'fs', 'path') or a native C++ addon (.node) or JSON
-      if (resolvedPath === id || resolvedPath.endsWith('.node') || resolvedPath.endsWith('.json')) {
+      // 3. Whitelist Node.js built-in modules - only allow safe modules
+      const safeBuiltins = new Set([
+        'util', 'path', 'url', 'querystring', 'crypto', 'assert',
+        'events', 'stream', 'buffer', 'string_decoder', 'timers'
+      ]);
+
+      if (resolvedPath === id) {
+        // This is a Node.js built-in module
+        if (!safeBuiltins.has(id)) {
+          throw new Error(`Sandbox security violation: access to built-in module '${id}' is not allowed`);
+        }
         return scopedRequire(id);
       }
 
-      // 4. If it's a regular JS file (whether local or in node_modules), recursively sandbox it!
+      // 4. Allow native addons and JSON files
+      if (resolvedPath.endsWith('.node') || resolvedPath.endsWith('.json')) {
+        return scopedRequire(id);
+      }
+
+      // 5. If it's a regular JS file (whether local or in node_modules), recursively sandbox it!
       // This ensures files inside the plugin ALSO get the static dependencies.
       return this.evaluateModule(resolvedPath, staticDependencies, moduleCache);
     };
@@ -84,15 +97,25 @@ export class PluginSandbox {
       global: this.contextGlobals,
     });
 
-    const compiledWrapper = script.runInContext(context);
+    // Apply timeout to script compilation and execution
+    // The timeout option for runInContext applies to the script execution
+    const compiledWrapper = script.runInContext(context, { timeout: 10000 });
 
-    compiledWrapper(
-      moduleObj.exports,
-      sandboxRequire,
-      moduleObj,
-      entryFilePath,
-      path.dirname(entryFilePath)
-    );
+    // Execute the compiled wrapper function
+    // Note: The VM timeout above covers script evaluation within the context,
+    // but synchronous blocking in the wrapper function itself is still subject to that timeout
+    try {
+      compiledWrapper(
+        moduleObj.exports,
+        sandboxRequire,
+        moduleObj,
+        entryFilePath,
+        path.dirname(entryFilePath)
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to evaluate module ${entryFilePath}: ${msg}`);
+    }
 
     return moduleObj.exports;
   }

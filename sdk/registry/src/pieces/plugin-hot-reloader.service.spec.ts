@@ -85,17 +85,20 @@ describe('plugin-hot-reloader.service', () => {
     it('should handle hot reload message', async () => {
       await service.onModuleInit();
       const messageHandler = mockPubSub.onMessage.mock.calls[0][0];
-      
+
       mockPluginManager.ensurePiece.mockResolvedValueOnce({
-        moduleExports: { piece: { name: 'test', displayName: 'Test' } }
+        moduleExports: { piece: { name: 'test', displayName: 'Test', auth: {}, categories: [] } }
       });
-      
+
       await messageHandler('system:plugins:reloaded', JSON.stringify({ packageName: 'test', version: '1.0' }));
-      
+
       // Wait for the async queue to process
       await new Promise(resolve => setTimeout(resolve, 0));
-      
+
       expect(mockPluginManager.ensurePiece).toHaveBeenCalledWith('test', '1.0');
+      expect(mockPieceRegistry.registerPiece).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'test', displayName: 'Test', auth: {}, categories: [] })
+      );
     });
 
     it('should ignore malformed JSON messages', async () => {

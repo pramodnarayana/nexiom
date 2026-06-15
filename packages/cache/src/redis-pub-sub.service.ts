@@ -31,6 +31,7 @@ export class RedisPubSubService implements IPubSub, OnModuleDestroy {
       await this.quit();
     } catch (err) {
       this.logger.warn(`Failed to quit pub/sub client gracefully: ${String(err)}`);
+      this.subscriber.disconnect();
     }
   }
 }

@@ -72,13 +72,31 @@ export class PieceRegistryService {
    */
   registerPiece(piece: Piece): void {
     this.registry.set(piece.name, piece);
-    
+
+    // Remove stale aliases from previous versions of this piece
+    const aliasesToRemove: string[] = [];
+    for (const [alias, baseName] of this.aliasToBaseName.entries()) {
+      if (baseName === piece.name) {
+        aliasesToRemove.push(alias);
+      }
+    }
+    for (const alias of aliasesToRemove) {
+      this.aliasToBaseName.delete(alias);
+    }
+
+    // Register new aliases and check for conflicts
     if (piece.aliases) {
       for (const alias of piece.aliases) {
+        const existingBaseName = this.aliasToBaseName.get(alias.name);
+        if (existingBaseName && existingBaseName !== piece.name) {
+          throw new Error(
+            `Alias conflict: "${alias.name}" is already mapped to piece "${existingBaseName}", cannot map to "${piece.name}"`,
+          );
+        }
         this.aliasToBaseName.set(alias.name, piece.name);
       }
     }
-    
+
     this.logger.log(`Hot-loaded piece schema into memory: ${piece.name}`);
   }
 

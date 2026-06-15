@@ -146,14 +146,14 @@ describe('plugin-manager.service', () => {
     });
 
     it('should execute installPiece and return PluginInfo', async () => {
-      vi.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify({
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({
         name: 'test-piece',
         version: '1.0.0',
         main: 'dist/index.js'
       }));
 
       const result = await service.installPiece('@soopa/test-piece', '1.0.0');
-      
+
       expect(result).toBeDefined();
       expect(result.version).toBe('1.0.0');
       expect(result.moduleExports.piece).toBeDefined();
@@ -165,20 +165,20 @@ describe('plugin-manager.service', () => {
       execSpy.mockClear();
 
       // First install it to populate the memory cache
-      vi.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify({
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({
         name: 'test-piece',
         version: '1.0.0',
         main: 'dist/index.js'
       }));
       await service.installPiece('@soopa/test-piece', '1.0.0');
-      
+
       const result = await service.ensurePiece('@soopa/test-piece', '1.0.0');
       expect(result.moduleExports.piece).toBeDefined();
     });
 
     it('should skip download if directory already exists', async () => {
       vi.spyOn(fs.promises, 'access').mockResolvedValueOnce(undefined);
-      vi.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify({
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({
         name: 'test-piece',
         version: '1.0.0',
         main: 'dist/index.js'
@@ -187,9 +187,9 @@ describe('plugin-manager.service', () => {
       const child_process = await import('child_process');
       const execSpy = vi.spyOn(child_process, 'exec');
       execSpy.mockClear();
-      
+
       const result = await service.installPiece('@soopa/existing-piece', '1.0.0');
-      
+
       expect(execSpy).not.toHaveBeenCalled();
       expect(result.version).toBe('1.0.0');
     });
@@ -209,7 +209,7 @@ describe('plugin-manager.service', () => {
 
     it('should resolve latest version using npm view', async () => {
       vi.spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined);
-      vi.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify({ name: 'test', main: 'index.js' }));
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({ name: 'test', main: 'index.js' }));
       const child_process = await import('child_process');
       vi.spyOn(child_process, 'exec').mockImplementation((cmd, opts, cb) => {
         const callback = typeof opts === 'function' ? opts : cb;
@@ -241,7 +241,7 @@ describe('plugin-manager.service', () => {
     });
 
     it('should throw if sandbox evaluation fails', async () => {
-      vi.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify({ name: 'test', main: 'index.js' }));
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({ name: 'test', main: 'index.js' }));
       const sandbox = await import('./sandbox.js');
       vi.spyOn(sandbox.PluginSandbox, 'evaluateModule').mockImplementationOnce(() => {
         throw new Error('Sandbox exploded');
@@ -251,7 +251,7 @@ describe('plugin-manager.service', () => {
     });
 
     it('should throw if module exports non-object', async () => {
-      vi.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify({ name: 'test', main: 'index.js' }));
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({ name: 'test', main: 'index.js' }));
       const sandbox = await import('./sandbox.js');
       vi.spyOn(sandbox.PluginSandbox, 'evaluateModule').mockReturnValueOnce(null as any);
 

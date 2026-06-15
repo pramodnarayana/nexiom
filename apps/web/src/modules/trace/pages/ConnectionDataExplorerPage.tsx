@@ -141,14 +141,14 @@ function coerceValue(originalValue: unknown, stringValue: string): unknown {
     return originalValue; // Keep original if invalid
   }
 
+  // For empty string, preserve as empty string
+  if (stringValue === '') return '';
+
   // If original was a number, parse to Number
   if (typeof originalValue === 'number') {
     const parsed = Number(stringValue);
     return Number.isNaN(parsed) ? originalValue : parsed;
   }
-
-  // For empty string, preserve as empty string
-  if (stringValue === '') return '';
 
   // Otherwise return the string value
   return stringValue;
@@ -564,7 +564,7 @@ function TabPanel({
     if (!confirm('Are you sure you want to delete this record?')) return;
     try {
       await deleteRecord(workspaceId, getDataSourceId(), tabId, String(row.id));
-      void load(page, filters, objectType);
+      void load(page, appliedFilters, objectType);
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to delete');
     }
@@ -724,7 +724,7 @@ function ConnectionDataExplorerPageContent() {
       setObjectType('');
       return;
     }
-    
+
     let mounted = true;
     setObjectsLoading(true);
     listObjects(selectedConnection.id)
@@ -750,7 +750,7 @@ function ConnectionDataExplorerPageContent() {
         if (mounted) setObjectsLoading(false);
       });
     return () => { mounted = false; };
-  }, [selectedConnection, toast]);
+  }, [selectedConnection, workspaceId, toast]);
 
   // Reset count when connection or object changes
   useEffect(() => {
@@ -782,9 +782,10 @@ function ConnectionDataExplorerPageContent() {
     try {
       toast({ description: `Sync started for ${objectType}` });
       const res = await syncConnectionObject(workspaceId, selectedConnection.id, objectType) as { status?: string, streamResults?: { error?: string }[] };
-      
+
       // The API returns 200 OK even if the sync failed internally. We must check the payload.
-      if (res && res.status === 'failed') {
+      const hasStreamErrors = res?.streamResults?.some(stream => stream.error);
+      if (res && (res.status === 'failed' || hasStreamErrors)) {
         const errorMsg = res.streamResults?.[0]?.error || 'Unknown error occurred during sync loop';
         throw new Error(errorMsg);
       }

@@ -3,12 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { createRequire } from 'module';
 import { PluginSandbox } from './sandbox.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface InstalledSlot {
   readonly location: string;
@@ -120,7 +120,11 @@ export class PluginManagerService implements OnModuleInit {
     let resolvedVersion = version;
     if (version === 'latest') {
       try {
-        const { stdout } = await execAsync(`npm view ${packageName} version --registry=${this.registryUrl}`);
+        const { stdout } = await execFileAsync(
+          'npm',
+          ['view', packageName, 'version', `--registry=${this.registryUrl}`],
+          { timeout: 30000 }
+        );
         resolvedVersion = stdout.trim();
         this.logger.debug(`Resolved 'latest' to ${resolvedVersion}`);
       } catch (err: unknown) {
@@ -160,11 +164,23 @@ export class PluginManagerService implements OnModuleInit {
 
       // Run npm install to download the plugin and all its dependencies
       try {
-        await execAsync(`npm install --no-package-lock --no-audit --no-fund --registry=${this.registryUrl}`, {
-          cwd: tmpDir,
-        });
-        await fs.promises.rename(tmpDir, versionDir);
-        this.logger.log(`Successfully installed ${packageName}@${resolvedVersion} to ${versionDir}`);
+        await execFileAsync(
+          'npm',
+          ['install', '--no-package-lock', '--no-audit', '--no-fund', '--ignore-scripts', `--registry=${this.registryUrl}`],
+          { cwd: tmpDir, timeout: 300000 }
+        );
+        try {
+          await fs.promises.rename(tmpDir, versionDir);
+          this.logger.log(`Successfully installed ${packageName}@${resolvedVersion} to ${versionDir}`);
+        } catch (renameErr: unknown) {
+          // Handle EEXIST error from concurrent installations
+          if (renameErr instanceof Error && 'code' in renameErr && renameErr.code === 'EEXIST') {
+            this.logger.log(`Directory ${versionDir} already exists (concurrent install), cleaning up tmpDir`);
+            await fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+          } else {
+            throw renameErr;
+          }
+        }
       } catch (err: unknown) {
         await fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
         const msg = err instanceof Error ? err.message : String(err);

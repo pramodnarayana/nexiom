@@ -78,6 +78,17 @@ export class LocalDevPluginSyncService implements OnModuleInit {
                     }
                   }
 
+                  if (key === 'default' && val !== null && typeof val === 'object') {
+                    const defaultObj = val as Record<string, unknown>;
+                    if (typeof defaultObj.register === 'function') {
+                      try {
+                        maybePiece = defaultObj.register();
+                      } catch (e) {
+                        // ignore
+                      }
+                    }
+                  }
+
                   if (typeof maybePiece === 'object' && maybePiece !== null && 'name' in maybePiece && 'displayName' in maybePiece) {
                     pieceDef = maybePiece as Record<string, unknown>;
                     break;

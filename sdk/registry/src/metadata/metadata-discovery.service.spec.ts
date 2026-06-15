@@ -71,7 +71,7 @@ function buildMockDb() {
 function buildMockRedis() {
   return {
     get: vi.fn<() => Promise<string | null>>().mockResolvedValue(null),
-    set: vi.fn<() => Promise<string>>().mockResolvedValue('OK'),
+    set: vi.fn<() => Promise<string | null>>().mockResolvedValue('OK'),
     del: vi.fn<() => Promise<number>>().mockResolvedValue(1),
     scan: vi.fn<() => Promise<[string, string[]]>>().mockResolvedValue(['0', []]),
     eval: vi.fn<() => Promise<number>>().mockResolvedValue(1),
