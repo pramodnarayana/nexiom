@@ -46,6 +46,11 @@ export class FakeRealtimeEventPubSub implements RealtimeEventPubSubPort {
 
   async publishDone(jobId: string): Promise<void> {
     this.dones.push(jobId);
+    return Promise.resolve();
+  }
+
+  async publishSystemEvent(_event: string, _payload: unknown): Promise<void> {
+    return Promise.resolve();
   }
 }
 

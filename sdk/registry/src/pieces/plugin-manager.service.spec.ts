@@ -1,149 +1,297 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { Mocked } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ConfigService } from '@nestjs/config';
-import { PluginManagerService } from './plugin-manager.service.js';
-import type { IQueueService } from '@soopa/queue';
 import * as fs from 'fs';
-import type { IPluginInfo } from 'live-plugin-manager';
+import {
+  PluginManagerService,
+  encodePackageName,
+  resolvePackageEntry,
+} from './plugin-manager.service.js';
 
-vi.mock('fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('fs')>();
+// Mock child_process and sandbox
+vi.mock('child_process', () => ({
+  execFile: vi.fn<any>((cmd: any, args: any, optionsOrCallback: any, cb: any) => {
+    const callback = typeof cb === 'function' ? cb : (typeof optionsOrCallback === 'function' ? optionsOrCallback : (typeof args === 'function' ? args : null));
+    if (callback) {
+      callback(null, { stdout: 'success', stderr: '' });
+    }
+  }),
+}));
+vi.mock('./sandbox.js', () => ({
+  PluginSandbox: {
+    evaluateModule: vi.fn().mockReturnValue({ piece: { name: 'mocked' } }),
+  },
+}));
+vi.mock('fs', async () => {
+  const actual = await vi.importActual<typeof import('fs')>('fs');
   return {
     ...actual,
     promises: {
-      access: vi.fn(),
-      mkdir: vi.fn(),
-      chmod: vi.fn(),
-      readdir: vi.fn(),
-    }
+      ...actual.promises,
+      mkdir: vi.fn().mockResolvedValue(undefined),
+      rename: vi.fn().mockResolvedValue(undefined),
+      rm: vi.fn().mockResolvedValue(undefined),
+      writeFile: vi.fn().mockResolvedValue(undefined),
+      readFile: vi.fn().mockResolvedValue('{}'),
+    },
+    readFileSync: vi.fn().mockReturnValue('{}'),
+    existsSync: vi.fn().mockReturnValue(true),
   };
 });
 
-// Mock live-plugin-manager so we don't actually hit the network or filesystem
-vi.mock('live-plugin-manager', () => {
-  return {
-    PluginManager: vi.fn().mockImplementation(function() {
-      return {
-        getInfo: vi.fn(),
-        install: vi.fn(),
-        uninstall: vi.fn(),
-        require: vi.fn(),
-        installFromPath: vi.fn(),
+describe('plugin-manager.service', () => {
+  describe('encodePackageName', () => {
+    it('should correctly encode scoped packages', () => {
+      expect(encodePackageName('@soopa/piece-salesforce')).toBe('_at_soopa__piece-salesforce');
+    });
+
+    it('should correctly encode normal packages', () => {
+      expect(encodePackageName('lodash')).toBe('lodash');
+    });
+  });
+
+  describe('resolvePackageEntry', () => {
+    it('should resolve the default main entry if no exports exist', () => {
+      expect(resolvePackageEntry({ main: 'dist/index.js' })).toBe('dist/index.js');
+    });
+
+    it('should fallback to index.js if neither main nor exports exist', () => {
+      expect(resolvePackageEntry({})).toBe('index.js');
+    });
+
+    it('should resolve string exports dot', () => {
+      expect(resolvePackageEntry({ exports: { '.': 'src/index.js' } })).toBe('src/index.js');
+    });
+
+    it('should resolve object exports dot with require', () => {
+      expect(
+        resolvePackageEntry({
+          exports: {
+            '.': {
+              require: 'dist/index.cjs',
+              default: 'dist/index.js',
+            },
+          },
+        }),
+      ).toBe('dist/index.cjs');
+    });
+
+    it('should resolve object exports dot with default fallback', () => {
+      expect(
+        resolvePackageEntry({
+          exports: {
+            '.': {
+              default: 'dist/index.mjs',
+            },
+          },
+        }),
+      ).toBe('dist/index.mjs');
+    });
+  });
+
+  describe('PluginManagerService', () => {
+    let service: PluginManagerService;
+    let mockConfigService: any;
+
+    beforeEach(() => {
+      mockConfigService = {
+        get: vi.fn((key: string) => {
+          if (key === 'NODE_ENV') return 'test';
+          if (key === 'APP_DATA_DIR') return '/tmp/soopa-test';
+          if (key === 'PLUGINS_PATH') return '/tmp/soopa-test/plugins';
+          if (key === 'NPM_REGISTRY_URL') return 'http://localhost:4873/';
+          return undefined;
+        }),
       };
-    })
-  };
-});
 
-// Mock node:child_process
-vi.mock('node:child_process', () => {
-  return {
-    execSync: vi.fn(),
-  };
-});
+      service = new PluginManagerService(mockConfigService as unknown as ConfigService);
+    });
 
-describe('PluginManagerService', () => {
-  let service: PluginManagerService;
-  let queueService: Mocked<IQueueService>;
-  let mockConfigService: Mocked<ConfigService>;
-  
-  beforeEach(() => {
-    queueService = {
-      send: vi.fn(),
-      consume: vi.fn(),
-    } as unknown as Mocked<IQueueService>;
+    it('should initialize successfully with config overrides', () => {
+      expect(service).toBeDefined();
+      expect(mockConfigService.get).toHaveBeenCalledWith('PLUGINS_PATH');
+    });
 
-    mockConfigService = {
-      get: vi.fn().mockImplementation((key: string) => {
-        if (key === 'PLUGINS_DIRECTORY') return './plugins';
-        return undefined;
-      })
-    } as unknown as Mocked<ConfigService>;
+    it('should safely return onModuleInit void promise', async () => {
+      await expect(service.onModuleInit()).resolves.toBeUndefined();
+    });
 
-    service = new PluginManagerService(queueService, mockConfigService);
-  });
-
-  describe('initializePlugins', () => {
-    it('should create plugins directory with 0o700 permissions if it does not exist', async () => {
-      const error = new Error('ENOENT') as NodeJS.ErrnoException;
-      error.code = 'ENOENT';
-      vi.mocked(fs.promises.access).mockRejectedValueOnce(error);
-      
+    it('should execute initializePlugins and create plugins path', async () => {
       await service.initializePlugins();
-      
-      expect(fs.promises.access).toHaveBeenCalled();
-      expect(fs.promises.mkdir).toHaveBeenCalledWith(expect.any(String), { recursive: true, mode: 0o700 });
+      expect(fs.promises.mkdir).toHaveBeenCalledWith('/tmp/soopa-test/plugins', expect.anything());
     });
 
-    it('should chmod existing directory to 0o700 if it already exists', async () => {
-      vi.mocked(fs.promises.access).mockResolvedValueOnce(undefined);
-      
-      await service.initializePlugins();
-      
-      expect(fs.promises.access).toHaveBeenCalled();
-      expect(fs.promises.chmod).toHaveBeenCalledWith(expect.any(String), 0o700);
+    it('should return cached initPromise if called twice', async () => {
+      const mkdirSpy = vi.spyOn(fs.promises, 'mkdir');
+      mkdirSpy.mockReset();
+      mkdirSpy.mockResolvedValue(undefined);
+      const newService = new PluginManagerService(mockConfigService);
+      const p1 = newService.initializePlugins();
+      const p2 = newService.initializePlugins();
+      await Promise.all([p1, p2]);
+      expect(mkdirSpy).toHaveBeenCalledTimes(1);
     });
 
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('ensurePiece', () => {
-    it('should skip download if the piece is already installed locally', async () => {
-      const mockPluginInfo = { version: '1.0.0', location: '/tmp', name: '@soopa/piece-test', mainFile: '', dependencies: {} } as IPluginInfo;
-      const mockGetInfo = vi.spyOn((service as any).manager, 'getInfo').mockReturnValue(mockPluginInfo);
-      const mockInstall = vi.spyOn((service as any).manager, 'install');
-
-      const result = await service.ensurePiece('@soopa/piece-test', 'latest');
+    it('should clear initPromise and throw if mkdir fails', async () => {
+      const newService = new PluginManagerService(mockConfigService);
+      const mkdirSpy = vi.spyOn(fs.promises, 'mkdir');
+      mkdirSpy.mockReset();
+      mkdirSpy.mockRejectedValueOnce(new Error('MKDIR FAILED'));
       
-      expect(result).toEqual(mockPluginInfo);
-      expect(mockGetInfo).toHaveBeenCalledWith('@soopa/piece-test');
-      expect(mockInstall).not.toHaveBeenCalled();
+      await expect(newService.initializePlugins()).rejects.toThrow('MKDIR FAILED');
+      
+      // Reset mock back to successful state for subsequent tests!
+      mkdirSpy.mockReset();
+      mkdirSpy.mockResolvedValue(undefined);
     });
 
-    it('should install piece if it is not installed locally', async () => {
-      const mockPluginInfo = { version: '1.2.0', location: '/tmp/new', name: '@soopa/piece-new', mainFile: '', dependencies: {} } as IPluginInfo;
-      const mockGetInfo = vi.spyOn((service as any).manager, 'getInfo').mockReturnValue(undefined);
-      const mockInstallPiece = vi.spyOn(service, 'installPiece').mockResolvedValue(mockPluginInfo);
+    it('should execute installPiece and return PluginInfo', async () => {
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({
+        name: 'test-piece',
+        version: '1.0.0',
+        main: 'dist/index.js'
+      }));
 
-      const result = await service.ensurePiece('@soopa/piece-new', '1.2.0');
-      
-      expect(result).toEqual(mockPluginInfo);
-      expect(mockGetInfo).toHaveBeenCalledWith('@soopa/piece-new');
-      expect(mockInstallPiece).toHaveBeenCalledWith('@soopa/piece-new', '1.2.0');
-    });
-  });
+      const result = await service.installPiece('@soopa/test-piece', '1.0.0');
 
-  describe('installPiece', () => {
-    it('should install piece using manager', async () => {
-      const mockPluginInfo = { version: '2.0.0', location: '/tmp/plugin', name: '@soopa/piece-install', mainFile: '', dependencies: {} } as IPluginInfo;
-      const mockInstall = vi.spyOn((service as any).manager, 'install').mockResolvedValue(mockPluginInfo);
-
-      const result = await service.installPiece('@soopa/piece-install', '2.0.0');
-      
-      expect(result).toEqual(mockPluginInfo);
-      expect(mockInstall).toHaveBeenCalledWith('@soopa/piece-install', '2.0.0');
+      expect(result).toBeDefined();
+      expect(result.version).toBe('1.0.0');
+      expect(result.moduleExports.piece).toBeDefined();
     });
 
-    it('should throw an error if installation fails', async () => {
-      const mockInstall = vi.spyOn((service as any).manager, 'install').mockRejectedValue(new Error('NPM is down'));
+    it('should execute ensurePiece from memory cache', async () => {
+      const child_process = await import('child_process');
+      const execSpy = vi.spyOn(child_process, 'execFile');
+      execSpy.mockClear();
 
-      await expect(service.installPiece('@soopa/piece-fail', 'latest')).rejects.toThrow('NPM is down');
+      // First install it to populate the memory cache
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({
+        name: 'test-piece',
+        version: '1.0.0',
+        main: 'dist/index.js'
+      }));
+      await service.installPiece('@soopa/test-piece', '1.0.0');
+
+      const result = await service.ensurePiece('@soopa/test-piece', '1.0.0');
+      expect(result.moduleExports.piece).toBeDefined();
     });
-  });
 
-  describe('requirePiece', () => {
-    it('should call manager.require if async import fails', async () => {
-      // Mock getPieceInfo to return mock info
-      vi.spyOn(service, 'getPieceInfo').mockReturnValue({
-        version: '1.0.0', location: '/tmp', name: '@soopa/piece-local', mainFile: '', dependencies: {}
-      } as IPluginInfo);
+    it('should skip download if directory already exists', async () => {
+      vi.spyOn(fs.promises, 'access').mockResolvedValueOnce(undefined);
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({
+        name: 'test-piece',
+        version: '1.0.0',
+        main: 'dist/index.js'
+      }));
+
+      const child_process = await import('child_process');
+      const execSpy = vi.spyOn(child_process, 'execFile');
+      execSpy.mockClear();
+
+      const result = await service.installPiece('@soopa/existing-piece', '1.0.0');
+
+      expect(execSpy).not.toHaveBeenCalled();
+      expect(result.version).toBe('1.0.0');
+    });
+
+    it('should throw error if npm install fails', async () => {
+      vi.spyOn(fs.promises, 'writeFile').mockResolvedValueOnce(undefined);
+      const child_process = await import('child_process');
+      vi.spyOn(child_process, 'execFile').mockImplementationOnce((cmd, args, opts, cb) => {
+        const callback = typeof cb === 'function' ? cb : (typeof opts === 'function' ? opts : (typeof args === 'function' ? args : null));
+        if (callback) {
+          (callback as any)(new Error('NPM FAILED'), { stdout: '', stderr: 'npm ERR!' });
+        }
+        return {} as any;
+      });
+
+      await expect(service.installPiece('@soopa/fail-piece', '1.0.0')).rejects.toThrow('NPM FAILED');
+    });
+
+    it('should ignore EEXIST error if concurrent installation occurs', async () => {
+      vi.spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined);
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({ name: 'test', main: 'index.js' }));
+      const child_process = await import('child_process');
+      vi.spyOn(child_process, 'execFile').mockImplementation((cmd, args, opts, cb) => {
+        const callback = typeof cb === 'function' ? cb : (typeof opts === 'function' ? opts : (typeof args === 'function' ? args : null));
+        if (callback) {
+          (callback as any)(null, { stdout: 'success', stderr: '' });
+        }
+        return {} as any;
+      });
+      vi.spyOn(fs.promises, 'rename').mockRejectedValueOnce(Object.assign(new Error('EEXIST'), { code: 'EEXIST' }));
+      const rmSpy = vi.spyOn(fs.promises, 'rm').mockResolvedValue(undefined);
+
+      const result = await service.installPiece('@soopa/concurrent-piece', '1.0.0');
       
-      const mockRequire = vi.spyOn((service as any).manager, 'require').mockReturnValue({ default: {} });
-      const result = await service.requirePiece('@soopa/piece-local');
-      expect(result).toEqual({ default: {} });
-      expect(mockRequire).toHaveBeenCalledWith('@soopa/piece-local');
+      expect(result.version).toBe('1.0.0');
+      expect(rmSpy).toHaveBeenCalled();
+    });
+
+    it('should throw if rename fails with non-EEXIST error', async () => {
+      vi.spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined);
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({ name: 'test', main: 'index.js' }));
+      const child_process = await import('child_process');
+      vi.spyOn(child_process, 'execFile').mockImplementation((cmd, args, opts, cb) => {
+        const callback = typeof cb === 'function' ? cb : (typeof opts === 'function' ? opts : (typeof args === 'function' ? args : null));
+        if (callback) {
+          (callback as any)(null, { stdout: 'success', stderr: '' });
+        }
+        return {} as any;
+      });
+      vi.spyOn(fs.promises, 'rename').mockRejectedValueOnce(Object.assign(new Error('EPERM'), { code: 'EPERM' }));
+      
+      await expect(service.installPiece('@soopa/eperm-piece', '1.0.0')).rejects.toThrow('EPERM');
+    });
+
+    it('should resolve latest version using npm view', async () => {
+      vi.spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined);
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({ name: 'test', main: 'index.js' }));
+      const child_process = await import('child_process');
+      vi.spyOn(child_process, 'execFile').mockImplementation((cmd, args, opts, cb) => {
+        const callback = typeof cb === 'function' ? cb : (typeof opts === 'function' ? opts : (typeof args === 'function' ? args : null));
+        if (callback) {
+          if (args && args.includes('view')) {
+            (callback as any)(null, { stdout: '2.0.0', stderr: '' });
+          } else {
+            (callback as any)(null, { stdout: 'success', stderr: '' });
+          }
+        }
+        return {} as any;
+      });
+
+      const result = await service.installPiece('@soopa/latest-piece', 'latest');
+      expect(result.version).toBe('2.0.0');
+    });
+
+    it('should throw if npm view fails', async () => {
+      const child_process = await import('child_process');
+      vi.spyOn(child_process, 'execFile').mockImplementationOnce((cmd, args, opts, cb) => {
+        const callback = typeof cb === 'function' ? cb : (typeof opts === 'function' ? opts : (typeof args === 'function' ? args : null));
+        if (callback) {
+          (callback as any)(new Error('NPM VIEW FAILED'), { stdout: '', stderr: '' });
+        }
+        return {} as any;
+      });
+
+      await expect(service.installPiece('@soopa/latest-piece', 'latest')).rejects.toThrow('Failed to resolve version');
+    });
+
+    it('should throw if sandbox evaluation fails', async () => {
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({ name: 'test', main: 'index.js' }));
+      const sandbox = await import('./sandbox.js');
+      vi.spyOn(sandbox.PluginSandbox, 'evaluateModule').mockImplementationOnce(() => {
+        throw new Error('Sandbox exploded');
+      });
+
+      await expect(service.installPiece('@soopa/sandbox-fail', '1.0.0')).rejects.toThrow(/Failed to require.*Sandbox exploded/);
+    });
+
+    it('should throw if module exports non-object', async () => {
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValue(JSON.stringify({ name: 'test', main: 'index.js' }));
+      const sandbox = await import('./sandbox.js');
+      vi.spyOn(sandbox.PluginSandbox, 'evaluateModule').mockReturnValueOnce(null as any);
+
+      await expect(service.installPiece('@soopa/bad-export', '1.0.0')).rejects.toThrow(/Piece exported a non-object value/);
     });
   });
 });

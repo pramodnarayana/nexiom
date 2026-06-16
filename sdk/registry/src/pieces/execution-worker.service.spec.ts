@@ -1,25 +1,51 @@
+/**
+ * ExecutionWorkerService tests — narrow integration tests.
+ *
+ * We do NOT mock Piscina internals. Instead we expose the pool as a
+ * settable property and inject a hand-crafted WorkerPool stub.
+ * This tests the timeout/abort orchestration logic — the only logic
+ * that lives in this class — without touching real threads or the filesystem.
+ */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ExecutionWorkerService } from './execution-worker.service.js';
 
-// Mock Piscina
-vi.mock('piscina', () => {
+// ─── Stub WorkerPool ─────────────────────────────────────────────────────────
+// A minimal implementation of the WorkerPool interface that we can control
+// from test code. No mocking framework needed — just a plain object.
+
+function makeStubPool(
+  runImpl: (input: unknown, options?: { signal?: AbortSignal }) => Promise<unknown>,
+) {
   return {
-    default: vi.fn().mockImplementation(function() {
-      return {
-        run: vi.fn()
-      };
-    })
+    run: runImpl,
+    destroy: async () => { /* no-op */ },
   };
-});
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function makeService(): ExecutionWorkerService {
+  // Bypass NestJS DI and onModuleInit — we inject the pool manually.
+  const svc = new ExecutionWorkerService();
+  return svc;
+}
+
+function injectPool(
+  svc: ExecutionWorkerService,
+  pool: { run: (input: unknown, options?: { signal?: AbortSignal }) => Promise<unknown>; destroy: () => Promise<void> },
+): void {
+  // TypeScript: access private field via index signature for testing only.
+  (svc as unknown as Record<string, unknown>)['pool'] = pool;
+}
+
+// ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('ExecutionWorkerService', () => {
   let service: ExecutionWorkerService;
 
   beforeEach(() => {
     vi.useFakeTimers();
-    service = new ExecutionWorkerService();
-    // Manually trigger onModuleInit to construct the pool
-    service.onModuleInit();
+    service = makeService();
   });
 
   afterEach(() => {
@@ -28,40 +54,100 @@ describe('ExecutionWorkerService', () => {
   });
 
   describe('executeTrigger', () => {
-    it('should successfully execute a payload via Piscina', async () => {
-      const mockRun = vi.spyOn((service as any).pool, 'run').mockResolvedValue('success');
+    it('resolves with the value returned by the pool', async () => {
+      injectPool(service, makeStubPool(() => Promise.resolve('ok')));
 
-      const result = await service.executeTrigger('/path/script.js', 'myTrigger', { data: 123 });
-      
-      expect(result).toBe('success');
-      expect(mockRun).toHaveBeenCalledWith(
-        { scriptPath: '/path/script.js', triggerName: 'myTrigger', payload: { data: 123 } },
-        { signal: expect.any(AbortSignal) }
-      );
+      const result = await service.executeTrigger('/script.js', 'myTrigger', { data: 1 });
+
+      expect(result).toBe('ok');
     });
 
-    it('should properly abort and throw an error if the Piscina task takes longer than 30s', async () => {
-      // Simulate a Piscina run that hangs indefinitely until aborted
-      const mockRun = vi.spyOn((service as any).pool, 'run').mockImplementation((task, options: any) => {
-        return new Promise((resolve, reject) => {
-          options.signal.addEventListener('abort', () => {
-            // Reject on next tick via microtask queue to avoid unhandled rejection bubbling
-            // from EventTarget listener, while bypassing fake timers deadlock.
-            queueMicrotask(() => reject(new Error('AbortError')));
-          });
-        });
+    it('passes scriptPath, triggerName and payload to the pool', async () => {
+      const calls: unknown[] = [];
+      injectPool(
+        service,
+        makeStubPool((input) => {
+          calls.push(input);
+          return Promise.resolve(null);
+        }),
+      );
+
+      await service.executeTrigger('/path/script.js', 'onSync', { id: 42 });
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toEqual({
+        scriptPath: '/path/script.js',
+        triggerName: 'onSync',
+        payload: { id: 42 },
+      });
+    });
+
+    it('aborts the pool task and rejects after 30 s', async () => {
+      injectPool(
+        service,
+        makeStubPool((_input, options) =>
+          new Promise((_resolve, reject) => {
+            options?.signal?.addEventListener('abort', () =>
+              queueMicrotask(() => reject(new Error('AbortError'))),
+            );
+          }),
+        ),
+      );
+
+      const promise = service.executeTrigger('/hang.js', 'slowTrigger', {});
+      // Suppress unhandled-rejection noise while we drive timers
+      promise.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      await expect(promise).rejects.toThrow('AbortError');
+    });
+
+    it('re-throws pool errors unchanged', async () => {
+      injectPool(
+        service,
+        makeStubPool(() => Promise.reject(new Error('pool exploded'))),
+      );
+
+      await expect(
+        service.executeTrigger('/script.js', 'trigger', {}),
+      ).rejects.toThrow('pool exploded');
+    });
+
+    it('re-throws non-Error rejections as strings', async () => {
+      injectPool(
+        service,
+        makeStubPool(() => Promise.reject('String error!')),
+      );
+
+      const promise = service.executeTrigger('/err.js', 'errTrigger', {});
+      await expect(promise).rejects.toThrow('String error!');
+    });
+  });
+
+  describe('Lifecycle Hooks', () => {
+    it('initializes and destroys the worker pool', async () => {
+      // Temporarily bypass testing logic
+      vi.mock('module', async () => {
+        const actual = await vi.importActual<typeof import('module')>('module');
+        return {
+          ...actual,
+          createRequire: () => () => {
+            return class MockPiscina {
+              constructor(opts: any) {}
+              destroy = vi.fn().mockResolvedValue(undefined);
+              run = vi.fn();
+            };
+          }
+        };
       });
 
-      // Start the execution without awaiting it yet.
-      // Attach a dummy catch immediately so Node doesn't log an Unhandled Rejection before we expect() it.
-      const executePromise = service.executeTrigger('/path/hang.js', 'badTrigger', {});
-      executePromise.catch(() => {});
+      const svc = new ExecutionWorkerService();
+      svc.onModuleInit();
+      expect((svc as any).pool).toBeDefined();
 
-      // Advance timers by 30 seconds to trigger the setTimeout AbortController
-      await vi.advanceTimersByTimeAsync(30000);
-
-      await expect(executePromise).rejects.toThrow('AbortError');
-      expect(mockRun).toHaveBeenCalled();
+      await svc.onModuleDestroy();
+      expect((svc as any).pool.destroy).toHaveBeenCalled();
     });
   });
 });

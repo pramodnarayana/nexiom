@@ -76,11 +76,7 @@ export function registerNormalizedWriter(appName: string, appProfile: string, fn
     if (!normalizedWriterRegistry.has(appName)) normalizedWriterRegistry.set(appName, new Map());
     const appMap = normalizedWriterRegistry.get(appName)!;
     if (appMap.has(appProfile)) {
-        const msg = `Duplicate registration for NormalizedWriter: ${appName}:${appProfile}`;
-        if (process.env.NODE_ENV !== 'production') {
-            throw new Error(msg);
-        }
-        console.warn(`[registerNormalizedWriter] ${msg}`);
+        console.warn(`[registerNormalizedWriter] Overwriting existing registration for: ${appName}:${appProfile} (Hot-reload)`);
     }
     appMap.set(appProfile, fn);
 }
@@ -103,11 +99,7 @@ export function registerTargetBuilder(appName: string, appProfile: string, fn: A
     if (!targetBuilderRegistry.has(appName)) targetBuilderRegistry.set(appName, new Map());
     const appMap = targetBuilderRegistry.get(appName)!;
     if (appMap.has(appProfile)) {
-        const msg = `Duplicate registration for TargetBuilder: ${appName}:${appProfile}`;
-        if (process.env.NODE_ENV !== 'production') {
-            throw new Error(msg);
-        }
-        console.warn(`[registerTargetBuilder] ${msg}`);
+        console.warn(`[registerTargetBuilder] Overwriting existing registration for: ${appName}:${appProfile} (Hot-reload)`);
     }
     appMap.set(appProfile, fn);
 }
@@ -132,11 +124,7 @@ export function getTargetBuilder(appName: string, appProfile: string | undefined
  */
 export function registerDomainProvisioner(appName: string, fn: AppDomainProvisionerFn): void {
     if (domainProvisionerRegistry.has(appName)) {
-        const msg = `Duplicate registration for DomainProvisioner: ${appName}`;
-        if (process.env.NODE_ENV !== 'production') {
-            throw new Error(msg);
-        }
-        console.warn(`[registerDomainProvisioner] ${msg}`);
+        console.warn(`[registerDomainProvisioner] Overwriting existing registration for: ${appName} (Hot-reload)`);
     }
     domainProvisionerRegistry.set(appName, fn);
 }

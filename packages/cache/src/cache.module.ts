@@ -1,12 +1,8 @@
 import { Global, Module, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
-
-/** Injection token for the single shared Redis client across the entire application. */
-export const REDIS_CLIENT = 'REDIS_CLIENT';
-
-/** Injection token for the key-value store interface (backed by Redis). */
-export const KEY_VALUE_STORE = 'KEY_VALUE_STORE';
+import { RedisPubSubService } from './redis-pub-sub.service.js';
+import { REDIS_CLIENT, KEY_VALUE_STORE, PUB_SUB_CLIENT } from './constants.js';
 
 export type { Redis };
 
@@ -74,12 +70,16 @@ class RedisLifecycleService implements OnModuleDestroy {
             useExisting: REDIS_CLIENT,
         },
         {
+            provide: PUB_SUB_CLIENT,
+            useClass: RedisPubSubService,
+        },
+        {
             // Lifecycle service — injected only so Nest calls onModuleDestroy.
             provide: REDIS_LIFECYCLE,
             inject: [REDIS_CLIENT],
             useFactory: (client: Redis) => new RedisLifecycleService(client),
         },
     ],
-    exports: [REDIS_CLIENT, KEY_VALUE_STORE],
+    exports: [REDIS_CLIENT, KEY_VALUE_STORE, PUB_SUB_CLIENT],
 })
 export class CacheModule { }

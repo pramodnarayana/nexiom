@@ -15,7 +15,7 @@ import {
   connectorObjectProfiles,
   dataSources,
 } from '@soopa/database';
-import { REDIS_CLIENT, type Redis } from '@soopa/cache';
+import { type IKeyValueStore } from '@soopa/cache';
 import { TokenManagerService } from '@soopa/credentials';
 import { PieceRegistryService } from '../pieces/piece-registry.service.js';
 import type { OAuthCredentialBlob } from '@soopa/credentials';
@@ -59,7 +59,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
-    @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    @Inject('KEY_VALUE_STORE') private readonly redis: IKeyValueStore,
     private readonly pieceRegistry: PieceRegistryService,
     private readonly tokenManager: TokenManagerService,
     private readonly config: ConfigService,
@@ -106,7 +106,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
         const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', 'meta:*', 'COUNT', 100);
         cursor = nextCursor;
         if (keys.length > 0) {
-          await this.redis.del(...keys);
+          await Promise.all(keys.map(key => this.redis.del(key)));
         }
       } while (cursor !== '0');
 

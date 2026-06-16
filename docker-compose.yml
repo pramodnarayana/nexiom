@@ -90,8 +90,21 @@ services:
       test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name delivery-queue --region us-east-1 && awslocal kms list-aliases --region us-east-1 | grep alias/soopa-local"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 15
       start_period: 15s
+    networks:
+      - app-network
+
+  # --- Verdaccio (Local NPM Registry) ---
+  # Hosts the compiled pieces and triggers webhooks to the API on publish.
+  verdaccio:
+    image: verdaccio/verdaccio:5
+    ports:
+      - "4873:4873"
+    volumes:
+      - ./verdaccio/conf:/verdaccio/conf
+      - ./verdaccio/storage:/verdaccio/storage
+      - ./verdaccio/plugins:/verdaccio/plugins
     networks:
       - app-network
 

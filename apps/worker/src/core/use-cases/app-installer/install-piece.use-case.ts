@@ -2,6 +2,7 @@ import type {
   PieceRegistryPort,
   GlobalPiecesRepositoryPort,
   LoggerPort,
+  SystemEventPubSubPort,
 } from "../../ports/outbound/app-installer-ports.js";
 
 export interface InstallPieceCommand {
@@ -16,6 +17,7 @@ export class InstallPieceUseCase {
   constructor(
     private readonly registry: PieceRegistryPort,
     private readonly repository: GlobalPiecesRepositoryPort,
+    private readonly pubSub: SystemEventPubSubPort,
     private readonly logger: LoggerPort,
   ) {}
 
@@ -26,7 +28,7 @@ export class InstallPieceUseCase {
 
     let pluginInfo;
     try {
-      // 1. Download to worker disk cache
+      // 1. Download to worker disk cache and extract metadata
       pluginInfo = await this.registry.installPiece(
         command.packageName,
         command.version,
@@ -41,11 +43,9 @@ export class InstallPieceUseCase {
       throw error;
     }
 
-    // 2. Extract metadata and Auto-Register globally
+    // 2. Auto-Register globally
     try {
-      const moduleExports = await this.registry.requirePiece(
-        command.packageName,
-      );
+      const moduleExports = pluginInfo.moduleExports;
       let piece = moduleExports.piece as Record<string, unknown> | undefined;
 
       let registerFn = moduleExports.register;
@@ -108,6 +108,14 @@ export class InstallPieceUseCase {
       });
 
       this.logger.log(`Auto-registered global piece: ${piece.name}`);
+
+      await this.pubSub.publishSystemEvent("system:plugins:reloaded", {
+        packageName: command.packageName,
+        version: pluginInfo.version,
+      });
+      this.logger.log(
+        `Broadcasted system:plugins:reloaded event for ${command.packageName}`,
+      );
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       this.logger.error(

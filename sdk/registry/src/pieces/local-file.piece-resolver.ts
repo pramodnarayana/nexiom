@@ -15,8 +15,8 @@ import { LocalDevPluginSyncService } from './local-dev-plugin-sync.service.js';
  * Registered by {@link PiecesModule} only when NODE_ENV is development.
  */
 @Injectable()
-export class DevelopmentPieceResolver implements IPieceResolver {
-  private readonly logger = new Logger(DevelopmentPieceResolver.name);
+export class LocalFilePieceResolver implements IPieceResolver {
+  private readonly logger = new Logger(LocalFilePieceResolver.name);
 
   constructor(private readonly localSync: LocalDevPluginSyncService) {}
 

@@ -33,12 +33,18 @@ export class FakePieceRegistry implements PieceRegistryPort {
   async installPiece(
     packageName: string,
     version: string,
-  ): Promise<{ version: string }> {
+  ): Promise<{
+    version: string;
+    location: string;
+    moduleExports: Record<string, unknown>;
+  }> {
     if (this.shouldFail) {
       throw new Error(`Failed to install ${packageName}`);
     }
     this.installed.push({ packageName, version });
-    return { version };
+
+    const mock = this.requireMocks.get(packageName) ?? {};
+    return { version, location: "/tmp/mock", moduleExports: mock };
   }
 
   async getLatestVersion(packageName: string): Promise<string> {
@@ -47,14 +53,6 @@ export class FakePieceRegistry implements PieceRegistryPort {
       throw new Error(`Package ${packageName} not found in registry`);
     }
     return version;
-  }
-
-  async requirePiece(packageName: string): Promise<Record<string, unknown>> {
-    const mock = this.requireMocks.get(packageName);
-    if (!mock) {
-      throw new Error(`Cannot require mock for ${packageName}`);
-    }
-    return mock;
   }
 }
 

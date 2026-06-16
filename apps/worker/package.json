@@ -43,10 +43,11 @@
     "@soopa/credentials": "workspace:*",
     "@soopa/database": "workspace:*",
     "@soopa/dbmanager": "workspace:*",
-    "@soopa/pipeline": "workspace:*",
     "@soopa/identity": "workspace:*",
+    "@soopa/observability": "workspace:*",
     "@soopa/piece-framework": "workspace:*",
     "@soopa/piece-registry": "workspace:*",
+    "@soopa/pipeline": "workspace:*",
     "@soopa/queue": "workspace:*",
     "@soopa/security": "workspace:*",
     "ai": "^6.0.146",
@@ -68,8 +69,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "uuid": "^13.0.0",
-    "zod": "^4.3.5",
-    "@soopa/observability": "workspace:*"
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -86,6 +86,7 @@
     "@types/node": "^20.14.9",
     "@types/nodemailer": "^7.0.4",
     "@types/pg": "^8.16.0",
+    "@types/semver": "^7.7.1",
     "@types/supertest": "^6.0.2",
     "@types/uuid": "^11.0.0",
     "@vitest/coverage-v8": "^4.0.18",

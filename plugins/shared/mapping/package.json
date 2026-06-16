@@ -1,31 +1,31 @@
 {
-  "name": "@soopa/mapping",
-  "version": "1.0.0",
-  "type": "module",
-  "private": true,
-  "description": "Soopa Standard Execution Engine — builds target JSON from Mapping Config + Stitch Config",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
-    }
-  },
-  "scripts": {
-    "build": "tsc",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:cov": "vitest run --coverage",
-    "lint": "eslint ."
-  },
-  "dependencies": {
-    "jsonata": "^2.1.0"
-  },
-  "devDependencies": {
-    "@vitest/coverage-v8": "^2.1.9",
-    "typescript": "^5.7.3",
-    "vitest": "^2.1.9"
-  }
+	"name": "@soopa/mapping",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"description": "Soopa Standard Execution Engine — builds target JSON from Mapping Config + Stitch Config",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:cov": "vitest run --coverage",
+		"lint": "eslint ."
+	},
+	"dependencies": {
+		"jsonata": "^2.1.0"
+	},
+	"devDependencies": {
+		"@vitest/coverage-v8": "^4.0.18",
+		"typescript": "^5.7.3",
+		"vitest": "^4.0.18"
+	}
 }

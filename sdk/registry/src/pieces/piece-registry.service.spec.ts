@@ -82,4 +82,45 @@ describe('PieceRegistryService', () => {
     expect(s.resolveBasePieceName('my-alias')).toBe('base');
     expect(s.getPiece('my-alias')?.name).toBe('base');
   });
+
+  describe('registerPiece', () => {
+    let service: PieceRegistryService;
+
+    beforeEach(() => {
+      service = new PieceRegistryService([]);
+    });
+
+    it('should dynamically register a piece', () => {
+      service.registerPiece(mockPiece);
+      expect(service.getPiece('mock-app')).toBeDefined();
+    });
+
+    it('should throw if the piece name conflicts with an existing alias for a different piece', () => {
+      const existing = { ...mockPiece, name: 'other', aliases: [{ name: 'mock-app', id: 'a1' }] };
+      service.registerPiece(existing as unknown as Piece);
+      expect(() => service.registerPiece(mockPiece)).toThrow(
+        /Name conflict: Piece name "mock-app" is already used as an alias for piece "other"/,
+      );
+    });
+
+    it('should throw if a new alias conflicts with an existing alias for a different piece', () => {
+      const existing = { ...mockPiece, name: 'other', aliases: [{ name: 'shared-alias', id: 'a1' }] };
+      service.registerPiece(existing as unknown as Piece);
+      const newPiece = { ...mockPiece, aliases: [{ name: 'shared-alias', id: 'a2' }] };
+      expect(() => service.registerPiece(newPiece as unknown as Piece)).toThrow(
+        /Alias conflict: "shared-alias" is already mapped to piece "other", cannot map to "mock-app"/,
+      );
+    });
+
+    it('should update piece and clean up old aliases when re-registering', () => {
+      const initial = { ...mockPiece, aliases: [{ name: 'old-alias', id: 'a1' }] };
+      service.registerPiece(initial as unknown as Piece);
+      expect(service.resolveBasePieceName('old-alias')).toBe('mock-app');
+
+      const updated = { ...mockPiece, aliases: [{ name: 'new-alias', id: 'a2' }] };
+      service.registerPiece(updated as unknown as Piece);
+      expect(service.resolveBasePieceName('old-alias')).toBe('old-alias');
+      expect(service.resolveBasePieceName('new-alias')).toBe('mock-app');
+    });
+  });
 });

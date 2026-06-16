@@ -66,6 +66,58 @@ export class PieceRegistryService {
     return this.getPiece(appName)?.triggers[triggerName];
   }
 
+  /**
+   * Dynamically registers or updates a piece in the in-memory registry.
+   * This is used by the hot-reloader to make new pieces available without restarting the process.
+   */
+  registerPiece(piece: Piece): void {
+    // Validate piece name doesn't collide with existing aliases mapped to other pieces
+    const baseForName = this.aliasToBaseName.get(piece.name);
+    if (baseForName && baseForName !== piece.name) {
+      throw new Error(`Name conflict: Piece name "${piece.name}" is already used as an alias for piece "${baseForName}"`);
+    }
+
+    // Validate new aliases don't collide with existing aliases mapped to other pieces
+    if (piece.aliases) {
+      for (const alias of piece.aliases) {
+        const existingBaseName = this.aliasToBaseName.get(alias.name);
+        if (existingBaseName && existingBaseName !== piece.name) {
+          throw new Error(
+            `Alias conflict: "${alias.name}" is already mapped to piece "${existingBaseName}", cannot map to "${piece.name}"`,
+          );
+        }
+        if (this.registry.has(alias.name) && alias.name !== piece.name) {
+          throw new Error(
+            `Alias conflict: "${alias.name}" matches an existing piece name, cannot map to "${piece.name}"`,
+          );
+        }
+      }
+    }
+
+    // All validations passed, mutate state
+    this.registry.set(piece.name, piece);
+
+    // Remove stale aliases from previous versions of this piece
+    const aliasesToRemove: string[] = [];
+    for (const [alias, baseName] of this.aliasToBaseName.entries()) {
+      if (baseName === piece.name) {
+        aliasesToRemove.push(alias);
+      }
+    }
+    for (const alias of aliasesToRemove) {
+      this.aliasToBaseName.delete(alias);
+    }
+
+    // Register new aliases
+    if (piece.aliases) {
+      for (const alias of piece.aliases) {
+        this.aliasToBaseName.set(alias.name, piece.name);
+      }
+    }
+
+    this.logger.log(`Hot-loaded piece schema into memory: ${piece.name}`);
+  }
+
   getAllPieces(): Piece[] {
     return [...this.registry.values()];
   }

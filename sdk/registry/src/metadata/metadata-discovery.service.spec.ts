@@ -71,8 +71,10 @@ function buildMockDb() {
 function buildMockRedis() {
   return {
     get: vi.fn<() => Promise<string | null>>().mockResolvedValue(null),
-    set: vi.fn<() => Promise<string>>().mockResolvedValue('OK'),
+    set: vi.fn<() => Promise<string | null>>().mockResolvedValue('OK'),
     del: vi.fn<() => Promise<number>>().mockResolvedValue(1),
+    scan: vi.fn<() => Promise<[string, string[]]>>().mockResolvedValue(['0', []]),
+    eval: vi.fn<() => Promise<number>>().mockResolvedValue(1),
   };
 }
 
@@ -148,7 +150,7 @@ describe('MetadataDiscoveryService', () => {
       providers: [
         MetadataDiscoveryService,
         { provide: DATABASE_CONNECTION, useValue: mocks.db },
-        { provide: REDIS_CLIENT, useValue: redis },
+        { provide: 'KEY_VALUE_STORE', useValue: redis },
         { provide: PieceRegistryService, useValue: mockPieceRegistry },
         { provide: TokenManagerService, useValue: mockTokenManager },
         {
@@ -159,6 +161,52 @@ describe('MetadataDiscoveryService', () => {
     }).compile();
 
     service = module.get(MetadataDiscoveryService);
+  });
+
+  describe('onModuleInit', () => {
+    it('should cleanup legacy cache keys successfully', async () => {
+      redis.set.mockResolvedValueOnce('OK'); // Claim lock
+      redis.scan.mockResolvedValueOnce(['10', ['meta:1', 'meta:2']]);
+      redis.scan.mockResolvedValueOnce(['0', []]);
+      
+      await service.onModuleInit();
+      await new Promise(resolve => setTimeout(resolve, 10)); // wait for async catch block
+      
+      expect(redis.set).toHaveBeenCalledWith(
+        'migration:meta_cache_cleanup_datasource_id',
+        expect.any(String),
+        'EX',
+        60,
+        'NX'
+      );
+      expect(redis.del).toHaveBeenCalledWith('meta:1');
+      expect(redis.del).toHaveBeenCalledWith('meta:2');
+      expect(redis.set).toHaveBeenCalledWith('migration:meta_cache_cleanup_datasource_id', '1');
+    });
+
+    it('should do nothing if another instance claimed the lock', async () => {
+      redis.set.mockResolvedValueOnce(null as any); // Lock already claimed
+      
+      await service.onModuleInit();
+      await new Promise(resolve => setTimeout(resolve, 10)); // wait for async catch block
+      
+      expect(redis.scan).not.toHaveBeenCalled();
+    });
+
+    it('should catch errors and release claim', async () => {
+      redis.set.mockResolvedValueOnce('OK'); // Claim lock
+      redis.scan.mockRejectedValueOnce(new Error('scan failed'));
+      
+      await service.onModuleInit();
+      await new Promise(resolve => setTimeout(resolve, 10)); // wait for async catch block
+      
+      expect(redis.eval).toHaveBeenCalledWith(
+        expect.any(String),
+        1,
+        'migration:meta_cache_cleanup_datasource_id',
+        expect.any(String)
+      );
+    });
   });
 
   // ── describeObjects ─────────────────────────────────────────────────────────

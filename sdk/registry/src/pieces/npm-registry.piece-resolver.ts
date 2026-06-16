@@ -14,11 +14,11 @@ import { PluginManagerService } from './plugin-manager.service.js';
  * Never instantiated directly.
  */
 @Injectable()
-export class ProductionPieceResolver implements IPieceResolver {
+export class NpmRegistryPieceResolver implements IPieceResolver {
   constructor(private readonly pluginManager: PluginManagerService) {}
 
   async resolve(packageName: string): Promise<Record<string, unknown>> {
-    await this.pluginManager.ensurePiece(packageName, 'latest');
-    return await this.pluginManager.requirePiece(packageName);
+    const { moduleExports } = await this.pluginManager.ensurePiece(packageName, 'latest');
+    return moduleExports;
   }
 }
