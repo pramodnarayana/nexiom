@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { InstallPieceUseCase } from "./install-piece.use-case.js";
 import { CheckPieceUpdatesUseCase } from "./check-piece-updates.use-case.js";
 import { QueueName } from "@soopa/queue";

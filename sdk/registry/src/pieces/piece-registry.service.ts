@@ -86,6 +86,11 @@ export class PieceRegistryService {
             `Alias conflict: "${alias.name}" is already mapped to piece "${existingBaseName}", cannot map to "${piece.name}"`,
           );
         }
+        if (this.registry.has(alias.name) && alias.name !== piece.name) {
+          throw new Error(
+            `Alias conflict: "${alias.name}" matches an existing piece name, cannot map to "${piece.name}"`,
+          );
+        }
       }
     }
 
@@ -106,6 +111,11 @@ export class PieceRegistryService {
     // Register new aliases
     if (piece.aliases) {
       for (const alias of piece.aliases) {
+        if (this.registry.has(alias.name) && alias.name !== piece.name) {
+          throw new Error(
+            `Alias conflict: "${alias.name}" matches an existing piece name, cannot map to "${piece.name}"`,
+          );
+        }
         this.aliasToBaseName.set(alias.name, piece.name);
       }
     }
