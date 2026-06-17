@@ -87,6 +87,12 @@ export class RegistryReplicationAdapter implements IRegistryReplicationPort {
     const tenantDb = await this.dbManager.getTenantDb(tenantId);
 
     await tenantDb.transaction(async (tx) => {
+      if (action === "APPLY" || entityType === "SCHEMA_PROVISION") {
+        throw new Error(
+          `Unhandled action and entityType combination: action=${action}, entityType=${entityType}`
+        );
+      }
+
       if (action === "UPSERT") {
         if (!payload) {
           throw new Error(
@@ -180,7 +186,7 @@ export class RegistryReplicationAdapter implements IRegistryReplicationPort {
       .where(eq(globalRegistryOutbox.id, outboxId));
   }
 
-  async markConnectionStatus(tenantId: string, connectionId: string, status: string): Promise<void> {
+  async markConnectionStatus(tenantId: string, connectionId: string, status: 'ACTIVE' | 'INACTIVE' | 'EXPIRED' | 'REVOKED' | 'PROVISIONING' | 'FAILED'): Promise<void> {
     // Verify the connection belongs to the tenant before updating credentials
     const [dataSource] = await this.globalDb
       .select({ id: schema.dataSources.id })
@@ -201,7 +207,7 @@ export class RegistryReplicationAdapter implements IRegistryReplicationPort {
 
     await this.globalDb
       .update(schema.credentials)
-      .set({ status: status as any })
+      .set({ status })
       .where(eq(schema.credentials.dataSourceId, connectionId));
   }
 }

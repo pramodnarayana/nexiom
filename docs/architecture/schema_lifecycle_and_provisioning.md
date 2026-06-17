@@ -44,6 +44,7 @@ Because workers are asynchronous, a webhook (L1) might arrive before the dbmanag
 async function processLayerJob(connectionId: string, payload: any) {
   // 1. Resolve Schema Name
   const schema = await storageResolver.resolve(connectionId);
+  const { tenantId, appName, appProfile } = payload.context;
 
   // 2. JIT Check (The "Ensure" step)
   // If the tables are missing, the worker triggers a fast schema plan apply

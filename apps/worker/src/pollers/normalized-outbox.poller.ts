@@ -87,7 +87,10 @@ export class NormalizedOutboxPoller {
           const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
 
           for (const connection of tenantConnections) {
-            if (!connection.vendorTenantId || connection.vendorTenantId.trim() === '') {
+            if (
+              !connection.vendorTenantId ||
+              connection.vendorTenantId.trim() === ""
+            ) {
               this.logger.warn(
                 `Skipping connection ${connection.id} due to missing or blank vendorTenantId`,
               );

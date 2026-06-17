@@ -61,6 +61,8 @@ async function run() {
             FROM app_connection
             WHERE status = 'ACTIVE'
             AND app_name = 'salesforce'
+            AND vendor_tenant_id IS NOT NULL 
+            AND vendor_tenant_id != ''
             ORDER BY id ASC
             LIMIT 1
         `);

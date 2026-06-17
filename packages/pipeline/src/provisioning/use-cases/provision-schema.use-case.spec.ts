@@ -60,7 +60,7 @@ describe('ProvisionSchemaUseCase', () => {
     expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalledWith('123');
   });
 
-  it('should mark success without provisioning if entityType is unrecognized', async () => {
+  it('should throw if entityType is unrecognized', async () => {
     registryPort.fetchGlobalOutboxRecord.mockResolvedValue({
       id: '123',
       tenantId: 'tenant-1',
@@ -71,9 +71,9 @@ describe('ProvisionSchemaUseCase', () => {
       createdAt: new Date(),
     } as any);
 
-    await useCase.execute({ outboxId: '123' });
+    await expect(useCase.execute({ outboxId: '123' })).rejects.toThrow('Unexpected outbox row type or action');
 
     expect(dbManager.applyPlan).not.toHaveBeenCalled();
-    expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalledWith('123');
+    expect(registryPort.markGlobalOutboxSuccess).not.toHaveBeenCalled();
   });
 });

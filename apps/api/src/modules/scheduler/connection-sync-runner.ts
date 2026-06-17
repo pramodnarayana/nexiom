@@ -140,8 +140,10 @@ export class ConnectionSyncRunner {
     // Standard tables were already created at connection time.
     const schemaName =
       await this.storageResolver.resolveSchemaName(connectionId);
-    const metadataAppProfile = (conn.metadata as Record<string, unknown>)?.appProfile;
-    const appProfile = typeof metadataAppProfile === 'string' ? metadataAppProfile : 'standard';
+    const metadataAppProfile = (conn.metadata as Record<string, unknown>)
+      ?.appProfile;
+    const appProfile =
+      typeof metadataAppProfile === 'string' ? metadataAppProfile : 'standard';
     await this.dbManager.applyPlan(
       conn.orgId,
       schemaName,

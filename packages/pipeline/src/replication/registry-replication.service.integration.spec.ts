@@ -201,9 +201,10 @@ describe("RegistryReplicationService", () => {
       {
         id: ds1Id,
         appName: "mock_app",
+        vendorTenantId: "vendor1",
         metadata: { appProfile: "standard" },
       },
-      { id: ds2Id, appName: "hubspot", metadata: { appProfile: "default" } },
+      { id: ds2Id, appName: "hubspot", vendorTenantId: "vendor1", metadata: { appProfile: "default" } },
     ]);
 
     service.onModuleInit();

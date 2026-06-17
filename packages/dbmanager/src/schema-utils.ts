@@ -7,7 +7,6 @@ import { createHash } from 'node:crypto';
  * @param tenantId The UUID of the tenant
  * @param appName The provider/app name (e.g., "salesforce", "quickbooks")
  * @param vendorTenantId The unique identifier of the 3rd party account (e.g. Realm ID, Org ID)
- * @param externalId The fallback deterministic identifier based on the user's display name
  * @returns The isolated schema name (e.g., "ws_salesforce_8f3a9b...")
  */
 export function getWorkspaceSchemaName(

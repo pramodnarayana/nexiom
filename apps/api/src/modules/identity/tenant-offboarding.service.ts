@@ -45,11 +45,21 @@ export class TenantOffboardingService {
     } else {
       // Best-effort schema cleanup - idempotent and safe to retry
       for (const currConnection of connections) {
+        if (
+          !currConnection.vendorTenantId ||
+          currConnection.vendorTenantId.trim() === ''
+        ) {
+          this.logger.warn(
+            `Skipping schema cleanup for connection ${currConnection.id}: vendorTenantId is missing or blank`,
+          );
+          continue;
+        }
+
         // Compute the deterministic schema name using the shared helper
         const dataNamespace = getWorkspaceSchemaName(
           tenantId,
           currConnection.appName,
-          currConnection.vendorTenantId as string,
+          currConnection.vendorTenantId,
         );
 
         this.logger.log(`Safely dropping physical schema: ${dataNamespace}`);

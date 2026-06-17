@@ -103,7 +103,12 @@ export class DrizzleConnectionLifecycleAdapter implements ConnectionLifecyclePor
             const [failedConn] = await tx
               .update(dataSources)
               .set({ updatedAt: new Date() })
-              .where(eq(dataSources.id, workspaceProvisionInfo.dataSourceId))
+              .where(
+                and(
+                  eq(dataSources.id, workspaceProvisionInfo.dataSourceId),
+                  eq(dataSources.tenantId, tenantId),
+                ),
+              )
               .returning();
 
             await tx
@@ -147,11 +152,13 @@ export class DrizzleConnectionLifecycleAdapter implements ConnectionLifecyclePor
   }
 
   async safeTeardown(tenantId: string, dataSourceId: string): Promise<void> {
-    const lockKey = `${tenantId}:${dataSourceId}`;
-    const lockId = this.hashLockKey(lockKey);
+    const lockId1 = this.hashLockKey(tenantId);
+    const lockId2 = this.hashLockKey(dataSourceId);
 
     await this.db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockId})`);
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(${lockId1}, ${lockId2})`,
+      );
 
       const [lockedConn] = await tx
         .select({ id: dataSources.id })
@@ -250,8 +257,8 @@ export class DrizzleConnectionLifecycleAdapter implements ConnectionLifecyclePor
     for (let i = 0; i < key.length; i++) {
       const char = key.charCodeAt(i);
       hash = (hash << 5) - hash + char;
-      hash = hash | 0;
+      hash = hash | 0; // Convert to 32bit integer
     }
-    return Math.abs(hash);
+    return hash;
   }
 }

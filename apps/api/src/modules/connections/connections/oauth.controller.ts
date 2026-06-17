@@ -429,6 +429,7 @@ export class OAuthController {
       );
     }
     let externalId = toKebabSlug(body.providerName, trimmedDisplayName);
+    let preservedVendorTenantId: string | undefined = undefined;
     if (body.dataSourceId) {
       try {
         const existing = await this.connectionRepository.findByIdAndTenant(
@@ -443,6 +444,9 @@ export class OAuthController {
         }
 
         externalId = existing.externalId;
+        if (existing.vendorTenantId) {
+          preservedVendorTenantId = existing.vendorTenantId;
+        }
         this.logger.log(
           `[OAuth Exchange] Overriding externalId with existing: ${externalId}`,
         );
@@ -573,7 +577,10 @@ export class OAuthController {
       );
     }
     const finalVendorTenantId =
-      extractedVendorTenantId ?? body.vendorTenantId ?? undefined;
+      extractedVendorTenantId ??
+      body.vendorTenantId ??
+      preservedVendorTenantId ??
+      undefined;
 
     if (!finalVendorTenantId) {
       throw new BadRequestException(

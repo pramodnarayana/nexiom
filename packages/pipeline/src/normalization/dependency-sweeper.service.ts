@@ -66,10 +66,15 @@ export class DependencySweeperService {
             let schemaName: string | undefined;
             try {
               // Use persisted schema name if available, otherwise compute
+              if (!conn.schemaName && (!conn.vendorTenantId || conn.vendorTenantId.trim() === "")) {
+                throw new Error(
+                  `Cannot resolve schema name: schemaName is empty and vendorTenantId is missing for connection ${conn.id}`
+                );
+              }
               schemaName =
                 conn.schemaName && conn.schemaName.trim() !== ""
                   ? conn.schemaName
-                  : getWorkspaceSchemaName(tenant.tenantId, conn.appName, conn.vendorTenantId as string);
+                  : getWorkspaceSchemaName(tenant.tenantId, conn.appName, conn.vendorTenantId!);
 
               const staleRecords = await this.sweeperRepo.getDeferredTraces(tenant.tenantId, schemaName, 5);
 

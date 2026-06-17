@@ -86,31 +86,33 @@ describe('StoreOAuthConnectionUseCase', () => {
   it('should throw an error in production if no region context is available', async () => {
     // Override NODE_ENV
     const oldEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
+    try {
+      process.env.NODE_ENV = 'production';
 
-    // Setup use case with no default
-    const noDefaultUseCase = new StoreOAuthConnectionUseCase(
-      fakeRepo,
-      fakeLifecycle,
-      undefined,
-    );
+      // Setup use case with no default
+      const noDefaultUseCase = new StoreOAuthConnectionUseCase(
+        fakeRepo,
+        fakeLifecycle,
+        undefined,
+      );
 
-    await expect(
-      noDefaultUseCase.execute({
-        tenantId: 'tenant-123',
-        providerName: 'salesforce',
-        externalId: 'ext-456',
-        displayName: 'SF Conn',
-        authType: 'OAUTH2',
-        value: 'token',
-        expiresAt: new Date(),
-        metadata: {},
-      }),
-    ).rejects.toThrow(
-      'Region context is required for connection storage in production',
-    );
-
-    // Restore NODE_ENV
-    process.env.NODE_ENV = oldEnv;
+      await expect(
+        noDefaultUseCase.execute({
+          tenantId: 'tenant-123',
+          providerName: 'salesforce',
+          externalId: 'ext-456',
+          displayName: 'SF Conn',
+          authType: 'OAUTH2',
+          value: 'token',
+          expiresAt: new Date(),
+          metadata: {},
+        }),
+      ).rejects.toThrow(
+        'Region context is required for connection storage in production',
+      );
+    } finally {
+      // Restore NODE_ENV
+      process.env.NODE_ENV = oldEnv;
+    }
   });
 });

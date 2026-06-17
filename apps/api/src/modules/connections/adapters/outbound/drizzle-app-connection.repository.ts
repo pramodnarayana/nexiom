@@ -148,7 +148,11 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
           status: AppConnectionStatus.PROVISIONING,
         });
 
-        if (!vendorTenantId || typeof vendorTenantId !== 'string' || vendorTenantId.trim() === '') {
+        if (
+          !vendorTenantId ||
+          typeof vendorTenantId !== 'string' ||
+          vendorTenantId.trim() === ''
+        ) {
           throw new InternalServerErrorException(
             'vendorTenantId is required but was not provided or is empty',
           );
@@ -257,7 +261,11 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
           }
 
           if (existingFailed) {
-            if (!vendorTenantId || typeof vendorTenantId !== 'string' || vendorTenantId.trim() === '') {
+            if (
+              !vendorTenantId ||
+              typeof vendorTenantId !== 'string' ||
+              vendorTenantId.trim() === ''
+            ) {
               throw new InternalServerErrorException(
                 'vendorTenantId is required but was not provided or is empty',
               );
@@ -318,7 +326,11 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
 
       let schemaName = connection.schemaName;
       if (!schemaName) {
-        if (!vendorTenantId || typeof vendorTenantId !== 'string' || vendorTenantId.trim() === '') {
+        if (
+          !vendorTenantId ||
+          typeof vendorTenantId !== 'string' ||
+          vendorTenantId.trim() === ''
+        ) {
           throw new InternalServerErrorException(
             'vendorTenantId is required but was not provided or is empty',
           );
