@@ -16,7 +16,7 @@ export class ProvisionSchemaUseCase {
 
   async execute(command: ProvisionSchemaCommand): Promise<void> {
     const row = await this.registryPort.fetchGlobalOutboxRecord(command.outboxId);
-    
+
     if (!row) {
       return;
     }
@@ -47,10 +47,12 @@ export class ProvisionSchemaUseCase {
       this.logger.debug(
         `Successfully provisioned schema ${payload.schemaName} for connection ${row.entityId} in tenant ${row.tenantId}`,
       );
-    } else {
-       // Optionally log unhandled event type, but we mark success to clear it.
-    }
 
-    await this.registryPort.markGlobalOutboxSuccess(command.outboxId);
+      await this.registryPort.markGlobalOutboxSuccess(command.outboxId);
+    } else {
+      throw new Error(
+        `Unexpected outbox row type or action: entityType=${row.entityType}, action=${row.action}`,
+      );
+    }
   }
 }

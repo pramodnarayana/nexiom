@@ -53,10 +53,10 @@ export class RegistryOutboxPoller {
               entityType?: string;
               entity_type?: string;
             };
-            console.log("OUTBOX ROW IN POLLER:", JSON.stringify(outboxRow));
             const type = (outboxRow.entityType ||
               outboxRow.entity_type) as string;
-            console.log("RESOLVED TYPE:", type);
+            this.logger.debug("OUTBOX ROW IN POLLER:", JSON.stringify(outboxRow));
+            this.logger.debug("RESOLVED TYPE:", type);
             return (
               ENTITY_TYPE_CONFIG_MAP[type]?.queueName ||
               QueueName.RegistryReplicationQueue

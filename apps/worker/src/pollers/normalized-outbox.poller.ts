@@ -87,10 +87,16 @@ export class NormalizedOutboxPoller {
           const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
 
           for (const connection of tenantConnections) {
+            if (!connection.vendorTenantId || connection.vendorTenantId.trim() === '') {
+              this.logger.warn(
+                `Skipping connection ${connection.id} due to missing or blank vendorTenantId`,
+              );
+              continue;
+            }
             const schemaName = getWorkspaceSchemaName(
               tenant.tenantId,
               connection.appName,
-              connection.vendorTenantId as string,
+              connection.vendorTenantId,
             );
             await this.executeSafeSchemaOperation(
               tenant.tenantId,

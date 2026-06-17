@@ -59,10 +59,16 @@ export class InboundOutboxPoller {
                 );
 
               for (const connection of connections) {
+                if (!connection.vendorTenantId || connection.vendorTenantId.trim() === '') {
+                  this.logger.warn(
+                    `Skipping connection ${connection.id} due to missing or blank vendorTenantId`,
+                  );
+                  continue;
+                }
                 const schemaName = getWorkspaceSchemaName(
                   connection.tenantId,
                   connection.appName,
-                  connection.vendorTenantId as string,
+                  connection.vendorTenantId,
                 );
                 await this.executeSafeSchemaOperation(
                   tenant.tenantId,

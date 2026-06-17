@@ -148,10 +148,15 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
           status: AppConnectionStatus.PROVISIONING,
         });
 
+        if (!vendorTenantId || typeof vendorTenantId !== 'string' || vendorTenantId.trim() === '') {
+          throw new InternalServerErrorException(
+            'vendorTenantId is required but was not provided or is empty',
+          );
+        }
         const schemaNameToStore = getWorkspaceSchemaName(
           tenantId,
           providerName,
-          vendorTenantId as string,
+          vendorTenantId,
         );
         await tx
           .update(dataSources)
@@ -252,10 +257,15 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
           }
 
           if (existingFailed) {
+            if (!vendorTenantId || typeof vendorTenantId !== 'string' || vendorTenantId.trim() === '') {
+              throw new InternalServerErrorException(
+                'vendorTenantId is required but was not provided or is empty',
+              );
+            }
             const recoveredSchemaName = getWorkspaceSchemaName(
               tenantId,
               providerName,
-              vendorTenantId as string,
+              vendorTenantId,
             );
             const [updated] = await tx
               .update(dataSources)
@@ -306,13 +316,19 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
         );
       }
 
-      const schemaName =
-        connection.schemaName ??
-        getWorkspaceSchemaName(
+      let schemaName = connection.schemaName;
+      if (!schemaName) {
+        if (!vendorTenantId || typeof vendorTenantId !== 'string' || vendorTenantId.trim() === '') {
+          throw new InternalServerErrorException(
+            'vendorTenantId is required but was not provided or is empty',
+          );
+        }
+        schemaName = getWorkspaceSchemaName(
           tenantId,
           providerName,
-          vendorTenantId as string,
+          vendorTenantId,
         );
+      }
 
       await tx.insert(globalRegistryOutbox).values({
         tenantId: connection.tenantId,

@@ -171,7 +171,9 @@ export function ActiveConnectionCard({ connection, provider, onDelete }: Readonl
         }
         try {
             setRenaming(true);
-            await updateDisplayName(connection.id, inlineName.trim());
+            const trimmedName = inlineName.trim();
+            await updateDisplayName(connection.id, trimmedName);
+            setInlineName(trimmedName);
             setIsInlineEditing(false);
         } finally {
             setRenaming(false);
@@ -348,6 +350,7 @@ export function ActiveConnectionCard({ connection, provider, onDelete }: Readonl
                                                 }
                                             }}
                                             disabled={renaming}
+                                            maxLength={100}
                                             className="h-8 text-sm font-semibold"
                                         />
                                         <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600 shrink-0" onClick={() => void handleInlineRename()} disabled={renaming || !inlineName.trim()}>

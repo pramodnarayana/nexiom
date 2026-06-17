@@ -365,10 +365,8 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 
 ### T026 · db-manager: New schema plans — REPLICA, NORMALIZE, OUTBOUND ✅ COMPLETE
 
-- [x] Add `STANDARD_ACTIVE` plan: creates `replica_entity`, `sync_cursor`
-- [x] Add `STANDARD_ACTIVE` plan: creates `normalized_entity`
-- [x] Add `STANDARD_ACTIVE` plan: creates `outbound_gateway`, `sync_log`
-- [x] Apply all three when a connection is activated in `TriggerExecutorService.applyPlan()` and `ConnectorsService`
+- [x] Add `STANDARD_ACTIVE` plan: creates multiple table groups including `replica_entity`, `sync_cursor`, `normalized_entity`, `outbound_gateway`, and `sync_log`
+- [x] Apply the consolidated `STANDARD_ACTIVE` plan when a connection is activated in `TriggerExecutorService.applyPlan()` and `ConnectorsService`
 - Files: `packages/dbmanager/src/plans/**`, `apps/api/src/modules/triggers/trigger-executor.service.ts`
 - Depends: T005
 

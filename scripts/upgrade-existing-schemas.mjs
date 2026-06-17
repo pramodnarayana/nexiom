@@ -49,7 +49,7 @@ await catalogClient.connect();
 // Fetch all connections that need upgrading
 const { rows: connections } = await catalogClient.query(
   `SELECT id, app_name, schema_name, schema_plan FROM data_source WHERE schema_plan = ANY($1)`,
-  [['NAMESPACE_ONLY', 'STANDARD_ACTIVE']]
+  [['NAMESPACE_ONLY']]
 );
 
 if (connections.length === 0) {

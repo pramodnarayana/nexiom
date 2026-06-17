@@ -16,8 +16,6 @@ export class MockDatabaseManager implements DatabaseManager {
     }
 
     async migrateToStandardActive(tenantId: string, schemaName: string): Promise<void> {
-        if (this.sqlManager.migrateToStandardActive) {
-            await this.sqlManager.migrateToStandardActive(schemaName);
-        }
+        await this.sqlManager.migrateToStandardActive(schemaName);
     }
 }

@@ -357,7 +357,10 @@ export class CredentialController {
       throw new BadRequestException('tenantId or user context is missing');
     }
 
-    const trimmedDisplayName = body.displayName?.trim();
+    if (typeof body.displayName !== 'string') {
+      throw new BadRequestException('displayName must be a string');
+    }
+    const trimmedDisplayName = body.displayName.trim();
     if (!trimmedDisplayName || trimmedDisplayName.length === 0) {
       throw new BadRequestException('displayName cannot be blank');
     }

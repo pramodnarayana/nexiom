@@ -41,7 +41,7 @@ describe('ProvisionSchemaUseCase', () => {
       entityId: 'conn-1',
       action: 'APPLY' as any,
       payload: {
-        plan: SchemaPlan.CANONICAL_ACTIVE,
+        plan: SchemaPlan.STANDARD_ACTIVE,
         schemaName: 'ws_test_schema',
         appName: 'test-app',
         appProfile: 'test-profile'
@@ -54,7 +54,7 @@ describe('ProvisionSchemaUseCase', () => {
     expect(dbManager.applyPlan).toHaveBeenCalledWith(
       'tenant-1',
       'ws_test_schema',
-      SchemaPlan.CANONICAL_ACTIVE,
+      SchemaPlan.STANDARD_ACTIVE,
       { appName: 'test-app', appProfile: 'test-profile' }
     );
     expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalledWith('123');

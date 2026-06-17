@@ -181,6 +181,24 @@ export class RegistryReplicationAdapter implements IRegistryReplicationPort {
   }
 
   async markConnectionStatus(tenantId: string, connectionId: string, status: string): Promise<void> {
+    // Verify the connection belongs to the tenant before updating credentials
+    const [dataSource] = await this.globalDb
+      .select({ id: schema.dataSources.id })
+      .from(schema.dataSources)
+      .where(
+        and(
+          eq(schema.dataSources.id, connectionId),
+          eq(schema.dataSources.tenantId, tenantId),
+        ),
+      )
+      .limit(1);
+
+    if (!dataSource) {
+      throw new Error(
+        `Connection ${connectionId} not found or does not belong to tenant ${tenantId}`,
+      );
+    }
+
     await this.globalDb
       .update(schema.credentials)
       .set({ status: status as any })

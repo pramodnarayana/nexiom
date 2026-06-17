@@ -33,5 +33,9 @@ export interface IRegistryReplicationPort {
   ): Promise<DataSourceMetadata[]>;
 
   markGlobalOutboxSuccess(outboxId: string): Promise<void>;
-  markConnectionStatus(tenantId: string, connectionId: string, status: string): Promise<void>;
+  markConnectionStatus(
+    tenantId: string,
+    connectionId: string,
+    status: 'ACTIVE' | 'INACTIVE' | 'EXPIRED' | 'REVOKED' | 'PROVISIONING' | 'FAILED'
+  ): Promise<void>;
 }

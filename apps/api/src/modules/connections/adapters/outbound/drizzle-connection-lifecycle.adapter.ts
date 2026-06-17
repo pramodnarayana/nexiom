@@ -50,8 +50,19 @@ export class DrizzleConnectionLifecycleAdapter implements ConnectionLifecyclePor
         const [activeConn] = await tx
           .update(dataSources)
           .set({ schemaPlan: SchemaPlan.STANDARD_ACTIVE })
-          .where(eq(dataSources.id, workspaceProvisionInfo.dataSourceId))
+          .where(
+            and(
+              eq(dataSources.id, workspaceProvisionInfo.dataSourceId),
+              eq(dataSources.tenantId, tenantId),
+            ),
+          )
           .returning();
+
+        if (!activeConn) {
+          throw new InternalServerErrorException(
+            `Connection ${workspaceProvisionInfo.dataSourceId} not found or does not belong to tenant ${tenantId}`,
+          );
+        }
 
         await tx
           .update(credentials)
