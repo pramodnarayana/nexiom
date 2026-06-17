@@ -2,7 +2,7 @@ import { Injectable, Inject } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import { DATABASE_CONNECTION, dataSources } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
-import { ConnectionRepositoryPort, ConnectionMetadata } from '../../../shared/ports/connection.repository.port.js';
+import { ConnectionRepositoryPort, ConnectionMetadata } from '../../ports/connection.repository.port.js';
 import { DB_MANAGER, type DatabaseManager } from "@soopa/dbmanager";
 
 @Injectable()
