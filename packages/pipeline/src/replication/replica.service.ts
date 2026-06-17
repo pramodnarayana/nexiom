@@ -12,7 +12,7 @@ import {
 } from "../index.js";
 import { DependenciesMissingError } from "@soopa/piece-framework";
 import { sanitizeErrorObject } from "../utils.js";
-import type { IReplicaStatePort } from "../shared/domain.js";
+import type { ReplicaStatePort } from "../shared/domain.js";
 import { CONNECTION_REPOSITORY_PORT, type ConnectionRepositoryPort } from "../shared/ports/connection.repository.port.js";
 
 @Injectable()
@@ -23,8 +23,8 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
     private readonly queueService: QueueService,
     @Inject(CONNECTION_REPOSITORY_PORT)
     private readonly connectionRepository: ConnectionRepositoryPort,
-    @Inject("IReplicaStatePort")
-    private readonly replicaStatePort: IReplicaStatePort,
+    @Inject("ReplicaStatePort")
+    private readonly replicaStatePort: ReplicaStatePort,
     private readonly storageResolver: StorageResolverService,
     private readonly hookBroker: PipelineHookBrokerService,
   ) {}

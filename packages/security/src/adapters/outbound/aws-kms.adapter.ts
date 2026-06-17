@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { KMSClient, EncryptCommand, DecryptCommand } from "@aws-sdk/client-kms";
-import type { IEncryptionService } from "../interfaces/encryption-service.interface.js";
+import type { IEncryptionService } from "../../interfaces/encryption-service.interface.js";
 
 export interface AwsKmsAdapterOptions {
   /** Full ARN or alias ARN of the KMS key (e.g. 'alias/soopa-local'). */

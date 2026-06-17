@@ -11,7 +11,7 @@ export interface ExtractedReplica {
   data: Record<string, unknown>;
 }
 
-export interface IReplicaStatePort {
+export interface ReplicaStatePort {
   fetchInboundRecord(
     tenantId: string,
     schemaName: string,

@@ -1,7 +1,7 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { sql, and, eq, inArray } from "drizzle-orm";
 import { DATABASE_CONNECTION, type DrizzleDb, tenantStorageRegistry, dataSources, integrationStitches, buildTenantSchema } from "@soopa/database";
-import { DependencySweeperRepositoryPort, ActiveConnectionWithStitch } from "../ports/dependency-sweeper.repository.port.js";
+import { DependencySweeperRepositoryPort, ActiveConnectionWithStitch } from '../../ports/dependency-sweeper.repository.port.js';
 import { DB_MANAGER, type DatabaseManager } from "@soopa/dbmanager";
 
 @Injectable()

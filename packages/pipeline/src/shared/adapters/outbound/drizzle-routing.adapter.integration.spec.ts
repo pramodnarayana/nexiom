@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { DrizzleRoutingRepositoryAdapter } from "./drizzle-routing.repository.js";
+import { DrizzleRoutingRepositoryAdapter } from './drizzle-routing.adapter.js';
 import { TestDatabaseManager, buildTenantSchema, dataSources } from "@soopa/database";
 import { v4 as uuidv4 } from "uuid";
 import { SqlDatabaseManager, SchemaPlan } from "@soopa/dbmanager";

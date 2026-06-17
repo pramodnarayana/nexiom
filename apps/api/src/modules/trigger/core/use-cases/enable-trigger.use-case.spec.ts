@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EnableTriggerUseCase } from './enable-trigger.use-case.js';
-import { FakeTriggerGatewayRepository } from '../fakes/fake-trigger-gateway.repository.js';
-import { FakeTriggerStorageResolver } from '../fakes/fake-trigger-storage.resolver.js';
-import { FakeDatabaseProvisioner } from '../fakes/fake-database-provisioner.js';
-import { FakeKeyValueStore } from '../fakes/fake-key-value-store.js';
+import { FakeTriggerGatewayRepository } from '../fakes/trigger-gateway-repository.fake.js';
+import { FakeTriggerStorageResolver } from '../fakes/trigger-storage-resolver.fake.js';
+import { FakeDatabaseProvisioner } from '../fakes/database-provisioner.fake.js';
+import { FakeKeyValueStore } from '../fakes/key-value-store.fake.js';
 import { SchemaPlan } from '@soopa/dbmanager';
 import type { Trigger } from '@soopa/piece-framework';
 

@@ -6,9 +6,9 @@ import {
   FakePieceRegistry,
   FakeGlobalPiecesRepository,
   FakeLoggerPort,
-} from "../../fakes/fake-app-installer-ports.js";
-import { FakeQueuePublisher } from "../../fakes/fake-queue.publisher.js";
-import { FakeRealtimeEventPubSub } from "../../fakes/fake-copilot-ports.js";
+} from "../../fakes/app-installer-ports.fake.js";
+import { FakeQueuePublisher } from "../../fakes/queue-publisher.fake.js";
+import { FakeRealtimeEventPubSub } from "../../fakes/copilot-ports.fake.js";
 
 describe("App Installer Subdomain", () => {
   let registry: FakePieceRegistry;

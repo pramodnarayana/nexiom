@@ -15,7 +15,7 @@ export interface DataSourceMetadata {
   metadata: unknown;
 }
 
-export interface IRegistryReplicationPort {
+export interface RegistryReplicationPort {
   fetchGlobalOutboxRecord(outboxId: string): Promise<GlobalOutboxRecord | null>;
 
   replicateEntity(

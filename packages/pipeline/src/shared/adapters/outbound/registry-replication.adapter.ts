@@ -6,10 +6,10 @@ import { DB_MANAGER } from "@soopa/dbmanager";
 import type { DatabaseManager } from "@soopa/dbmanager";
 import * as schema from "@soopa/database";
 import type {
-  IRegistryReplicationPort,
+  RegistryReplicationPort,
   GlobalOutboxRecord,
   DataSourceMetadata,
-} from "../domain.js";
+} from '../../domain.js';
 
 // ISO 8601 pattern — matches timestamps stored as strings in JSONB
 const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
@@ -41,7 +41,7 @@ function prepareAppConnectionPayload(
 }
 
 @Injectable()
-export class RegistryReplicationAdapter implements IRegistryReplicationPort {
+export class RegistryReplicationAdapter implements RegistryReplicationPort {
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ListUsersWithInvitationsUseCase } from "./list-users-with-invitations.use-case.js";
-import type { IUserRepository } from "../../ports/outbound/user-repository.port.js";
+import type { UserRepositoryPort } from "../../ports/outbound/user-repository.port.js";
 import type { IAuthProvider } from "../../ports/outbound/auth-provider.port.js";
 
 describe("ListUsersWithInvitationsUseCase", () => {
@@ -12,7 +12,7 @@ describe("ListUsersWithInvitationsUseCase", () => {
     userRepository = { findAll: vi.fn() };
     authProvider = { listInvitations: vi.fn() };
     useCase = new ListUsersWithInvitationsUseCase(
-      userRepository as unknown as IUserRepository,
+      userRepository as unknown as UserRepositoryPort,
       authProvider as unknown as IAuthProvider,
     );
   });

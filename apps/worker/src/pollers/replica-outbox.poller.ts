@@ -17,8 +17,8 @@ import { ProcessOutboxUseCase } from "../core/use-cases/outbox/process-outbox.us
 import {
   DrizzleOutboxRepositoryAdapter,
   type OutboxTableSchema,
-} from "../adapters/outbound/drizzle-outbox.repository.js";
-import { NestQueuePublisherAdapter } from "../adapters/outbound/nest-queue.publisher.js";
+} from "../adapters/outbound/drizzle-outbox.adapter.js";
+import { NestQueuePublisherAdapter } from "../adapters/outbound/nest-queue.adapter.js";
 
 const BATCH_SIZE = 50;
 

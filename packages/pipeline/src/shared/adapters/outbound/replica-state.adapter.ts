@@ -4,13 +4,13 @@ import { buildTenantSchema, assertValidSchemaName } from "@soopa/database";
 import { DB_MANAGER } from "@soopa/dbmanager";
 import type { DatabaseManager } from "@soopa/dbmanager";
 import type {
-  IReplicaStatePort,
+  ReplicaStatePort,
   InboundRecord,
   ExtractedReplica,
-} from "../domain.js";
+} from '../../domain.js';
 
 @Injectable()
-export class ReplicaStateAdapter implements IReplicaStatePort {
+export class ReplicaStateAdapter implements ReplicaStatePort {
   constructor(
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {}

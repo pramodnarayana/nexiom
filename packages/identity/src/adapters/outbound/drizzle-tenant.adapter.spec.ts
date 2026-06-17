@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Tenant as TenantInterface } from "../../core/ports/outbound/index.js";
 import type { IIdentityEventPublisher } from "../../core/ports/outbound/index.js";
-import { DrizzleTenantRepositoryAdapter } from "./drizzle-tenant.repository.js";
+import { DrizzleTenantRepositoryAdapter } from "./drizzle-tenant.adapter.js";
 import * as schema from "../../schema.js";
 
 type MockFunc = ReturnType<typeof vi.fn>;

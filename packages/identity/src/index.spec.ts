@@ -38,16 +38,16 @@ vi.mock("better-auth/node", () => ({
 vi.mock("./adapters/outbound/better-auth.adapter.js", () => ({
   BetterAuthAdapter: class { },
 }));
-vi.mock("./adapters/outbound/drizzle-user.repository.js", () => ({
+vi.mock("./adapters/outbound/drizzle-user.adapter.js", () => ({
   DrizzleUserRepositoryAdapter: class { },
 }));
-vi.mock("./adapters/outbound/drizzle-tenant.repository.js", () => ({
+vi.mock("./adapters/outbound/drizzle-tenant.adapter.js", () => ({
   DrizzleTenantRepositoryAdapter: class { },
 }));
-vi.mock("./adapters/outbound/drizzle-permission.repository.js", () => ({
+vi.mock("./adapters/outbound/drizzle-permission.adapter.js", () => ({
   DrizzlePermissionRepositoryAdapter: class { },
 }));
-vi.mock("./adapters/outbound/drizzle-role.repository.js", () => ({
+vi.mock("./adapters/outbound/drizzle-role.adapter.js", () => ({
   DrizzleRoleRepositoryAdapter: class { },
 }));
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NotFoundException } from "@nestjs/common";
 import { GetUserProfileUseCase } from "./get-user-profile.use-case.js";
-import type { IUserRepository } from "../../ports/outbound/user-repository.port.js";
+import type { UserRepositoryPort } from "../../ports/outbound/user-repository.port.js";
 
 describe("GetUserProfileUseCase", () => {
   let useCase: GetUserProfileUseCase;
@@ -10,7 +10,7 @@ describe("GetUserProfileUseCase", () => {
   beforeEach(() => {
     userRepository = { findById: vi.fn() };
     useCase = new GetUserProfileUseCase(
-      userRepository as unknown as IUserRepository,
+      userRepository as unknown as UserRepositoryPort,
     );
   });
 

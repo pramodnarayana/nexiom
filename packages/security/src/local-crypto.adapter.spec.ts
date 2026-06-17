@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { LocalCryptoAdapter } from "./adapters/local-crypto.adapter.js";
+import { LocalCryptoAdapter } from "./adapters/outbound/local-crypto.adapter.js";
 
 const KEY_32 = "a".repeat(32);
 

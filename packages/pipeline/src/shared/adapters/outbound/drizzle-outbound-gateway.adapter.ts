@@ -2,7 +2,7 @@ import { Injectable, Inject } from "@nestjs/common";
 import { sql } from "drizzle-orm";
 import { DB_MANAGER, type DatabaseManager } from "@soopa/dbmanager";
 import { assertValidSchemaName } from "@soopa/database";
-import { OutboundGatewayRepositoryPort } from "../../shared/ports/outbound-gateway.repository.port.js";
+import { OutboundGatewayRepositoryPort } from '../../../shared/ports/outbound-gateway.repository.port.js';
 
 @Injectable()
 export class DrizzleOutboundGatewayRepositoryAdapter implements OutboundGatewayRepositoryPort {

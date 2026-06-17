@@ -3,14 +3,14 @@ import { v4 as uuidv4 } from "uuid";
 import { TestDatabaseManager, buildTenantSchema, dataSources, globalEntityMap, fieldMappings, integrationStitches, uiWorkspaceDataSources, uiWorkspaces } from "@soopa/database";
 import { SqlDatabaseManager, SchemaPlan } from "@soopa/dbmanager";
 
-import { DrizzleConnectionRepositoryAdapter } from "./drizzle-connection.repository.js";
-import { DrizzleFieldMappingRepositoryAdapter } from "./drizzle-field-mapping.repository.js";
-import { DrizzleGlobalEntityMapRepositoryAdapter } from "./drizzle-global-entity-map.repository.js";
-import { DrizzleOutboundGatewayRepositoryAdapter } from "./drizzle-outbound-gateway.repository.js";
-import { DrizzlePipelineStateRepositoryAdapter } from "./drizzle-pipeline-state.repository.js";
-import { DrizzleSharedStitchRepositoryAdapter } from "./drizzle-stitch.repository.js";
-import { DrizzleSyncLogRepositoryAdapter } from "./drizzle-sync-log.repository.js";
-import { DrizzleTransactionManagerAdapter } from "./drizzle-transaction-manager.adapter.js";
+import { DrizzleConnectionRepositoryAdapter } from './drizzle-connection.adapter.js';
+import { DrizzleFieldMappingRepositoryAdapter } from './drizzle-field-mapping.adapter.js';
+import { DrizzleGlobalEntityMapRepositoryAdapter } from './drizzle-global-entity-map.adapter.js';
+import { DrizzleOutboundGatewayRepositoryAdapter } from './drizzle-outbound-gateway.adapter.js';
+import { DrizzlePipelineStateRepositoryAdapter } from './drizzle-pipeline-state.adapter.js';
+import { DrizzleSharedStitchRepositoryAdapter } from './drizzle-stitch.adapter.js';
+import { DrizzleSyncLogRepositoryAdapter } from './drizzle-sync-log.adapter.js';
+import { DrizzleTransactionManagerAdapter } from './drizzle-transaction-manager.adapter.js';
 import { sql } from "drizzle-orm";
 
 describe("Fanout Drizzle Adapters", () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { ProcessActiveFetchUseCase } from "./process-active-fetch.use-case.js";
-import { FakeDataSourceRepository } from "../../fakes/fake-data-source.repository.js";
-import { FakePipelineHookBroker } from "../../fakes/fake-pipeline-hook-broker.js";
+import { FakeDataSourceRepository } from "../../fakes/data-source-repository.fake.js";
+import { FakePipelineHookBroker } from "../../fakes/pipeline-hook-broker.fake.js";
 
 describe("ProcessActiveFetchUseCase", () => {
   let repository: FakeDataSourceRepository;

@@ -2,7 +2,7 @@ import { Injectable, Inject } from "@nestjs/common";
 import { sql } from "drizzle-orm";
 import { buildTenantSchema, assertValidSchemaName } from "@soopa/database";
 import { DB_MANAGER, type DatabaseManager } from "@soopa/dbmanager";
-import { SyncLogRepositoryPort } from "../../shared/ports/sync-log.repository.port.js";
+import { SyncLogRepositoryPort } from '../../../shared/ports/sync-log.repository.port.js';
 
 @Injectable()
 export class DrizzleSyncLogRepositoryAdapter implements SyncLogRepositoryPort {

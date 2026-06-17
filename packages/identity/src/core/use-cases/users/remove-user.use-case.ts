@@ -4,13 +4,14 @@ import {
   BadRequestException,
   NotFoundException,
 } from "@nestjs/common";
-import { IUserRepository } from "../../ports/outbound/user-repository.port.js";
+import { UserRepositoryPort } from "../../ports/outbound/user-repository.port.js";
 import { USER_REPOSITORY } from "../../../constants.js";
 
 @Injectable()
 export class RemoveUserUseCase {
   constructor(
-    @Inject(USER_REPOSITORY) private readonly userRepository: IUserRepository,
+    @Inject(USER_REPOSITORY)
+    private readonly userRepository: UserRepositoryPort,
   ) {}
 
   async execute(

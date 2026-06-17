@@ -3,7 +3,7 @@ import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { IDENTITY_DB } from "../../constants.js";
 import { eq, and } from "drizzle-orm";
 import type {
-  IPermissionRepository,
+  PermissionRepositoryPort,
   PermissionAction,
   PermissionResource,
   User,
@@ -11,7 +11,7 @@ import type {
 import * as schema from "../../schema.js";
 
 @Injectable()
-export class DrizzlePermissionRepositoryAdapter implements IPermissionRepository {
+export class DrizzlePermissionRepositoryAdapter implements PermissionRepositoryPort {
   constructor(
     @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
   ) {}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from "vitest";
-import { DrizzleRoleRepositoryAdapter } from "./drizzle-role.repository.js";
+import { DrizzleRoleRepositoryAdapter } from "./drizzle-role.adapter.js";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../schema.js";
 import { eq, desc } from "drizzle-orm";

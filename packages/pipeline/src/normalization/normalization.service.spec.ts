@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NormalizationService } from "./normalization.service.js";
 import { QueueName } from "@soopa/queue";
-import { FakeNormalizationRepository } from "../shared/fakes/fake-normalization.repository.js";
-import { FakeConnectionRepository } from "../shared/fakes/fake-connection.repository.js";
-import { FakeTransactionManager } from "../shared/fakes/fake-transaction-manager.js";
-import { FakeSyncLogRepository } from "../shared/fakes/fake-sync-log.repository.js";
+import { FakeNormalizationRepository } from "../shared/fakes/normalization-repository.fake.js";
+import { FakeConnectionRepository } from "../shared/fakes/connection-repository.fake.js";
+import { FakeTransactionManager } from "../shared/fakes/transaction-manager.fake.js";
+import { FakeSyncLogRepository } from "../shared/fakes/sync-log-repository.fake.js";
 import { v4 as uuidv4 } from "uuid";
 
 describe("NormalizationService (Unit)", () => {

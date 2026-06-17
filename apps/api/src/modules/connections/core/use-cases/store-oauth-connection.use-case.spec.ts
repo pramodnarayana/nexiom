@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { StoreOAuthConnectionUseCase } from './store-oauth-connection.use-case.js';
-import { FakeAppConnectionRepository } from '../fakes/fake-app-connection.repository.js';
-import { FakeConnectionLifecyclePort } from '../fakes/fake-connection-lifecycle.port.js';
+import { FakeAppConnectionRepository } from '../fakes/app-connection-repository.fake.js';
+import { FakeConnectionLifecyclePort } from '../fakes/connection-lifecycle-port.fake.js';
 
 describe('StoreOAuthConnectionUseCase', () => {
   let useCase: StoreOAuthConnectionUseCase;

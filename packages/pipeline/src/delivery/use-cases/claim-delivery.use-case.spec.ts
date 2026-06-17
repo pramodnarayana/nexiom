@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, Mocked, Mock } from 'vitest';
 import { ClaimDeliveryUseCase, ClaimDeliveryInput } from './claim-delivery.use-case.js';
 import { StorageResolverService } from '../../storage-resolver/storage-resolver.service.js';
-import { FakeConnectionRepository } from '../../shared/fakes/fake-connection.repository.js';
-import { FakeOutboundGatewayRepository } from '../../shared/fakes/fake-outbound-gateway.repository.js';
+import { FakeConnectionRepository } from '../../shared/fakes/connection-repository.fake.js';
+import { FakeOutboundGatewayRepository } from '../../shared/fakes/outbound-gateway-repository.fake.js';
 import { DeliveryRetryService } from '../delivery-retry.service.js';
 import { MAX_DELIVERY_ATTEMPTS } from '../delivery.service.js';
 import type { TransactionManagerPort } from '../../shared/ports/transaction-manager.port.js';

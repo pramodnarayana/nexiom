@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import { QueueService, QueueName } from "@soopa/queue";
 import { ProcessActiveFetchUseCase } from "../core/use-cases/active-fetch/process-active-fetch.use-case.js";
-import { DrizzleDataSourceRepositoryAdapter } from "../adapters/outbound/drizzle-data-source.repository.js";
+import { DrizzleDataSourceRepositoryAdapter } from "../adapters/outbound/drizzle-data-source.adapter.js";
 import { NestPipelineHookBrokerAdapter } from "../adapters/outbound/nest-pipeline-hook-broker.adapter.js";
 
 @Injectable()

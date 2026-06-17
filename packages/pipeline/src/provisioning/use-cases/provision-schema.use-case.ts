@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import type { IRegistryReplicationPort } from '../../shared/domain.js';
+import type { RegistryReplicationPort } from '../../shared/domain.js';
 import type { DatabaseManager, SchemaPlan } from '@soopa/dbmanager';
 
 export interface ProvisionSchemaCommand {
@@ -10,7 +10,7 @@ export class ProvisionSchemaUseCase {
   private readonly logger = new Logger(ProvisionSchemaUseCase.name);
 
   constructor(
-    private readonly registryPort: IRegistryReplicationPort,
+    private readonly registryPort: RegistryReplicationPort,
     private readonly dbManager: DatabaseManager,
   ) {}
 

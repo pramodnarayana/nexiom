@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import * as schema from "../../schema.js";
 import { IDENTITY_DB } from "../../constants.js";
 import type {
-  IRoleRepository,
+  RoleRepositoryPort,
   RoleEntity,
   FindRolesOptions,
   CreateRoleInput,
@@ -13,7 +13,7 @@ import type {
 } from "../../core/ports/outbound/index.js";
 
 @Injectable()
-export class DrizzleRoleRepositoryAdapter implements IRoleRepository {
+export class DrizzleRoleRepositoryAdapter implements RoleRepositoryPort {
   constructor(
     @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
   ) {}

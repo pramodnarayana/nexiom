@@ -4,8 +4,8 @@ import { StorageResolverModule } from '@soopa/pipeline';
 import { TraceController } from './trace.controller.js';
 import { ConnectionExplorerController } from './connection-explorer.controller.js';
 
-import { DrizzleTraceRepositoryAdapter } from './adapters/outbound/drizzle-trace.repository.js';
-import { DrizzleExplorerRepositoryAdapter } from './adapters/outbound/drizzle-explorer.repository.js';
+import { DrizzleTraceRepositoryAdapter } from './adapters/outbound/drizzle-trace.adapter.js';
+import { DrizzleExplorerRepositoryAdapter } from './adapters/outbound/drizzle-explorer.adapter.js';
 import { PipelineTraceStorageResolverAdapter } from './adapters/outbound/pipeline-trace-storage-resolver.adapter.js';
 
 import { ListTracesUseCase } from './core/use-cases/trace/list-traces.use-case.js';

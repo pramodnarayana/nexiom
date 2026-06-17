@@ -8,9 +8,9 @@ import {
   User,
   CreateUserInput,
   TENANT_REPOSITORY,
-  ITenantRepository,
+  TenantRepositoryPort,
   PERMISSION_REPOSITORY,
-  IPermissionRepository,
+  PermissionRepositoryPort,
   getSystemTenantId,
 } from "@soopa/identity";
 
@@ -21,9 +21,9 @@ export class AuthService {
   constructor(
     @Inject(AUTH_PROVIDER) private readonly authProvider: IAuthProvider,
     @Inject(TENANT_REPOSITORY)
-    private readonly tenantProvider: ITenantRepository,
+    private readonly tenantProvider: TenantRepositoryPort,
     @Inject(PERMISSION_REPOSITORY)
-    private readonly permissionProvider: IPermissionRepository,
+    private readonly permissionProvider: PermissionRepositoryPort,
   ) {}
 
   async login(credentials: LoginCredentials): Promise<AuthResult> {

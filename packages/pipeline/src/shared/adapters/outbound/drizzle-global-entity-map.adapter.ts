@@ -2,7 +2,7 @@ import { Injectable, Inject } from "@nestjs/common";
 import { sql } from "drizzle-orm";
 import { DATABASE_CONNECTION, globalEntityMap } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
-import { GlobalEntityMapRepositoryPort, GemMappingParams } from "../../shared/ports/global-entity-map.repository.port.js";
+import { GlobalEntityMapRepositoryPort, GemMappingParams } from '../../../shared/ports/global-entity-map.repository.port.js';
 import { DB_MANAGER, type DatabaseManager } from "@soopa/dbmanager";
 
 @Injectable()

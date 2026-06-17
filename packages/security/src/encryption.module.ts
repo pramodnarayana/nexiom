@@ -1,8 +1,8 @@
 import type { DynamicModule, ModuleMetadata, Type } from "@nestjs/common";
 import { Global, Module } from "@nestjs/common";
 import { ENCRYPTION_MODULE_OPTIONS, ENCRYPTION_SERVICE } from "./constants.js";
-import { LocalCryptoAdapter } from "./adapters/local-crypto.adapter.js";
-import { AwsKmsAdapter } from "./adapters/aws-kms.adapter.js";
+import { LocalCryptoAdapter } from "./adapters/outbound/local-crypto.adapter.js";
+import { AwsKmsAdapter } from "./adapters/outbound/aws-kms.adapter.js";
 
 export interface EncryptionModuleOptions {
   /**

@@ -20,10 +20,10 @@ import {
 } from "./constants.js";
 import { BetterAuthAdapter } from "./adapters/outbound/better-auth.adapter.js";
 import type { BetterAuthAdapterConfig } from "./core/ports/outbound/better-auth-config.port.js";
-import { DrizzleUserRepositoryAdapter } from "./adapters/outbound/drizzle-user.repository.js";
-import { DrizzleTenantRepositoryAdapter } from "./adapters/outbound/drizzle-tenant.repository.js";
-import { DrizzlePermissionRepositoryAdapter } from "./adapters/outbound/drizzle-permission.repository.js";
-import { DrizzleRoleRepositoryAdapter } from "./adapters/outbound/drizzle-role.repository.js";
+import { DrizzleUserRepositoryAdapter } from "./adapters/outbound/drizzle-user.adapter.js";
+import { DrizzleTenantRepositoryAdapter } from "./adapters/outbound/drizzle-tenant.adapter.js";
+import { DrizzlePermissionRepositoryAdapter } from "./adapters/outbound/drizzle-permission.adapter.js";
+import { DrizzleRoleRepositoryAdapter } from "./adapters/outbound/drizzle-role.adapter.js";
 import type { IEmailProvider } from "./core/ports/outbound/email-provider.port.js";
 import * as schema from "./schema.js";
 import { PermissionSeeder } from "./services/permission-seeder.js";

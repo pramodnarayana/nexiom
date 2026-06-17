@@ -9,8 +9,8 @@ import { FieldMappingsController } from './field-mappings.controller.js';
 import { MetadataModule } from '@soopa/piece-registry';
 
 // Adapters
-import { DrizzleStitchRepositoryAdapter } from './adapters/outbound/drizzle-stitch.repository.js';
-import { DrizzleFieldMappingRepositoryAdapter } from './adapters/outbound/drizzle-field-mapping.repository.js';
+import { DrizzleStitchRepositoryAdapter } from './adapters/outbound/drizzle-stitch.adapter.js';
+import { DrizzleFieldMappingRepositoryAdapter } from './adapters/outbound/drizzle-field-mapping.adapter.js';
 import { DbManagerSchemaProvisionerAdapter } from './adapters/outbound/db-manager-schema-provisioner.adapter.js';
 
 // Ports

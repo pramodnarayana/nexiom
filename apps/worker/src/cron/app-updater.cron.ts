@@ -2,8 +2,8 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { CheckPieceUpdatesUseCase } from "../core/use-cases/app-installer/check-piece-updates.use-case.js";
 import { NestPieceRegistryAdapter } from "../adapters/outbound/nest-piece-registry.adapter.js";
-import { DrizzleGlobalPiecesRepositoryAdapter } from "../adapters/outbound/drizzle-global-pieces.repository.js";
-import { NestQueuePublisherAdapter } from "../adapters/outbound/nest-queue.publisher.js";
+import { DrizzleGlobalPiecesRepositoryAdapter } from "../adapters/outbound/drizzle-global-pieces.adapter.js";
+import { NestQueuePublisherAdapter } from "../adapters/outbound/nest-queue.adapter.js";
 
 @Injectable()
 export class AppUpdaterCron {
