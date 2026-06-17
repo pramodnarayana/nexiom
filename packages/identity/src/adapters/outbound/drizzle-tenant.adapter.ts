@@ -8,7 +8,7 @@ import {
 import { eq, count, ilike, desc, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import type {
-  ITenantRepository,
+  TenantRepositoryPort,
   Tenant as TenantInterface,
   UpdateTenantInput,
   IIdentityEventPublisher,
@@ -23,7 +23,7 @@ interface PgError extends Error {
 }
 
 @Injectable()
-export class DrizzleTenantRepositoryAdapter implements ITenantRepository {
+export class DrizzleTenantRepositoryAdapter implements TenantRepositoryPort {
   constructor(
     @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
     @Inject(IDENTITY_EVENT_PUBLISHER)

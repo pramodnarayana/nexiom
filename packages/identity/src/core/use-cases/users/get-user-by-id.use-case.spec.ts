@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GetUserByIdUseCase } from "./get-user-by-id.use-case.js";
-import type { IUserRepository } from "../../ports/outbound/user-repository.port.js";
-import type { ITenantRepository } from "../../ports/outbound/tenant-repository.port.js";
+import type { UserRepositoryPort } from "../../ports/outbound/user-repository.port.js";
+import type { TenantRepositoryPort } from "../../ports/outbound/tenant-repository.port.js";
 import { NotFoundException } from "@nestjs/common";
 
 describe("GetUserByIdUseCase", () => {
@@ -13,8 +13,8 @@ describe("GetUserByIdUseCase", () => {
     userRepository = { findById: vi.fn() };
     tenantRepository = { findOneForUser: vi.fn() };
     useCase = new GetUserByIdUseCase(
-      userRepository as unknown as IUserRepository,
-      tenantRepository as unknown as ITenantRepository,
+      userRepository as unknown as UserRepositoryPort,
+      tenantRepository as unknown as TenantRepositoryPort,
     );
   });
 

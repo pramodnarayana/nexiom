@@ -9,10 +9,10 @@ import {
   IDENTITY_OPTIONS,
 } from "./constants.js";
 import { BetterAuthAdapter } from "./adapters/outbound/better-auth.adapter.js";
-import { DrizzleUserRepositoryAdapter } from "./adapters/outbound/drizzle-user.repository.js";
-import { DrizzleTenantRepositoryAdapter } from "./adapters/outbound/drizzle-tenant.repository.js";
-import { DrizzlePermissionRepositoryAdapter } from "./adapters/outbound/drizzle-permission.repository.js";
-import { DrizzleRoleRepositoryAdapter } from "./adapters/outbound/drizzle-role.repository.js";
+import { DrizzleUserRepositoryAdapter } from "./adapters/outbound/drizzle-user.adapter.js";
+import { DrizzleTenantRepositoryAdapter } from "./adapters/outbound/drizzle-tenant.adapter.js";
+import { DrizzlePermissionRepositoryAdapter } from "./adapters/outbound/drizzle-permission.adapter.js";
+import { DrizzleRoleRepositoryAdapter } from "./adapters/outbound/drizzle-role.adapter.js";
 
 import type {
   DynamicModule,

@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ProvisionSchemaUseCase } from './provision-schema.use-case.js';
-import type { IRegistryReplicationPort } from '../../shared/domain.js';
+import type { RegistryReplicationPort } from '../../shared/domain.js';
 import type { DatabaseManager } from '@soopa/dbmanager';
 import { SchemaPlan } from '@soopa/dbmanager';
 
 describe('ProvisionSchemaUseCase', () => {
   let useCase: ProvisionSchemaUseCase;
-  let registryPort: import('vitest').Mocked<IRegistryReplicationPort>;
+  let registryPort: import('vitest').Mocked<RegistryReplicationPort>;
   let dbManager: import('vitest').Mocked<DatabaseManager>;
 
   beforeEach(() => {

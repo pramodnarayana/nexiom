@@ -2,7 +2,7 @@ import { Injectable, Inject } from "@nestjs/common";
 import { sql } from "drizzle-orm";
 import { DATABASE_CONNECTION, buildTenantSchema } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
-import { RoutingRepositoryPort } from "../../shared/ports/routing.repository.port.js";
+import { RoutingRepositoryPort } from '../../../shared/ports/routing.repository.port.js';
 
 type DbTransaction = Parameters<Parameters<DrizzleDb["transaction"]>[0]>[0];
 

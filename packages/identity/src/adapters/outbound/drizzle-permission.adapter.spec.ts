@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
-import { DrizzlePermissionRepositoryAdapter } from "./drizzle-permission.repository.js";
+import { DrizzlePermissionRepositoryAdapter } from "./drizzle-permission.adapter.js";
 import * as schema from "../../schema.js";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { User } from "../../core/ports/outbound/index.js";

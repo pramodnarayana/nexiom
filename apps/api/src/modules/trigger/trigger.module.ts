@@ -16,8 +16,8 @@ import { RedisDistributedLockService } from './infrastructure/redis-distributed-
 import { RedisTriggerDlqService } from './infrastructure/redis-trigger-dlq.service.js';
 
 // --- Adapters ---
-import { DrizzleTriggerGatewayRepositoryAdapter } from './adapters/outbound/drizzle-trigger-gateway.repository.js';
-import { DrizzleTriggerAppConnectionAdapter } from './adapters/outbound/drizzle-trigger-app-connection.repository.js';
+import { DrizzleTriggerGatewayRepositoryAdapter } from './adapters/outbound/drizzle-trigger-gateway.adapter.js';
+import { DrizzleTriggerAppConnectionAdapter } from './adapters/outbound/drizzle-trigger-app-connection.adapter.js';
 import { PipelineDatabaseProvisionerAdapter } from './adapters/outbound/pipeline-database-provisioner.adapter.js';
 import { PipelineTriggerStorageResolverAdapter } from './adapters/outbound/pipeline-trigger-storage-resolver.adapter.js';
 

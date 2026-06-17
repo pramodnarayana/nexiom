@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DependencySweeperService } from "./dependency-sweeper.service.js";
 import { QueueName } from "@soopa/queue";
-import { FakeDependencySweeperRepository } from "../shared/fakes/fake-dependency-sweeper.repository.js";
+import { FakeDependencySweeperRepository } from "../shared/fakes/dependency-sweeper-repository.fake.js";
 import { v4 as uuidv4 } from "uuid";
 import { getWorkspaceSchemaName } from "@soopa/dbmanager";
 

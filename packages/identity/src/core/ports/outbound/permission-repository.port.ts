@@ -9,7 +9,7 @@ export type PermissionAction =
   | "invite";
 export type PermissionResource = string; // e.g. 'user', 'tenant', 'settings', 'billing', 'api_key'
 
-export interface IPermissionRepository {
+export interface PermissionRepositoryPort {
   /**
    * Check if a user has permission to perform an action on a resource within a specific context (tenant).
    */

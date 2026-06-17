@@ -3,7 +3,7 @@ import { SyncGitopsShardUseCase } from "./sync-gitops-shard.use-case.js";
 import {
   FakeGitRepository,
   FakeCacheInvalidator,
-} from "../../fakes/fake-gitops-ports.js";
+} from "../../fakes/gitops-ports.fake.js";
 
 describe("SyncGitopsShardUseCase", () => {
   let gitRepo: FakeGitRepository;

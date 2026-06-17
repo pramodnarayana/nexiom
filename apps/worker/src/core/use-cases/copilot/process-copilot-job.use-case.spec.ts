@@ -5,7 +5,7 @@ import {
   FakeRealtimeEventPubSub,
   FakeChatPersistence,
   FakeTitleGenerator,
-} from "../../fakes/fake-copilot-ports.js";
+} from "../../fakes/copilot-ports.fake.js";
 
 describe("ProcessCopilotJobUseCase", () => {
   let orchestrator: FakeChatStreamOrchestrator;

@@ -27,7 +27,7 @@ import {
   DeleteWorkspaceUseCase,
   GetWorkspaceUseCase,
   ListWorkspacesUseCase,
-} from './core/use-cases/workspace.use-cases.js';
+} from './core/use-cases/workspace.use-case.js';
 import { CreateWorkspace, UpdateWorkspace } from './workspaces.validation.js';
 import { requireOrgId } from './workspace.utils.js';
 import { isUniqueViolation } from '../../shared/db.utils.js';

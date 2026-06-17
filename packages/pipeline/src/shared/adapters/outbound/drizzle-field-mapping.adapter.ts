@@ -2,8 +2,8 @@ import { Injectable, Inject } from "@nestjs/common";
 import { sql } from "drizzle-orm";
 import { fieldMappings } from "@soopa/database";
 import { DB_MANAGER, type DatabaseManager } from "@soopa/dbmanager";
-import { FieldMappingRepositoryPort } from "../../shared/ports/field-mapping.repository.port.js";
-import { Rule } from "../../index.js";
+import { FieldMappingRepositoryPort } from '../../ports/field-mapping.repository.port.js';
+import { Rule } from '../../../index.js';
 
 @Injectable()
 export class DrizzleFieldMappingRepositoryAdapter implements FieldMappingRepositoryPort {

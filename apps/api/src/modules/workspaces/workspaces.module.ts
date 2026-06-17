@@ -8,7 +8,7 @@ import { CapacityManagerService } from './capacity-manager.service.js';
 import type { WorkspaceRepositoryPort } from './core/ports/outbound/workspace-repository.port.js';
 
 // --- Hexagonal Adapters ---
-import { DrizzleWorkspaceRepositoryAdapter } from './adapters/outbound/drizzle-workspace.repository.js';
+import { DrizzleWorkspaceRepositoryAdapter } from './adapters/outbound/drizzle-workspace.adapter.js';
 
 // --- Hexagonal Use Cases ---
 import {
@@ -18,13 +18,13 @@ import {
   GetWorkspaceUseCase,
   ListWorkspacesUseCase,
   ListWorkspaceConnectionsUseCase,
-} from './core/use-cases/workspace.use-cases.js';
+} from './core/use-cases/workspace.use-case.js';
 import {
   AssignConnectionUseCase,
   UnassignConnectionUseCase,
   GetConnectionForAssignmentUseCase,
   GetConnectionForSyncUseCase,
-} from './core/use-cases/connection-assignment.use-cases.js';
+} from './core/use-cases/connection-assignment.use-case.js';
 
 import { QueueModule } from '@soopa/queue';
 import { SchedulerModule } from '../scheduler/scheduler.module.js';

@@ -15,7 +15,7 @@ import { SchemaPlan } from "@soopa/dbmanager";
 import { DB_MANAGER } from "@soopa/dbmanager";
 import { MockDatabaseManager } from "../test-utils/mock-db-manager.js";
 import { sql } from "drizzle-orm";
-import { DrizzleGlobalEntityMapRepositoryAdapter } from "../shared/adapters/drizzle-global-entity-map.repository.js";
+import { DrizzleGlobalEntityMapRepositoryAdapter } from "../shared/adapters/outbound/drizzle-global-entity-map.adapter.js";
 
 describe("GemHydrationService", () => {
   let service: GemHydrationService;

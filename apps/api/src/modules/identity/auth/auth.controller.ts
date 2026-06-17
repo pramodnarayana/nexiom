@@ -18,8 +18,8 @@ import {
 } from '@soopa/auth';
 import { USER_REPOSITORY, TENANT_REPOSITORY } from '@soopa/identity';
 import type {
-  IUserRepository,
-  ITenantRepository,
+  UserRepositoryPort,
+  TenantRepositoryPort,
   Session,
   User,
 } from '@soopa/identity';
@@ -53,9 +53,9 @@ export class ResendVerificationDto extends createZodDto(
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    @Inject(USER_REPOSITORY) private readonly userProvider: IUserRepository,
+    @Inject(USER_REPOSITORY) private readonly userProvider: UserRepositoryPort,
     @Inject(TENANT_REPOSITORY)
-    private readonly tenantProvider: ITenantRepository,
+    private readonly tenantProvider: TenantRepositoryPort,
     private readonly invitationsService: InvitationsService,
   ) {}
 

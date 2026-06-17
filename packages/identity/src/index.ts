@@ -32,10 +32,10 @@ export type {
 } from "./schema.js";
 
 export * from "./adapters/outbound/better-auth.adapter.js";
-export * from "./adapters/outbound/drizzle-user.repository.js";
-export * from "./adapters/outbound/drizzle-tenant.repository.js";
-export * from "./adapters/outbound/drizzle-permission.repository.js";
-export * from "./adapters/outbound/drizzle-role.repository.js";
+export * from "./adapters/outbound/drizzle-user.adapter.js";
+export * from "./adapters/outbound/drizzle-tenant.adapter.js";
+export * from "./adapters/outbound/drizzle-permission.adapter.js";
+export * from "./adapters/outbound/drizzle-role.adapter.js";
 
 export * from "./identity.module.js";
 export * from "./constants.js";

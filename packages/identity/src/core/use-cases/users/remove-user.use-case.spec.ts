@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { RemoveUserUseCase } from "./remove-user.use-case.js";
-import type { IUserRepository } from "../../ports/outbound/user-repository.port.js";
+import type { UserRepositoryPort } from "../../ports/outbound/user-repository.port.js";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 
 describe("RemoveUserUseCase", () => {
@@ -10,7 +10,7 @@ describe("RemoveUserUseCase", () => {
   beforeEach(() => {
     userRepository = { deleteIfNotLastAdmin: vi.fn() };
     useCase = new RemoveUserUseCase(
-      userRepository as unknown as IUserRepository,
+      userRepository as unknown as UserRepositoryPort,
     );
   });
 

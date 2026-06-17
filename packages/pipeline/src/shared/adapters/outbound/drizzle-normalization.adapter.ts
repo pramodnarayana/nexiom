@@ -1,6 +1,6 @@
 import { Injectable, Inject } from "@nestjs/common";
-import { NORMALIZATION_REPOSITORY_PORT, type NormalizationRepositoryPort, type ReplicaRecord } from "../ports/normalization.repository.port.js";
-import { type TxContext } from "../ports/transaction-manager.port.js";
+import { NORMALIZATION_REPOSITORY_PORT, type NormalizationRepositoryPort, type ReplicaRecord } from '../../ports/normalization.repository.port.js';
+import { type TxContext } from '../../ports/transaction-manager.port.js';
 import { DB_MANAGER, type TenantDatabaseManager } from "@soopa/dbmanager";
 import { buildTenantSchema, assertValidSchemaName } from "@soopa/database";
 import { sql } from "drizzle-orm";

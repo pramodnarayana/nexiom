@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RunPollUseCase } from './run-poll.use-case.js';
-import { FakeTriggerGatewayRepository } from '../fakes/fake-trigger-gateway.repository.js';
-import { FakeTriggerStorageResolver } from '../fakes/fake-trigger-storage.resolver.js';
-import { FakeDistributedLockService } from '../fakes/fake-distributed-lock.service.js';
-import { FakeKeyValueStore } from '../fakes/fake-key-value-store.js';
+import { FakeTriggerGatewayRepository } from '../fakes/trigger-gateway-repository.fake.js';
+import { FakeTriggerStorageResolver } from '../fakes/trigger-storage-resolver.fake.js';
+import { FakeDistributedLockService } from '../fakes/distributed-lock-service.fake.js';
+import { FakeKeyValueStore } from '../fakes/key-value-store.fake.js';
 import { TriggerPayloadTransformer } from '../../trigger-payload-transformer.js';
 import { TriggerRetryPolicyService } from '../../trigger-retry-policy.service.js';
 import type { ITriggerDlqService } from '../../interfaces/trigger-dlq.interface.js';

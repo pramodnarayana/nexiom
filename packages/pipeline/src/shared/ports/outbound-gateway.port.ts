@@ -9,7 +9,7 @@ export interface OutboundGatewayRecord {
   attempts: number;
 }
 
-export interface IOutboundGatewayPort {
+export interface OutboundGatewayPort {
   insertOrFetchPending(
     tenantId: string,
     destSchemaName: string,

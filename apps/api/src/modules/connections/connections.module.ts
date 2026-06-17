@@ -30,7 +30,7 @@ import type { PieceRegistryPort } from './core/ports/outbound/piece-registry.por
 import type { OAuthClientPort } from './core/ports/outbound/oauth-client.port.js';
 
 // --- Hexagonal Architecture Adapters ---
-import { DrizzleAppConnectionRepositoryAdapter } from './adapters/outbound/drizzle-app-connection.repository.js';
+import { DrizzleAppConnectionRepositoryAdapter } from './adapters/outbound/drizzle-app-connection.adapter.js';
 import { DrizzleConnectionLifecycleAdapter } from './adapters/outbound/drizzle-connection-lifecycle.adapter.js';
 import { HttpOAuthClientAdapter } from './adapters/outbound/http-oauth-client.adapter.js';
 import { NestPieceRegistryAdapter } from './adapters/outbound/nest-piece-registry.adapter.js';

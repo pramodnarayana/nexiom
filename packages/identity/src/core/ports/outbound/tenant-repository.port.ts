@@ -8,7 +8,7 @@ export interface UpdateTenantInput {
   metadata?: Record<string, any>;
 }
 
-export interface ITenantRepository {
+export interface TenantRepositoryPort {
   // User-scoped creation (auto-adds member)
   create(userId: string, name: string): Promise<Tenant>;
 

@@ -7,7 +7,7 @@ import {
 } from "@soopa/queue";
 import { InstallPieceUseCase } from "../core/use-cases/app-installer/install-piece.use-case.js";
 import { NestPieceRegistryAdapter } from "../adapters/outbound/nest-piece-registry.adapter.js";
-import { DrizzleGlobalPiecesRepositoryAdapter } from "../adapters/outbound/drizzle-global-pieces.repository.js";
+import { DrizzleGlobalPiecesRepositoryAdapter } from "../adapters/outbound/drizzle-global-pieces.adapter.js";
 import { RedisRealtimeEventPubSubAdapter } from "../adapters/outbound/redis-realtime-event-pubsub.adapter.js";
 
 @Injectable()

@@ -3,14 +3,14 @@ import { ReplicaService } from './replica.service.js';
 import { QueueService, QueueName } from '@soopa/queue';
 import { StorageResolverService } from '../storage-resolver/storage-resolver.service.js';
 import { PipelineHookBrokerService } from '../sharding/pipeline-hook-broker.service.js';
-import type { IReplicaStatePort } from "../shared/domain.js";
-import { FakeConnectionRepository } from '../shared/fakes/fake-connection.repository.js';
+import type { ReplicaStatePort } from "../shared/domain.js";
+import { FakeConnectionRepository } from '../shared/fakes/connection-repository.fake.js';
 import { DependenciesMissingError } from '@soopa/piece-framework';
 
 describe('ReplicaService', () => {
   let queueService: Mocked<QueueService>;
   let connectionRepository: FakeConnectionRepository;
-  let replicaStatePort: Mocked<IReplicaStatePort>;
+  let replicaStatePort: Mocked<ReplicaStatePort>;
   let storageResolver: Mocked<StorageResolverService>;
   let hookBroker: Mocked<PipelineHookBrokerService>;
   let service: ReplicaService;

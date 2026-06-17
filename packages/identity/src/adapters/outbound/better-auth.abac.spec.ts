@@ -3,7 +3,7 @@ import { BetterAuthAdapter } from "./better-auth.adapter.js";
 import type { IdentityModuleOptions } from "../../identity.module.js";
 import type {
   IEmailProvider,
-  ITenantRepository,
+  TenantRepositoryPort,
   IIdentityEventPublisher,
 } from "../../core/ports/outbound/index.js";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -59,7 +59,7 @@ describe("BetterAuthAdapter - ABAC Condition Mapping", () => {
   it("should serialize permissions with conditions as JSON strings", async () => {
     const db = mkDb();
     const mockEmail = { sendEmail: vi.fn() } as unknown as IEmailProvider;
-    const mockTenantProvider = {} as unknown as ITenantRepository;
+    const mockTenantProvider = {} as unknown as TenantRepositoryPort;
     const options = mkOptions();
 
     const mockEventPublisher: IIdentityEventPublisher = {

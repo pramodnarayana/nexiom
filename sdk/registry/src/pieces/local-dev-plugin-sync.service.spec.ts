@@ -83,8 +83,10 @@ describe('local-dev-plugin-sync.service', () => {
     });
     
     // cleanup
-    if (fs.existsSync(tempFile)) {
+    try {
       fs.unlinkSync(tempFile);
+    } catch (e) {
+      // ignore
     }
   });
 
@@ -117,7 +119,7 @@ describe('local-dev-plugin-sync.service', () => {
     await service.initialize();
     expect(mockPieceRepo.upsertPiece).toHaveBeenCalledWith(expect.objectContaining({ name: 'mock-piece-def-reg' }));
     
-    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+    try { fs.unlinkSync(tempFile); } catch (e) {}
   });
 
   it('should catch error when natively importing piece', async () => {
@@ -129,7 +131,7 @@ describe('local-dev-plugin-sync.service', () => {
     await service.initialize();
     expect(mockPieceRepo.upsertPiece).not.toHaveBeenCalled();
     
-    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+    try { fs.unlinkSync(tempFile); } catch (e) {}
   });
 
   it('should catch error if scanning workspace plugins directory fails', async () => {

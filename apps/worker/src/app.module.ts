@@ -29,14 +29,14 @@ import { RegistryOutboxPoller } from "./pollers/registry-outbox.poller.js";
 import { AppUpdaterCron } from "./cron/app-updater.cron.js";
 
 // Adapters
-import { NestQueuePublisherAdapter } from "./adapters/outbound/nest-queue.publisher.js";
-import { DrizzleDataSourceRepositoryAdapter } from "./adapters/outbound/drizzle-data-source.repository.js";
+import { NestQueuePublisherAdapter } from "./adapters/outbound/nest-queue.adapter.js";
+import { DrizzleDataSourceRepositoryAdapter } from "./adapters/outbound/drizzle-data-source.adapter.js";
 import { NestPipelineHookBrokerAdapter } from "./adapters/outbound/nest-pipeline-hook-broker.adapter.js";
 import { NestChatStreamOrchestratorAdapter } from "./adapters/outbound/nest-chat-stream-orchestrator.adapter.js";
 import { RedisRealtimeEventPubSubAdapter } from "./adapters/outbound/redis-realtime-event-pubsub.adapter.js";
 import { NestChatPersistenceAdapter } from "./adapters/outbound/nest-chat-persistence.adapter.js";
 import { AiSdkTitleGeneratorAdapter } from "./adapters/outbound/ai-sdk-title-generator.adapter.js";
-import { DrizzleGlobalPiecesRepositoryAdapter } from "./adapters/outbound/drizzle-global-pieces.repository.js";
+import { DrizzleGlobalPiecesRepositoryAdapter } from "./adapters/outbound/drizzle-global-pieces.adapter.js";
 import { NestPieceRegistryAdapter } from "./adapters/outbound/nest-piece-registry.adapter.js";
 import { NodeFsGitRepositoryAdapter } from "./adapters/outbound/node-fs-git-repository.adapter.js";
 import { NestCacheInvalidatorAdapter } from "./adapters/outbound/nest-cache-invalidator.adapter.js";

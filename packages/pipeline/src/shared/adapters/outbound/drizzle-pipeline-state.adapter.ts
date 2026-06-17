@@ -2,7 +2,7 @@ import { Injectable, Inject } from "@nestjs/common";
 import { sql, eq, and } from "drizzle-orm";
 import { buildTenantSchema, assertValidSchemaName } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
-import { PipelineStateRepositoryPort } from "../../shared/ports/pipeline-state.repository.port.js";
+import { PipelineStateRepositoryPort } from '../../../shared/ports/pipeline-state.repository.port.js';
 import { DB_MANAGER, type DatabaseManager } from "@soopa/dbmanager";
 
 @Injectable()

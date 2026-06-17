@@ -22,27 +22,27 @@ import { FanoutRouterService } from "./fanout/fanout-router.service.js";
 import { FanoutBatchProcessor } from "./fanout/fanout-batch-processor.js";
 import { RoutingDecisionEngine } from "./fanout/routing-decision.engine.js";
 import { ROUTING_REPOSITORY_PORT } from "./shared/ports/routing.repository.port.js";
-import { DrizzleRoutingRepositoryAdapter } from "./shared/adapters/drizzle-routing.repository.js";
+import { DrizzleRoutingRepositoryAdapter } from "./shared/adapters/outbound/drizzle-routing.adapter.js";
 import { CONNECTION_REPOSITORY_PORT } from "./shared/ports/connection.repository.port.js";
-import { DrizzleConnectionRepositoryAdapter } from "./shared/adapters/drizzle-connection.repository.js";
+import { DrizzleConnectionRepositoryAdapter } from "./shared/adapters/outbound/drizzle-connection.adapter.js";
 import { STITCH_REPOSITORY_PORT } from "./shared/ports/stitch.repository.port.js";
-import { DrizzleSharedStitchRepositoryAdapter } from "./shared/adapters/drizzle-stitch.repository.js";
+import { DrizzleSharedStitchRepositoryAdapter } from "./shared/adapters/outbound/drizzle-stitch.adapter.js";
 import { PIPELINE_STATE_REPOSITORY_PORT } from "./shared/ports/pipeline-state.repository.port.js";
-import { DrizzlePipelineStateRepositoryAdapter } from "./shared/adapters/drizzle-pipeline-state.repository.js";
+import { DrizzlePipelineStateRepositoryAdapter } from "./shared/adapters/outbound/drizzle-pipeline-state.adapter.js";
 import { GLOBAL_ENTITY_MAP_REPOSITORY_PORT } from "./shared/ports/global-entity-map.repository.port.js";
-import { DrizzleGlobalEntityMapRepositoryAdapter } from "./shared/adapters/drizzle-global-entity-map.repository.js";
+import { DrizzleGlobalEntityMapRepositoryAdapter } from "./shared/adapters/outbound/drizzle-global-entity-map.adapter.js";
 import { FIELD_MAPPING_REPOSITORY_PORT } from "./shared/ports/field-mapping.repository.port.js";
-import { DrizzleFieldMappingRepositoryAdapter } from "./shared/adapters/drizzle-field-mapping.repository.js";
+import { DrizzleFieldMappingRepositoryAdapter } from "./shared/adapters/outbound/drizzle-field-mapping.adapter.js";
 import { SYNC_LOG_REPOSITORY_PORT } from "./shared/ports/sync-log.repository.port.js";
-import { DrizzleSyncLogRepositoryAdapter } from "./shared/adapters/drizzle-sync-log.repository.js";
+import { DrizzleSyncLogRepositoryAdapter } from "./shared/adapters/outbound/drizzle-sync-log.adapter.js";
 import { OUTBOUND_GATEWAY_REPOSITORY_PORT } from "./shared/ports/outbound-gateway.repository.port.js";
-import { DrizzleOutboundGatewayRepositoryAdapter } from "./shared/adapters/drizzle-outbound-gateway.repository.js";
+import { DrizzleOutboundGatewayRepositoryAdapter } from "./shared/adapters/outbound/drizzle-outbound-gateway.adapter.js";
 import { NORMALIZATION_REPOSITORY_PORT } from "./shared/ports/normalization.repository.port.js";
-import { DrizzleNormalizationRepositoryAdapter } from "./shared/adapters/drizzle-normalization.repository.js";
+import { DrizzleNormalizationRepositoryAdapter } from "./shared/adapters/outbound/drizzle-normalization.adapter.js";
 import { TRANSACTION_MANAGER_PORT } from "./shared/ports/transaction-manager.port.js";
-import { DrizzleTransactionManagerAdapter } from "./shared/adapters/drizzle-transaction-manager.adapter.js";
+import { DrizzleTransactionManagerAdapter } from "./shared/adapters/outbound/drizzle-transaction-manager.adapter.js";
 import { DEPENDENCY_SWEEPER_REPOSITORY_PORT } from "./shared/ports/dependency-sweeper.repository.port.js";
-import { DrizzleDependencySweeperRepositoryAdapter } from "./shared/adapters/drizzle-dependency-sweeper.repository.js";
+import { DrizzleDependencySweeperRepositoryAdapter } from "./shared/adapters/outbound/drizzle-dependency-sweeper.adapter.js";
 import { DeliveryService } from "./delivery/delivery.service.js";
 import { PieceOutboundDispatcher } from "./delivery/piece-outbound.dispatcher.js";
 import { DeliveryRetryService } from "./delivery/delivery-retry.service.js";
@@ -51,9 +51,9 @@ import { RegistryReplicationService } from "./replication/registry-replication.s
 import { DependencySweeperService } from "./normalization/dependency-sweeper.service.js";
 import { SchemaProvisionWorker } from "./provisioning/schema-provision.worker.js";
 
-import { OutboundGatewayAdapter } from "./shared/adapters/outbound-gateway.adapter.js";
-import { RegistryReplicationAdapter } from "./shared/adapters/registry-replication.adapter.js";
-import { ReplicaStateAdapter } from "./shared/adapters/replica-state.adapter.js";
+import { OutboundGatewayAdapter } from "./shared/adapters/outbound/outbound-gateway.adapter.js";
+import { RegistryReplicationAdapter } from "./shared/adapters/outbound/registry-replication.adapter.js";
+import { ReplicaStateAdapter } from "./shared/adapters/outbound/replica-state.adapter.js";
 
 import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-case.js";
 
@@ -120,15 +120,15 @@ import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-ca
       useClass: PieceOutboundDispatcher,
     },
     {
-      provide: "IOutboundGatewayPort",
+      provide: "OutboundGatewayPort",
       useClass: OutboundGatewayAdapter,
     },
     {
-      provide: "IRegistryReplicationPort",
+      provide: "RegistryReplicationPort",
       useClass: RegistryReplicationAdapter,
     },
     {
-      provide: "IReplicaStatePort",
+      provide: "ReplicaStatePort",
       useClass: ReplicaStateAdapter,
     },
     ClaimDeliveryUseCase,

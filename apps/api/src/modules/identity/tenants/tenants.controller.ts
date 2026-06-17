@@ -13,14 +13,14 @@ import { Request } from 'express';
 import { AuthGuard, PermissionsGuard, RequirePermission } from '@soopa/auth';
 import { UpdateTenantStatus, UpdateTenantDto } from './tenants.validation.js';
 import { TENANT_REPOSITORY } from '@soopa/identity';
-import type { ITenantRepository } from '@soopa/identity';
+import type { TenantRepositoryPort } from '@soopa/identity';
 
 @Controller('tenants')
 @UseGuards(AuthGuard, PermissionsGuard)
 export class TenantsController {
   constructor(
     @Inject(TENANT_REPOSITORY)
-    private readonly tenantProvider: ITenantRepository,
+    private readonly tenantProvider: TenantRepositoryPort,
   ) {}
 
   @Get()

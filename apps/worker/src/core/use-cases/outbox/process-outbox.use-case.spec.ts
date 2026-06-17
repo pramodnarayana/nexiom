@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { QueueName } from "@soopa/queue";
 import { ProcessOutboxUseCase } from "./process-outbox.use-case.js";
-import { FakeOutboxRepository } from "../../fakes/fake-outbox.repository.js";
-import { FakeQueuePublisher } from "../../fakes/fake-queue.publisher.js";
+import { FakeOutboxRepository } from "../../fakes/outbox-repository.fake.js";
+import { FakeQueuePublisher } from "../../fakes/queue-publisher.fake.js";
 
 describe("ProcessOutboxUseCase", () => {
   let repository: FakeOutboxRepository;

@@ -21,7 +21,7 @@ import {
 } from '@soopa/auth';
 import { ROLE_REPOSITORY, RoleScope } from '@soopa/identity';
 import type {
-  IRoleRepository,
+  RoleRepositoryPort,
   CreateRoleInput,
   UpdateRoleInput,
 } from '@soopa/identity';
@@ -31,7 +31,7 @@ import { filterRolesForRequester } from '@soopa/identity/utils/role-visibility';
 @UseGuards(AuthGuard, PermissionsGuard)
 export class RolesController {
   constructor(
-    @Inject(ROLE_REPOSITORY) private readonly roleProvider: IRoleRepository,
+    @Inject(ROLE_REPOSITORY) private readonly roleProvider: RoleRepositoryPort,
   ) {}
 
   @Get()

@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { RegistryReplicationAdapter } from "./registry-replication.adapter.js";
+import { RegistryReplicationAdapter } from './registry-replication.adapter.js';
 import { TestDatabaseManager, globalRegistryOutbox, dataSources, uiWorkspaces, integrationStitches, fieldMappings } from "@soopa/database";
 import { SchemaPlan } from "@soopa/dbmanager";
 import { v4 as uuidv4 } from "uuid";
-import { MockDatabaseManager } from "../../test-utils/mock-db-manager.js";
+import { MockDatabaseManager } from '../../../test-utils/mock-db-manager.js';
 import { eq } from "drizzle-orm";
 
 describe("RegistryReplicationAdapter", () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ExchangeOAuthTokenUseCase } from './exchange-oauth-token.use-case.js';
-import { FakePieceRegistryPort } from '../fakes/fake-piece-registry.port.js';
-import { FakeOAuthClientPort } from '../fakes/fake-oauth-client.port.js';
+import { FakePieceRegistryPort } from '../fakes/piece-registry-port.fake.js';
+import { FakeOAuthClientPort } from '../fakes/oauth-client-port.fake.js';
 import { PropertyType } from '@soopa/piece-framework';
 
 describe('ExchangeOAuthTokenUseCase', () => {

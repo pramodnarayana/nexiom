@@ -19,14 +19,14 @@ import {
   AuthContext,
   type RequestAuthContext,
 } from '@soopa/auth';
-import { ListWorkspaceConnectionsUseCase } from './core/use-cases/workspace.use-cases.js';
+import { ListWorkspaceConnectionsUseCase } from './core/use-cases/workspace.use-case.js';
 import {
   AssignConnectionUseCase,
   UnassignConnectionUseCase,
   GetConnectionForAssignmentUseCase,
   GetConnectionForSyncUseCase,
-} from './core/use-cases/connection-assignment.use-cases.js';
-import { GetWorkspaceUseCase } from './core/use-cases/workspace.use-cases.js';
+} from './core/use-cases/connection-assignment.use-case.js';
+import { GetWorkspaceUseCase } from './core/use-cases/workspace.use-case.js';
 import { SyncRunner } from '../scheduler/sync-runner.js';
 import { requireOrgId } from './workspace.utils.js';
 

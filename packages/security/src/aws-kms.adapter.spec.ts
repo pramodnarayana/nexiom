@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { AwsKmsAdapter } from "./adapters/aws-kms.adapter.js";
+import { AwsKmsAdapter } from "./adapters/outbound/aws-kms.adapter.js";
 
 // ---------------------------------------------------------------------------
 // Mock @aws-sdk/client-kms — no real network calls in unit tests

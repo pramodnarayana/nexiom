@@ -21,9 +21,9 @@ import {
 } from '@soopa/identity';
 import type {
   IAuthProvider,
-  IUserRepository,
-  ITenantRepository,
-  IRoleRepository,
+  UserRepositoryPort,
+  TenantRepositoryPort,
+  RoleRepositoryPort,
 } from '@soopa/identity';
 import { AuthContext, type RequestAuthContext } from '@soopa/auth';
 import {
@@ -47,10 +47,10 @@ import { RequirePermission, PermissionsGuard, AuthGuard } from '@soopa/auth';
 export class SystemAdminController {
   constructor(
     @Inject(AUTH_PROVIDER) private readonly authProvider: IAuthProvider,
-    @Inject(USER_REPOSITORY) private readonly userProvider: IUserRepository,
+    @Inject(USER_REPOSITORY) private readonly userProvider: UserRepositoryPort,
     @Inject(TENANT_REPOSITORY)
-    private readonly tenantProvider: ITenantRepository,
-    @Inject(ROLE_REPOSITORY) private readonly roleProvider: IRoleRepository,
+    private readonly tenantProvider: TenantRepositoryPort,
+    @Inject(ROLE_REPOSITORY) private readonly roleProvider: RoleRepositoryPort,
   ) {}
 
   @Post('users/:id/invite')

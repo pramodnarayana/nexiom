@@ -1,5 +1,5 @@
 import { Injectable, Inject } from "@nestjs/common";
-import { IUserRepository } from "../../ports/outbound/user-repository.port.js";
+import type { UserRepositoryPort } from "../../ports/outbound/user-repository.port.js";
 import { USER_REPOSITORY, AUTH_PROVIDER } from "../../../constants.js";
 import type { IAuthProvider } from "../../ports/outbound/auth-provider.port.js";
 import type { UserListItem, Invitation } from "../../ports/outbound/types.js";
@@ -7,7 +7,8 @@ import type { UserListItem, Invitation } from "../../ports/outbound/types.js";
 @Injectable()
 export class ListUsersWithInvitationsUseCase {
   constructor(
-    @Inject(USER_REPOSITORY) private readonly userRepository: IUserRepository,
+    @Inject(USER_REPOSITORY)
+    private readonly userRepository: UserRepositoryPort,
     @Inject(AUTH_PROVIDER) private readonly authProvider: IAuthProvider,
   ) {}
 

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import type { IEncryptionService } from "../interfaces/encryption-service.interface.js";
+import type { IEncryptionService } from "../../interfaces/encryption-service.interface.js";
 
 export interface LocalCryptoAdapterOptions {
   /** Exactly 32-byte raw string key for AES-256-GCM. */

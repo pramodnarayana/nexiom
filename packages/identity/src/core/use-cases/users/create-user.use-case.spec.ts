@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { CreateUserUseCase } from "./create-user.use-case.js";
-import type { IUserRepository } from "../../ports/outbound/user-repository.port.js";
+import type { UserRepositoryPort } from "../../ports/outbound/user-repository.port.js";
 
 describe("CreateUserUseCase", () => {
   let useCase: CreateUserUseCase;
@@ -9,7 +9,7 @@ describe("CreateUserUseCase", () => {
   beforeEach(() => {
     userRepository = { create: vi.fn() };
     useCase = new CreateUserUseCase(
-      userRepository as unknown as IUserRepository,
+      userRepository as unknown as UserRepositoryPort,
     );
   });
 

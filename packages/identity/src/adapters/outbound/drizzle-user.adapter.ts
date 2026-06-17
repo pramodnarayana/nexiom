@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { eq, and, ilike, count, desc } from "drizzle-orm";
 import {
-  IUserRepository,
+  UserRepositoryPort,
   UpdateUserInput,
   User as UserInterface,
   IAuthProvider,
@@ -19,7 +19,7 @@ import {
 import type { IdentityModuleOptions } from "../../identity.module.js";
 
 @Injectable()
-export class DrizzleUserRepositoryAdapter implements IUserRepository {
+export class DrizzleUserRepositoryAdapter implements UserRepositoryPort {
   private readonly logger = new Logger(DrizzleUserRepositoryAdapter.name);
 
   constructor(

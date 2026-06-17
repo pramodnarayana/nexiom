@@ -12,8 +12,8 @@ import { ENTITY_TYPE_CONFIG_MAP } from "./registry-outbox.routing.js";
 import {
   DrizzleOutboxRepositoryAdapter,
   type OutboxTableSchema,
-} from "../adapters/outbound/drizzle-outbox.repository.js";
-import { NestQueuePublisherAdapter } from "../adapters/outbound/nest-queue.publisher.js";
+} from "../adapters/outbound/drizzle-outbox.adapter.js";
+import { NestQueuePublisherAdapter } from "../adapters/outbound/nest-queue.adapter.js";
 import type { OutboxRow } from "../core/ports/outbound/outbox-repository.port.js";
 
 const BATCH_SIZE = 50;

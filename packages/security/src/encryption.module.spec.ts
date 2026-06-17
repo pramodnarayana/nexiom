@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { EncryptionModule } from "./encryption.module.js";
 import { ENCRYPTION_SERVICE, ENCRYPTION_MODULE_OPTIONS } from "./constants.js";
-import { LocalCryptoAdapter } from "./adapters/local-crypto.adapter.js";
-import { AwsKmsAdapter } from "./adapters/aws-kms.adapter.js";
+import { LocalCryptoAdapter } from "./adapters/outbound/local-crypto.adapter.js";
+import { AwsKmsAdapter } from "./adapters/outbound/aws-kms.adapter.js";
 import type { FactoryProvider } from "@nestjs/common";
 
 const KEY_32 = "a".repeat(32);

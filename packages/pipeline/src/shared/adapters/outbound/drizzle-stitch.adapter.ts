@@ -1,7 +1,7 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { sql, eq, and } from "drizzle-orm";
 import { integrationStitches, uiWorkspaceDataSources } from "@soopa/database";
-import { StitchRepositoryPort, ActiveStitch } from "../../shared/ports/stitch.repository.port.js";
+import { StitchRepositoryPort, ActiveStitch } from '../../../shared/ports/stitch.repository.port.js';
 import { DB_MANAGER, type DatabaseManager } from "@soopa/dbmanager";
 
 @Injectable()

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { DrizzleUserRepositoryAdapter } from "./drizzle-user.repository.js";
+import { DrizzleUserRepositoryAdapter } from "./drizzle-user.adapter.js";
 import * as schema from "../../schema.js";
 import { UserNotFoundError } from "../../core/ports/outbound/index.js";
 import type { IdentityModuleOptions } from "../../identity.module.js";

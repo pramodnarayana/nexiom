@@ -2,7 +2,7 @@ import { Injectable, Inject, OnModuleInit, Logger } from '@nestjs/common';
 import { QueueService, QueueName } from '@soopa/queue';
 import { DB_MANAGER } from '@soopa/dbmanager';
 import type { DatabaseManager } from '@soopa/dbmanager';
-import type { IRegistryReplicationPort } from '../shared/domain.js';
+import type { RegistryReplicationPort } from '../shared/domain.js';
 import { ProvisionSchemaUseCase } from './use-cases/provision-schema.use-case.js';
 
 @Injectable()
@@ -12,8 +12,8 @@ export class SchemaProvisionWorker implements OnModuleInit {
 
   constructor(
     private readonly queueService: QueueService,
-    @Inject('IRegistryReplicationPort')
-    registryPort: IRegistryReplicationPort,
+    @Inject('RegistryReplicationPort')
+    registryPort: RegistryReplicationPort,
     @Inject(DB_MANAGER) dbManager: DatabaseManager,
   ) {
     this.useCase = new ProvisionSchemaUseCase(registryPort, dbManager);

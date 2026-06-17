@@ -4,12 +4,12 @@ import { DB_MANAGER } from "@soopa/dbmanager";
 import type { DatabaseManager } from "@soopa/dbmanager";
 import { buildTenantSchema, assertValidSchemaName } from "@soopa/database";
 import type {
-  IOutboundGatewayPort,
+  OutboundGatewayPort,
   OutboundGatewayRecord,
-} from "../domain.js";
+} from '../../domain.js';
 
 @Injectable()
-export class OutboundGatewayAdapter implements IOutboundGatewayPort {
+export class OutboundGatewayAdapter implements OutboundGatewayPort {
   constructor(
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {}

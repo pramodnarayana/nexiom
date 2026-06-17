@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { OutboundGatewayAdapter } from "./outbound-gateway.adapter.js";
+import { OutboundGatewayAdapter } from './outbound-gateway.adapter.js';
 import { TestDatabaseManager, buildTenantSchema } from "@soopa/database";
 import { SchemaPlan } from "@soopa/dbmanager";
 import { v4 as uuidv4 } from "uuid";
-import { MockDatabaseManager } from "../../test-utils/mock-db-manager.js";
+import { MockDatabaseManager } from '../../../test-utils/mock-db-manager.js';
 
 describe("OutboundGatewayAdapter", () => {
   let adapter: OutboundGatewayAdapter;

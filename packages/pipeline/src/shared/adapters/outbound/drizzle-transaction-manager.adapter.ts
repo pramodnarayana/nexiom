@@ -2,7 +2,7 @@ import { Injectable, Inject } from "@nestjs/common";
 import { sql } from "drizzle-orm";
 import { assertValidSchemaName } from "@soopa/database";
 import { DB_MANAGER, type DatabaseManager } from "@soopa/dbmanager";
-import { TransactionManagerPort } from "../../shared/ports/transaction-manager.port.js";
+import { TransactionManagerPort } from '../../ports/transaction-manager.port.js';
 
 @Injectable()
 export class DrizzleTransactionManagerAdapter implements TransactionManagerPort {

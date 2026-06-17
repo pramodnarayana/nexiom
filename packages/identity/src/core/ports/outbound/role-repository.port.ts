@@ -21,7 +21,7 @@ export interface UpdateRoleInput {
   description?: string;
 }
 
-export interface IRoleRepository {
+export interface RoleRepositoryPort {
   findAll(options?: FindRolesOptions): Promise<RoleEntity[]>;
   /**
    * Finds a role by ID.

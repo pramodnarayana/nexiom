@@ -8,7 +8,7 @@ import { fromNodeHeaders } from "better-auth/node";
 import { normalizeRole } from "../../utils/role-normalization.js";
 import { getBetterAuthPlugins } from "../../better-auth.config.js";
 import { validateFrontendUrl } from "../../utils/url.util.js";
-import type { ITenantRepository } from "../../core/ports/outbound/tenant-repository.port.js";
+import type { TenantRepositoryPort } from "../../core/ports/outbound/tenant-repository.port.js";
 import { Inject, Injectable } from "@nestjs/common";
 import type { IncomingHttpHeaders } from "node:http";
 import * as schema from "../../schema.js";
@@ -96,7 +96,7 @@ export class BetterAuthAdapter implements IAuthProvider {
     @Inject(BETTER_AUTH_CONFIG)
     private readonly config: BetterAuthAdapterConfig,
     @Inject(TENANT_REPOSITORY)
-    private readonly tenantProvider: ITenantRepository, // Injected Dependency
+    private readonly tenantProvider: TenantRepositoryPort, // Injected Dependency
     @Inject(IDENTITY_OPTIONS) private readonly options: IdentityModuleOptions,
     @Inject(IDENTITY_EVENT_PUBLISHER)
     private readonly eventPublisher: IIdentityEventPublisher,

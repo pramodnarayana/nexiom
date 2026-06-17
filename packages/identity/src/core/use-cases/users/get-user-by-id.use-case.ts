@@ -1,14 +1,15 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { USER_REPOSITORY, TENANT_REPOSITORY } from "../../../constants.js";
-import type { IUserRepository } from "../../ports/outbound/user-repository.port.js";
-import type { ITenantRepository } from "../../ports/outbound/tenant-repository.port.js";
+import type { UserRepositoryPort } from "../../ports/outbound/user-repository.port.js";
+import type { TenantRepositoryPort } from "../../ports/outbound/tenant-repository.port.js";
 
 @Injectable()
 export class GetUserByIdUseCase {
   constructor(
-    @Inject(USER_REPOSITORY) private readonly userRepository: IUserRepository,
+    @Inject(USER_REPOSITORY)
+    private readonly userRepository: UserRepositoryPort,
     @Inject(TENANT_REPOSITORY)
-    private readonly tenantRepository: ITenantRepository,
+    private readonly tenantRepository: TenantRepositoryPort,
   ) {}
 
   async execute(id: string, tenantId?: string) {
