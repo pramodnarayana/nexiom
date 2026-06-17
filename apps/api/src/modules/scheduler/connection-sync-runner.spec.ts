@@ -35,6 +35,7 @@ describe('ConnectionSyncRunner', () => {
     };
 
     dbManagerMock = {
+      applyPlan: vi.fn().mockResolvedValue(undefined),
       getTenantDb: vi.fn().mockResolvedValue({
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),

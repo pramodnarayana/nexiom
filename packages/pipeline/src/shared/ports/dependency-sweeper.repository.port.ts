@@ -2,6 +2,7 @@ export interface ActiveConnectionWithStitch {
   id: string;
   appName: string;
   tenantId: string;
+  vendorTenantId: string | null;
   schemaName: string | null;
 }
 

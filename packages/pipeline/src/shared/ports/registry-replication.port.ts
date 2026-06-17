@@ -1,9 +1,9 @@
 export interface GlobalOutboxRecord {
   id: string;
   tenantId: string;
-  entityType: 'APP_CONNECTION' | 'UI_WORKSPACE' | 'INTEGRATION_STITCH' | 'FIELD_MAPPING';
+  entityType: 'APP_CONNECTION' | 'UI_WORKSPACE' | 'INTEGRATION_STITCH' | 'FIELD_MAPPING' | 'SCHEMA_PROVISION';
   entityId: string;
-  action: 'UPSERT' | 'DELETE';
+  action: 'UPSERT' | 'DELETE' | 'APPLY';
   payload: Record<string, unknown> | null;
   status: 'PENDING' | 'SUCCESS' | 'FAIL';
 }
@@ -11,6 +11,7 @@ export interface GlobalOutboxRecord {
 export interface DataSourceMetadata {
   id: string;
   appName: string;
+  vendorTenantId: string | null;
   metadata: unknown;
 }
 
@@ -19,8 +20,8 @@ export interface IRegistryReplicationPort {
 
   replicateEntity(
     tenantId: string,
-    action: 'UPSERT' | 'DELETE',
-    entityType: 'APP_CONNECTION' | 'UI_WORKSPACE' | 'INTEGRATION_STITCH' | 'FIELD_MAPPING',
+    action: 'UPSERT' | 'DELETE' | 'APPLY',
+    entityType: 'APP_CONNECTION' | 'UI_WORKSPACE' | 'INTEGRATION_STITCH' | 'FIELD_MAPPING' | 'SCHEMA_PROVISION',
     entityId: string,
     payload: Record<string, unknown> | null
   ): Promise<void>;
@@ -32,4 +33,5 @@ export interface IRegistryReplicationPort {
   ): Promise<DataSourceMetadata[]>;
 
   markGlobalOutboxSuccess(outboxId: string): Promise<void>;
+  markConnectionStatus(tenantId: string, connectionId: string, status: string): Promise<void>;
 }

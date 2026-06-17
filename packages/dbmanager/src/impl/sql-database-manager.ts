@@ -41,46 +41,41 @@ export class SqlDatabaseManager {
     async applyPlan(schemaName: string, plan: SchemaPlan, context?: { appName: string, appProfile: string }): Promise<void> {
         this.validateSchemaName(schemaName);
 
-        // 1. Always ensure namespace exists (minimum baseline for all plans)
-        await this.db.$client.query(
-            `CREATE SCHEMA IF NOT EXISTS "${schemaName}";`,
-        );
+        type ProvisioningTask = 'namespace' | 'gateway' | 'replica' | 'normalize' | 'canonical' | 'outbound';
 
-        if (plan === SchemaPlan.NAMESPACE_ONLY) {
-            return;
+        const PLAN_TASKS: Record<SchemaPlan, ProvisioningTask[]> = {
+            [SchemaPlan.NAMESPACE_ONLY]: ['namespace'],
+            [SchemaPlan.STANDARD_ACTIVE]: ['namespace', 'gateway', 'replica', 'normalize', 'outbound'],
+            [SchemaPlan.CANONICAL_ACTIVE]: ['namespace', 'canonical'],
+        };
+
+        const tasks = PLAN_TASKS[plan];
+        if (!tasks) {
+            throw new Error(`Unknown SchemaPlan: ${plan}`);
         }
 
-        // 2. Ensure Gateway Tables exist
-        await this.provisionGatewayTables(schemaName);
-
-        if (plan === SchemaPlan.GATEWAY_ACTIVE) {
-            return;
+        for (const task of tasks) {
+            switch (task) {
+                case 'namespace':
+                    await this.db.$client.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}";`);
+                    break;
+                case 'gateway':
+                    await this.provisionGatewayTables(schemaName);
+                    break;
+                case 'replica':
+                    await this.provisionReplicaTables(schemaName);
+                    break;
+                case 'normalize':
+                    await this.provisionNormalizeTables(schemaName);
+                    break;
+                case 'canonical':
+                    await this.provisionCanonicalTables(schemaName, context);
+                    break;
+                case 'outbound':
+                    await this.provisionOutboundTables(schemaName);
+                    break;
+            }
         }
-
-        // 3. Ensure Replica Tables exist
-        await this.provisionReplicaTables(schemaName);
-
-        if (plan === SchemaPlan.REPLICA_ACTIVE) {
-            return;
-        }
-
-        // 4. Ensure Normalize Tables exist
-        await this.provisionNormalizeTables(schemaName);
-
-        if (plan === SchemaPlan.NORMALIZE_ACTIVE) {
-            return;
-        }
-
-        // 4.5. Ensure Canonical Tables exist
-        await this.provisionCanonicalTables(schemaName, context);
-
-        if (plan === SchemaPlan.CANONICAL_ACTIVE) {
-            return;
-        }
-
-        // 5. Ensure Outbound Tables exist
-        await this.provisionOutboundTables(schemaName);
-        // OUTBOUND_ACTIVE — all tables provisioned
     }
 
     /**
@@ -95,20 +90,19 @@ export class SqlDatabaseManager {
     }
 
     /**
-     * Migrates an existing tenant schema to OUTBOUND_ACTIVE state.
-     * Reapplies all provisioner layers (Gateway, Replica, Normalize, Canonical, Outbound)
+     * Migrates an existing tenant schema to STANDARD_ACTIVE state.
+     * Reapplies all generic provisioner layers (Gateway, Replica, Normalize, Outbound)
      * to ensure existing tenants receive newly provisioned objects:
      * - active_sync_locks table (from provisionGatewayTables)
      * - schema_name columns on outbox tables (from provision*Tables)
      * - sync_log partial indexes (from provisionOutboundTables)
      * All DDL is idempotent so this is safe to run on live schemas.
      */
-    async migrateToOutboundActive(schemaName: string, context?: { appName: string, appProfile: string }): Promise<void> {
+    async migrateToStandardActive(schemaName: string): Promise<void> {
         this.validateSchemaName(schemaName);
         await this.provisionGatewayTables(schemaName);
         await this.provisionReplicaTables(schemaName);
         await this.provisionNormalizeTables(schemaName);
-        await this.provisionCanonicalTables(schemaName, context);
         await this.provisionOutboundTables(schemaName);
     }
 
@@ -233,6 +227,7 @@ export class SqlDatabaseManager {
                               CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
                 attempts      INTEGER      NOT NULL DEFAULT 0,
                 error_message    VARCHAR(500),
+                claim_token   VARCHAR(36),
                 next_retry_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
                 created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
             );
@@ -249,6 +244,12 @@ export class SqlDatabaseManager {
                     ALTER TABLE "${schemaName}".inbound_outbox RENAME COLUMN last_error TO error_message;
                 END IF;
             END $$;
+        `);
+
+        // Idempotently add claim_token column for pre-existing schemas
+        await this.db.$client.query(`
+            ALTER TABLE "${schemaName}".inbound_outbox
+                ADD COLUMN IF NOT EXISTS claim_token VARCHAR(36);
         `);
 
         await this.db.$client.query(`

@@ -47,7 +47,7 @@ async function processLayerJob(connectionId: string, payload: any) {
 
   // 2. JIT Check (The "Ensure" step)
   // If the tables are missing, the worker triggers a fast schema plan apply
-  await dbmanager.applyPlan(schema, SchemaPlan.GATEWAY_ACTIVE);
+  await dbmanager.applyPlan(schema, SchemaPlan.STANDARD_ACTIVE);
 
   // 3. Perform Business Logic
   await db.withSchema(schema).insert(...);

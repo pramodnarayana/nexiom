@@ -151,8 +151,7 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
         const schemaNameToStore = getWorkspaceSchemaName(
           tenantId,
           providerName,
-          vendorTenantId,
-          externalId,
+          vendorTenantId as string,
         );
         await tx
           .update(dataSources)
@@ -256,8 +255,7 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
             const recoveredSchemaName = getWorkspaceSchemaName(
               tenantId,
               providerName,
-              vendorTenantId,
-              externalId,
+              vendorTenantId as string,
             );
             const [updated] = await tx
               .update(dataSources)
@@ -313,8 +311,7 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
         getWorkspaceSchemaName(
           tenantId,
           providerName,
-          vendorTenantId,
-          externalId,
+          vendorTenantId as string,
         );
 
       await tx.insert(globalRegistryOutbox).values({

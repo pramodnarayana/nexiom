@@ -50,7 +50,7 @@ export class ConnectionLifecycleService {
     tenantId: string,
     workspaceProvisionInfo: ProvisionInfo,
     providerName: string,
-    metadata: Record<string, unknown>,
+    _metadata: Record<string, unknown>,
   ): Promise<void> {
     if (!workspaceProvisionInfo.schemaName) {
       // If schemaName is empty, it means this was an explicit update
@@ -58,18 +58,13 @@ export class ConnectionLifecycleService {
     }
 
     try {
-      // At connection setup time, provision L1→L3 pipeline tables so that
-      // webhook ingestion and normalization work immediately — without
-      // waiting for a stitch to be configured.
-      // L4-L6 outbound tables are added when a stitch is activated.
+      // At connection setup time, provision the entire generic pipeline (L1-L6)
+      // This includes gateways, replicas, normalize, and outbound outboxes.
+      // Plugin-specific entity tables are NOT created here.
       await this.dbManager.applyPlan(
         tenantId,
         workspaceProvisionInfo.schemaName,
-        SchemaPlan.CANONICAL_ACTIVE,
-        {
-          appName: providerName,
-          appProfile: (metadata?.appProfile as string) || 'standard',
-        },
+        SchemaPlan.STANDARD_ACTIVE,
       );
 
       // Transition to ACTIVE only after namespace is successfully provisioned
@@ -77,7 +72,7 @@ export class ConnectionLifecycleService {
         const [activeConn] = await tx
           .update(dataSources)
           .set({
-            schemaPlan: SchemaPlan.CANONICAL_ACTIVE,
+            schemaPlan: SchemaPlan.STANDARD_ACTIVE,
           })
           .where(eq(dataSources.id, workspaceProvisionInfo.dataSourceId))
           .returning();

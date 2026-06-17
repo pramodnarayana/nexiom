@@ -32,7 +32,11 @@ export class TenantOffboardingService {
 
     // 1. Identify all database schema namespaces associated with the tenant
     const connections = await this.db
-      .select({ id: dataSources.id, appName: dataSources.appName })
+      .select({
+        id: dataSources.id,
+        appName: dataSources.appName,
+        vendorTenantId: dataSources.vendorTenantId,
+      })
       .from(dataSources)
       .where(eq(dataSources.tenantId, tenantId));
 
@@ -43,8 +47,9 @@ export class TenantOffboardingService {
       for (const currConnection of connections) {
         // Compute the deterministic schema name using the shared helper
         const dataNamespace = getWorkspaceSchemaName(
-          currConnection.id,
+          tenantId,
           currConnection.appName,
+          currConnection.vendorTenantId as string,
         );
 
         this.logger.log(`Safely dropping physical schema: ${dataNamespace}`);

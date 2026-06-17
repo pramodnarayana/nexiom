@@ -1,19 +1,19 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { StoreOAuthConnectionUseCase } from './store-oauth-connection.use-case.js';
 import { FakeAppConnectionRepository } from '../fakes/fake-app-connection.repository.js';
-import { FakeTenantSchemaPort } from '../fakes/fake-tenant-schema.port.js';
+import { FakeConnectionLifecyclePort } from '../fakes/fake-connection-lifecycle.port.js';
 
 describe('StoreOAuthConnectionUseCase', () => {
-  let fakeRepo: FakeAppConnectionRepository;
-  let fakeTenantSchema: FakeTenantSchemaPort;
   let useCase: StoreOAuthConnectionUseCase;
+  let fakeRepo: FakeAppConnectionRepository;
+  let fakeLifecycle: FakeConnectionLifecyclePort;
 
   beforeEach(() => {
     fakeRepo = new FakeAppConnectionRepository();
-    fakeTenantSchema = new FakeTenantSchemaPort();
+    fakeLifecycle = new FakeConnectionLifecyclePort();
     useCase = new StoreOAuthConnectionUseCase(
       fakeRepo,
-      fakeTenantSchema,
+      fakeLifecycle,
       'us-east-1',
     );
   });
@@ -33,16 +33,14 @@ describe('StoreOAuthConnectionUseCase', () => {
     await useCase.execute(options);
 
     expect(fakeRepo.callCount.storeOAuthConnection).toBe(1);
-    expect(fakeTenantSchema.callCount.provisionNamespace).toBe(1);
+    expect(fakeLifecycle.callCount.activateAndProvision).toBe(1);
 
     // It should have generated an ID or stored it
     expect(fakeRepo.connections.size).toBe(1);
 
     // It should have provisioned the namespace based on the fake's logic
     expect(
-      fakeTenantSchema.provisionedNamespaces.has(
-        'schema_tenant-123_salesforce',
-      ),
+      fakeLifecycle.provisionedNamespaces.has('schema_tenant-123_salesforce'),
     ).toBe(true);
   });
 
@@ -62,7 +60,7 @@ describe('StoreOAuthConnectionUseCase', () => {
     await useCase.execute(options);
 
     // Check that it merged the region context
-    const stored = Array.from(fakeRepo.connections.values())[0];
+    const stored = Array.from(fakeRepo.connections.values())[0] as any;
     expect(stored.regionContext).toBe('eu-west-1');
   });
 
@@ -81,7 +79,7 @@ describe('StoreOAuthConnectionUseCase', () => {
 
     await useCase.execute(options);
 
-    const stored = Array.from(fakeRepo.connections.values())[0];
+    const stored = Array.from(fakeRepo.connections.values())[0] as any;
     expect(stored.regionContext).toBe('us-east-1');
   });
 
@@ -93,7 +91,7 @@ describe('StoreOAuthConnectionUseCase', () => {
     // Setup use case with no default
     const noDefaultUseCase = new StoreOAuthConnectionUseCase(
       fakeRepo,
-      fakeTenantSchema,
+      fakeLifecycle,
       undefined,
     );
 

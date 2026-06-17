@@ -10,37 +10,19 @@ export enum SchemaPlan {
     NAMESPACE_ONLY = 'NAMESPACE_ONLY',
 
     /**
-     * The L1 Gateway tables (inbound_gateway, sync_log).
-     * Provisioned when a Route/Webhook is activated.
-     * Note: sync_log is provisioned here so L1/L2 can log successes/failures.
-     */
-    GATEWAY_ACTIVE = 'GATEWAY_ACTIVE',
-
-    /**
-     * The L2 Unified Replica tables (replica_entity, sync_cursor)
-     * Provisioned when an object mapping is initialized.
-     */
-    REPLICA_ACTIVE = 'REPLICA_ACTIVE',
-
-    /**
-     * The L3 Normalization tables (normalized_entity)
-     * Provisioned when normalization is activated for a connection.
-     */
-    NORMALIZE_ACTIVE = 'NORMALIZE_ACTIVE',
-
-    /**
      * Per-entity typed canonical tables (canonical_account, canonical_tp).
-     * Provisioned when typed canonical tables are required by the application.
+     * Provisioned dynamically when an initial sync happens for a specific app.
      * These replace the generic normalized_entity JSONB blob with typed
      * columns and native FK relationships for SQL JOIN enrichment.
      */
     CANONICAL_ACTIVE = 'CANONICAL_ACTIVE',
 
     /**
-     * The L5/L6 Outbound tables (outbound_gateway, sync_log)
+     * The L5/L6 Outbound tables (outbound_gateway, sync_log).
+     * Now called STANDARD_ACTIVE to represent the complete set of generic pipeline tables.
      * Provisioned when delivery is activated for a connection.
      */
-    OUTBOUND_ACTIVE = 'OUTBOUND_ACTIVE',
+    STANDARD_ACTIVE = 'STANDARD_ACTIVE',
 }
 
 /**
@@ -61,7 +43,7 @@ export interface DatabaseManager {
     applyPlan(tenantId: string, schemaName: string, plan: SchemaPlan, context?: { appName: string, appProfile: string }): Promise<void>;
 
     /**
-     * Migrates an existing tenant schema to OUTBOUND_ACTIVE state.
+     * Migrates an existing tenant schema to STANDARD_ACTIVE state.
      */
-    migrateToOutboundActive?(tenantId: string, schemaName: string, context?: { appName: string, appProfile: string }): Promise<void>;
+    migrateToStandardActive?(tenantId: string, schemaName: string): Promise<void>;
 }

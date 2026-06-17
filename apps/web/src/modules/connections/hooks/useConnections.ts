@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/shared/lib/auth/context';
-import { listActiveConnections, exchangeOAuthCode, createOAuthSession, deleteConnection as deleteConnectionAPI, type ActiveConnectionResponse } from '../api/connections.api';
+import { listActiveConnections, exchangeOAuthCode, createOAuthSession, deleteConnection as deleteConnectionAPI, updateConnectionDisplayName as updateConnectionDisplayNameAPI, type ActiveConnectionResponse } from '../api/connections.api';
 import { useOAuthPopup } from './useOAuthPopup';
 import { useToast } from '@/shared/hooks/use-toast';
 
@@ -179,5 +179,20 @@ export function useConnections() {
         [refresh, toast],
     );
 
-    return { connections, loading, refresh, connect, remove };
+    const updateDisplayName = useCallback(
+        async (dataSourceId: string, displayName: string): Promise<void> => {
+            try {
+                await updateConnectionDisplayNameAPI(dataSourceId, displayName);
+                toast({ title: 'Name updated', description: 'The connection name has been successfully updated.' });
+                await refresh();
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : 'Failed to update connection name';
+                toast({ title: 'Update failed', description: msg, variant: 'destructive' });
+                throw err;
+            }
+        },
+        [refresh, toast],
+    );
+
+    return { connections, loading, refresh, connect, remove, updateDisplayName };
 }

@@ -83,7 +83,7 @@ describe("Fanout Drizzle Adapters", () => {
     currentSchemaName = "ws_" + uuidv4().replace(/-/g, "");
     currentTenantId = "tenant_" + uuidv4();
     const sqlManager = new SqlDatabaseManager(testDbManager.db!);
-    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.OUTBOUND_ACTIVE, { appName: "test_app", appProfile: "standard" });
+    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.STANDARD_ACTIVE, { appName: "test_app", appProfile: "standard" });
   }, 30000);
 
   describe("DrizzleConnectionRepositoryAdapter", () => {

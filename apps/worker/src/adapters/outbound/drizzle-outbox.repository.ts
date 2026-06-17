@@ -14,6 +14,7 @@ export interface OutboxTableSchema extends PgTable {
   nextRetryAt: AnyPgColumn;
   errorMessage: AnyPgColumn;
   claimToken?: AnyPgColumn;
+  entityType?: AnyPgColumn;
 }
 
 export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
@@ -66,8 +67,8 @@ export class DrizzleOutboxRepositoryAdapter implements OutboxRepositoryPort {
 
     // Manually map the returned rows to OutboxRow format if needed,
     // though drizzle's .returning() output usually matches it exactly
-    return claimed.map((row: unknown) => {
-      const r = row as Record<string, unknown>;
+    return claimed.map((row: Record<string, unknown>) => {
+      const r = row;
       // Drizzle returns the table columns
       return {
         ...r,

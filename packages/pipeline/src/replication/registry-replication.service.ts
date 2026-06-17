@@ -90,63 +90,6 @@ export class RegistryReplicationService implements OnModuleInit {
         );
       }
 
-      // --- Trigger schema provisioning if an INTEGRATION_STITCH was replicated ---
-      // This MUST happen before marking the outbox as SUCCESS so that if provisioning fails,
-      // the entire message is retried. Both replication and provisioning are idempotent.
-      if (row.entityType === "INTEGRATION_STITCH" && row.action === "UPSERT") {
-        const stitch = row.payload as {
-          srcDataSourceId: string;
-          destDataSourceId: string;
-        };
-
-        // Get appNames and metadata for the connections from the local replica to compute schema names
-        const dataSources = await this.registryPort.getStitchDataSources(
-          row.tenantId,
-          stitch.srcDataSourceId,
-          stitch.destDataSourceId,
-        );
-
-        // Ensure both stitch data sources are present before provisioning
-        const dataSourceIds = new Set(dataSources.map((ds) => ds.id));
-        if (
-          !dataSourceIds.has(stitch.srcDataSourceId) ||
-          !dataSourceIds.has(stitch.destDataSourceId)
-        ) {
-          throw new Error(
-            `Stitch data sources not yet replicated: srcDataSourceId=${stitch.srcDataSourceId}, destDataSourceId=${stitch.destDataSourceId}. Retrying.`,
-          );
-        }
-
-        for (const ds of dataSources) {
-          const schemaName = getWorkspaceSchemaName(ds.id, ds.appName);
-
-          // Pass context explicitly to bypass the O(N) hash-matching loop in SqlDatabaseManager
-          const rawAppProfile =
-            ds.metadata &&
-            typeof ds.metadata === "object" &&
-            "appProfile" in ds.metadata
-              ? (ds.metadata.appProfile as string)
-              : "";
-          const appProfile =
-            typeof rawAppProfile === "string" && rawAppProfile.trim() !== ""
-              ? rawAppProfile.trim()
-              : "standard";
-
-          await this.dbManager.applyPlan(
-            row.tenantId,
-            schemaName,
-            SchemaPlan.OUTBOUND_ACTIVE,
-            {
-              appName: ds.appName,
-              appProfile,
-            },
-          );
-          this.logger.debug(
-            `Provisioned schema ${schemaName} to OUTBOUND_ACTIVE in tenant ${row.tenantId}`,
-          );
-        }
-      }
-
       // Mark outbox as success ONLY after everything (including provisioning) succeeds
       await this.registryPort.markGlobalOutboxSuccess(outboxId);
 

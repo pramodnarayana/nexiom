@@ -8,7 +8,7 @@
 | Multi-instance Connections | ✅ Done | OAuth2/API-key, multi-connection per tenant per app |
 | Connection Storage Registry | ✅ Done | Maps `connection_id` → schema name + host + region |
 | Piece Registry (Salesforce, QuickBooks) | ✅ Done | Framework + 2 concrete pieces |
-| DBManager — Schema Provisioning | ✅ Done | `NAMESPACE_ONLY`, `GATEWAY_ACTIVE` plans |
+| DBManager — Schema Provisioning | ✅ Done | `NAMESPACE_ONLY`, `STANDARD_ACTIVE` plans |
 | L1 Source Gateway (inbound) | ✅ Done | `inbound_gateway` table, webhooks controller, polling cron |
 | Redis DLQ + Distributed Locking | ✅ Done | Lua-script DLQ, NX+EX locks per workspace+trigger |
 | Storage Resolver | ✅ Done | Resolves `connectionId` → physical schema name |
@@ -540,9 +540,9 @@ Extend `SchemaPlan` in `packages/dbmanager/`:
 
 | Plan | Tables Created |
 | --- | --- |
-| `REPLICA_ACTIVE` | `replica_entity`, `sync_cursor` |
-| `NORMALIZE_ACTIVE` | `normalized_entity` |
-| `OUTBOUND_ACTIVE` | `outbound_gateway`, `sync_log` |
+| `STANDARD_ACTIVE` | `replica_entity`, `sync_cursor` |
+| `STANDARD_ACTIVE` | `normalized_entity` |
+| `STANDARD_ACTIVE` | `outbound_gateway`, `sync_log` |
 
 All table DDL matches `packages/database/src/schema/pipeline.ts` (already written). Apply all plans when a connection is activated inside `TriggerExecutorService.applyPlan()`.
 

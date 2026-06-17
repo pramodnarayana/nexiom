@@ -52,14 +52,14 @@ describe('EnableTriggerUseCase', () => {
     expect(fakeResolver.callCount.resolveSchemaName).toBe(1);
     expect(fakeProvisioner.callCount.applyPlan).toBe(1);
     expect(fakeProvisioner.appliedPlans[0].schemaPlan).toBe(
-      SchemaPlan.OUTBOUND_ACTIVE,
+      SchemaPlan.STANDARD_ACTIVE,
     );
     expect(fakeProvisioner.callCount.registerPublication).toBe(1);
 
     expect(params.trigger.onEnable).toHaveBeenCalled();
 
     expect(fakeRepo.callCount.updateSchemaPlan).toBe(1);
-    expect(fakeRepo.schemaPlans.get('ds-789')).toBe(SchemaPlan.OUTBOUND_ACTIVE);
+    expect(fakeRepo.schemaPlans.get('ds-789')).toBe(SchemaPlan.STANDARD_ACTIVE);
   });
 
   it('should rollback schemaPlan and unregister publication if onEnable throws', async () => {

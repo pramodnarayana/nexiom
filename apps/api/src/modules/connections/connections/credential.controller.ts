@@ -14,6 +14,8 @@ import {
   Param,
   Inject,
   ParseUUIDPipe,
+  Patch,
+  Body,
 } from '@nestjs/common';
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@soopa/auth';
 import { ENCRYPTION_SERVICE, type IEncryptionService } from '@soopa/security';
@@ -339,6 +341,58 @@ export class CredentialController {
       );
       throw new InternalServerErrorException(
         'An unexpected error occurred while deleting the connection',
+      );
+    }
+  }
+
+  @Patch(':dataSourceId')
+  @HttpCode(HttpStatus.OK)
+  async updateConnection(
+    @AuthContext() ctx: RequestAuthContext,
+    @Param('dataSourceId', ParseUUIDPipe) dataSourceId: string,
+    @Body() body: { displayName: string },
+  ) {
+    const tenantId = ctx.user?.organizationId;
+    if (!tenantId || !ctx.user?.id) {
+      throw new BadRequestException('tenantId or user context is missing');
+    }
+
+    const trimmedDisplayName = body.displayName?.trim();
+    if (!trimmedDisplayName || trimmedDisplayName.length === 0) {
+      throw new BadRequestException('displayName cannot be blank');
+    }
+    if (trimmedDisplayName.length > 100) {
+      throw new BadRequestException('displayName exceeds 100 characters');
+    }
+
+    try {
+      await this.assertAdminOrOwner(ctx.user.id, tenantId);
+
+      const connection = await this.connectionRepository.findByIdAndTenant(
+        dataSourceId,
+        tenantId,
+      );
+      if (!connection) {
+        throw new NotFoundException('Connection not found');
+      }
+
+      await this.connectionRepository.updateDisplayName(
+        dataSourceId,
+        tenantId,
+        trimmedDisplayName,
+      );
+
+      return { success: true, message: 'Connection updated successfully' };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(
+        `Failed to update connection ${dataSourceId} for tenant ${tenantId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new InternalServerErrorException(
+        'An unexpected error occurred while updating the connection',
       );
     }
   }

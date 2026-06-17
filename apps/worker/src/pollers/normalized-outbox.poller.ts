@@ -50,10 +50,11 @@ export class NormalizedOutboxPoller {
           id: dataSources.id,
           appName: dataSources.appName,
           tenantId: dataSources.tenantId,
+          vendorTenantId: dataSources.vendorTenantId,
         })
         .from(dataSources)
         .where(
-          sql`${dataSources.schemaPlan} IN ('OUTBOUND_ACTIVE', 'GATEWAY_ACTIVE', 'NORMALIZE_ACTIVE')`,
+          sql`${dataSources.schemaPlan} IN ('STANDARD_ACTIVE', 'CANONICAL_ACTIVE')`,
         );
 
       if (allConnections.length === 0) {
@@ -62,15 +63,17 @@ export class NormalizedOutboxPoller {
 
       const connectionsByTenant = new Map<
         string,
-        Array<{ id: string; appName: string }>
+        Array<{ id: string; appName: string; vendorTenantId: string | null }>
       >();
       for (const conn of allConnections) {
         if (!connectionsByTenant.has(conn.tenantId)) {
           connectionsByTenant.set(conn.tenantId, []);
         }
-        connectionsByTenant
-          .get(conn.tenantId)!
-          .push({ id: conn.id, appName: conn.appName });
+        connectionsByTenant.get(conn.tenantId)!.push({
+          id: conn.id,
+          appName: conn.appName,
+          vendorTenantId: conn.vendorTenantId,
+        });
       }
 
       const TENANT_CONCURRENCY = 5;
@@ -85,8 +88,9 @@ export class NormalizedOutboxPoller {
 
           for (const connection of tenantConnections) {
             const schemaName = getWorkspaceSchemaName(
-              connection.id,
+              tenant.tenantId,
               connection.appName,
+              connection.vendorTenantId as string,
             );
             await this.executeSafeSchemaOperation(
               tenant.tenantId,

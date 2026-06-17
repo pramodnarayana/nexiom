@@ -1,0 +1,79 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ProvisionSchemaUseCase } from './provision-schema.use-case.js';
+import type { IRegistryReplicationPort } from '../../shared/domain.js';
+import type { DatabaseManager } from '@soopa/dbmanager';
+import { SchemaPlan } from '@soopa/dbmanager';
+
+describe('ProvisionSchemaUseCase', () => {
+  let useCase: ProvisionSchemaUseCase;
+  let registryPort: import('vitest').Mocked<IRegistryReplicationPort>;
+  let dbManager: import('vitest').Mocked<DatabaseManager>;
+
+  beforeEach(() => {
+    registryPort = {
+      fetchGlobalOutboxRecord: vi.fn(),
+      replicateEntity: vi.fn(),
+      markGlobalOutboxSuccess: vi.fn(),
+      getStitchDataSources: vi.fn(),
+      markConnectionStatus: vi.fn(),
+    };
+    
+    dbManager = {
+      applyPlan: vi.fn(),
+      getTenantDb: vi.fn(),
+    };
+
+    useCase = new ProvisionSchemaUseCase(registryPort, dbManager);
+  });
+
+  it('should ignore if outbox record is not found', async () => {
+    registryPort.fetchGlobalOutboxRecord.mockResolvedValue(null);
+    await useCase.execute({ outboxId: '123' });
+    expect(dbManager.applyPlan).not.toHaveBeenCalled();
+    expect(registryPort.markGlobalOutboxSuccess).not.toHaveBeenCalled();
+  });
+
+  it('should provision schema and mark success', async () => {
+    registryPort.fetchGlobalOutboxRecord.mockResolvedValue({
+      id: '123',
+      tenantId: 'tenant-1',
+      entityType: 'SCHEMA_PROVISION' as any,
+      entityId: 'conn-1',
+      action: 'APPLY' as any,
+      payload: {
+        plan: SchemaPlan.CANONICAL_ACTIVE,
+        schemaName: 'ws_test_schema',
+        appName: 'test-app',
+        appProfile: 'test-profile'
+      },
+      createdAt: new Date(),
+    } as any);
+
+    await useCase.execute({ outboxId: '123' });
+
+    expect(dbManager.applyPlan).toHaveBeenCalledWith(
+      'tenant-1',
+      'ws_test_schema',
+      SchemaPlan.CANONICAL_ACTIVE,
+      { appName: 'test-app', appProfile: 'test-profile' }
+    );
+    expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalledWith('123');
+  });
+
+  it('should mark success without provisioning if entityType is unrecognized', async () => {
+    registryPort.fetchGlobalOutboxRecord.mockResolvedValue({
+      id: '123',
+      tenantId: 'tenant-1',
+      entityType: 'UNKNOWN_EVENT' as any,
+      entityId: 'conn-1',
+      action: 'APPLY' as any,
+      payload: {},
+      createdAt: new Date(),
+    } as any);
+
+    await useCase.execute({ outboxId: '123' });
+
+    expect(dbManager.applyPlan).not.toHaveBeenCalled();
+    expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalledWith('123');
+  });
+});

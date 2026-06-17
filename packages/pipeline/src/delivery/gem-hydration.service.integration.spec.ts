@@ -97,7 +97,7 @@ describe("GemHydrationService", () => {
     // 2. Setup tenant schema
     const tenantId = "ten1";
     const schemaName = `ws_${tenantId.replace(/-/g, "_")}`;
-    await dbManager.applyPlan(tenantId, schemaName, SchemaPlan.OUTBOUND_ACTIVE, {
+    await dbManager.applyPlan(tenantId, schemaName, SchemaPlan.STANDARD_ACTIVE, {
       appName: "testApp",
       appProfile: "default",
     });

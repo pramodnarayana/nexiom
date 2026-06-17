@@ -68,7 +68,7 @@ export class EnableTriggerUseCase {
       await this.dbProvisioner.applyPlan({
         tenantId: params.tenantId,
         schemaName: resolvedSchemaName,
-        schemaPlan: SchemaPlan.OUTBOUND_ACTIVE,
+        schemaPlan: SchemaPlan.STANDARD_ACTIVE,
         appName: params.appName,
         appProfile: params.appProfile,
       });
@@ -81,7 +81,7 @@ export class EnableTriggerUseCase {
       wroteRegistryRow = true;
       await this.gatewayRepo.updateSchemaPlan(
         params.dataSourceId,
-        SchemaPlan.OUTBOUND_ACTIVE,
+        SchemaPlan.STANDARD_ACTIVE,
       );
     } catch (err) {
       if (wroteRegistryRow) {

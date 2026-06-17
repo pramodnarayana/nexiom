@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plug2, MoreVertical, RefreshCw, Trash2, Loader2, Settings } from 'lucide-react';
+import { Plug2, MoreVertical, RefreshCw, Trash2, Loader2, Settings, Pencil, Check, X } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
 import {
@@ -23,6 +23,7 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/shared/components/ui/sheet';
+import { Input } from '@/shared/components/ui/input';
 import { type ProviderResponse, type ActiveConnectionResponse, type VendorParams, getConnectionCredentials } from '../api/connections.api';
 import { DynamicAuthForm } from './DynamicAuthForm';
 import { useConnections } from '../hooks/useConnections';
@@ -43,13 +44,16 @@ const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'second
 
 export function ActiveConnectionCard({ connection, provider, onDelete }: Readonly<ActiveConnectionCardProps>) {
     const statusInfo = STATUS_BADGE[connection.status] || { label: connection.status, variant: 'outline' };
-    const { connect, remove } = useConnections();
+    const { connect, remove, updateDisplayName } = useConnections();
     const { toast } = useToast();
 
     const [imgError, setImgError] = useState(false);
     const [reconnecting, setReconnecting] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [manageOpen, setManageOpen] = useState(false);
+    const [isInlineEditing, setIsInlineEditing] = useState(false);
+    const [inlineName, setInlineName] = useState(connection.displayName);
+    const [renaming, setRenaming] = useState(false);
     const [loadingManage, setLoadingManage] = useState(false);
     const [manageCreds, setManageCreds] = useState<{ clientId: string; hasClientSecret: boolean; vendorParams?: VendorParams } | null>(null);
 
@@ -156,6 +160,21 @@ export function ActiveConnectionCard({ connection, provider, onDelete }: Readonl
             });
         } finally {
             setReconnecting(false);
+        }
+    };
+
+    const handleInlineRename = async () => {
+        if (!inlineName.trim() || inlineName.trim() === connection.displayName) {
+            setIsInlineEditing(false);
+            setInlineName(connection.displayName);
+            return;
+        }
+        try {
+            setRenaming(true);
+            await updateDisplayName(connection.id, inlineName.trim());
+            setIsInlineEditing(false);
+        } finally {
+            setRenaming(false);
         }
     };
 
@@ -314,9 +333,48 @@ export function ActiveConnectionCard({ connection, provider, onDelete }: Readonl
                                     return <img src={provider.logoUrl} alt="logo" className="h-6 w-6 object-contain" />;
                                 })()}
                             </div>
-                            <div>
-                                <SheetTitle className="text-left text-lg">{connection.displayName}</SheetTitle>
-                                <SheetDescription className="text-left">
+                            <div className="flex-1 min-w-0">
+                                {isInlineEditing ? (
+                                    <div className="flex items-center gap-2 w-full">
+                                        <Input
+                                            autoFocus
+                                            value={inlineName}
+                                            onChange={(e) => setInlineName(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') void handleInlineRename();
+                                                if (e.key === 'Escape') {
+                                                    setIsInlineEditing(false);
+                                                    setInlineName(connection.displayName);
+                                                }
+                                            }}
+                                            disabled={renaming}
+                                            className="h-8 text-sm font-semibold"
+                                        />
+                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600 shrink-0" onClick={() => void handleInlineRename()} disabled={renaming || !inlineName.trim()}>
+                                            {renaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                        </Button>
+                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground shrink-0" onClick={() => { setIsInlineEditing(false); setInlineName(connection.displayName); }} disabled={renaming}>
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <div className="group flex items-center gap-2">
+                                        <SheetTitle className="text-left text-lg truncate">{connection.displayName}</SheetTitle>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={() => {
+                                                setInlineName(connection.displayName);
+                                                setIsInlineEditing(true);
+                                            }}
+                                        >
+                                            <Pencil className="h-3 w-3" />
+                                            <span className="sr-only">Rename connection</span>
+                                        </Button>
+                                    </div>
+                                )}
+                                <SheetDescription className="text-left mt-0.5">
                                     {provider?.displayName || connection.appName} Integration
                                 </SheetDescription>
                             </div>

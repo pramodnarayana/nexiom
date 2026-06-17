@@ -105,3 +105,7 @@ export async function exchangeOAuthCode(payload: {
 export async function deleteConnection(dataSourceId: string): Promise<void> {
     await apiClient.delete(`/connectors/${dataSourceId}`);
 }
+
+export async function updateConnectionDisplayName(dataSourceId: string, displayName: string): Promise<void> {
+    await apiClient.patch(`/connectors/${dataSourceId}`, { displayName });
+}

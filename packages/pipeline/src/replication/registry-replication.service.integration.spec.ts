@@ -221,11 +221,11 @@ describe("RegistryReplicationService", () => {
     expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalled();
 
     // Verify schemas were actually created in DB
-    const schema1 = getWorkspaceSchemaName(ds1Id, "mock_app");
+    const schema1 = getWorkspaceSchemaName(ds1Id, "mock_app", "vendor1");
     const res1 = await testDbManager.db!.execute(sql`SELECT schema_name FROM information_schema.schemata WHERE schema_name = ${schema1}`);
     expect(res1.rows.length).toBe(1);
     
-    const schema2 = getWorkspaceSchemaName(ds2Id, "hubspot");
+    const schema2 = getWorkspaceSchemaName(ds2Id, "hubspot", "vendor1");
     const res2 = await testDbManager.db!.execute(sql`SELECT schema_name FROM information_schema.schemata WHERE schema_name = ${schema2}`);
     expect(res2.rows.length).toBe(1);
   }, 30000);

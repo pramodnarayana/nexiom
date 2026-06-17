@@ -22,7 +22,7 @@ describe("DrizzleRoutingRepositoryAdapter", () => {
   beforeEach(async () => {
     currentSchemaName = "ws_" + uuidv4().replace(/-/g, "");
     const sqlManager = new SqlDatabaseManager(testDbManager.db!);
-    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.OUTBOUND_ACTIVE, { appName: "test_app", appProfile: "standard" });
+    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.STANDARD_ACTIVE, { appName: "test_app", appProfile: "standard" });
   }, 30000);
 
   it("should return found if normalized entity exists", async () => {

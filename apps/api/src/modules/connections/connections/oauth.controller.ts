@@ -13,7 +13,9 @@ import {
   InternalServerErrorException,
   ValidationPipe,
   HttpException,
+  Inject,
 } from '@nestjs/common';
+import { ENCRYPTION_SERVICE, type IEncryptionService } from '@soopa/security';
 import type { Response } from 'express';
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@soopa/auth';
 import { PieceRegistryService } from '@soopa/piece-registry';
@@ -195,6 +197,7 @@ export class OAuthController {
     private readonly getAuthorizationUrlUseCase: GetAuthorizationUrlUseCase,
     private readonly exchangeOAuthTokenUseCase: ExchangeOAuthTokenUseCase,
     private readonly storeOAuthConnectionUseCase: StoreOAuthConnectionUseCase,
+    @Inject(ENCRYPTION_SERVICE) private readonly crypto: IEncryptionService,
   ) {}
 
   private resolveVendorParams(
@@ -572,7 +575,14 @@ export class OAuthController {
     const finalVendorTenantId =
       extractedVendorTenantId ?? body.vendorTenantId ?? undefined;
 
+    if (!finalVendorTenantId) {
+      throw new BadRequestException(
+        `vendorTenantId is required for this provider. The connection cannot be created without a unique vendor tenant identifier.`,
+      );
+    }
+
     const stringifiedValue = JSON.stringify(valueBlob);
+    const encryptedValue = await this.crypto.encrypt(stringifiedValue);
     await this.storeOAuthConnectionUseCase.execute({
       id: body.dataSourceId,
       tenantId,
@@ -580,7 +590,7 @@ export class OAuthController {
       externalId,
       displayName: trimmedDisplayName,
       authType: 'OAUTH2',
-      value: stringifiedValue,
+      value: encryptedValue,
       expiresAt,
       metadata: mergedMetadata,
       envType,

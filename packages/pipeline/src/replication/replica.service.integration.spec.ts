@@ -38,7 +38,7 @@ describe("ReplicaService", () => {
 
     const sqlManager = new SqlDatabaseManager(testDbManager.db!);
     await sqlManager.applyPlan(currentSchemaName, SchemaPlan.NAMESPACE_ONLY, { appName: "testApp", appProfile: "online" });
-    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.REPLICA_ACTIVE, { appName: "testApp", appProfile: "online" });
+    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.STANDARD_ACTIVE, { appName: "testApp", appProfile: "online" });
 
     queueService = {
       consume: vi.fn(),

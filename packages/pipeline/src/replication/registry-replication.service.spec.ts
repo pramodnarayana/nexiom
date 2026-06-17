@@ -21,6 +21,7 @@ describe('RegistryReplicationService', () => {
       replicateEntity: vi.fn(),
       getStitchDataSources: vi.fn(),
       markGlobalOutboxSuccess: vi.fn(),
+      markConnectionStatus: vi.fn(),
     };
 
     dbManager = {
@@ -88,67 +89,7 @@ describe('RegistryReplicationService', () => {
     await expect((service as any).processMessage('outbox-1')).rejects.toThrow('Unrecognized registry outbox operation: action="UNKNOWN_ACTION", entityType="APP_CONNECTION"');
   });
 
-  it('provisions schema if INTEGRATION_STITCH is upserted', async () => {
-    registryPort.fetchGlobalOutboxRecord.mockResolvedValue({
-      id: 'outbox-1',
-      tenantId: 'ten-1',
-      action: 'UPSERT',
-      status: 'PENDING',
-      entityType: 'INTEGRATION_STITCH',
-      entityId: 'stitch-1',
-      payload: { srcDataSourceId: 'ds-src', destDataSourceId: 'ds-dest' },
-    });
 
-    registryPort.getStitchDataSources.mockResolvedValue([
-      { id: 'ds-src', appName: 'salesforce', metadata: { appProfile: 'default' } },
-      { id: 'ds-dest', appName: 'quickbooks', metadata: {} }
-    ]);
-
-    await (service as any).processMessage('outbox-1');
-
-    expect(registryPort.replicateEntity).toHaveBeenCalledWith('ten-1', 'UPSERT', 'INTEGRATION_STITCH', 'stitch-1', expect.any(Object));
-    expect(dbManager.applyPlan).toHaveBeenCalledTimes(2);
-    
-    // Check first applyPlan (srcDataSource)
-    expect(dbManager.applyPlan).toHaveBeenNthCalledWith(
-      1,
-      'ten-1',
-      getWorkspaceSchemaName('ds-src', 'salesforce'),
-      SchemaPlan.OUTBOUND_ACTIVE,
-      { appName: 'salesforce', appProfile: 'default' }
-    );
-
-    // Check second applyPlan (destDataSource)
-    expect(dbManager.applyPlan).toHaveBeenNthCalledWith(
-      2,
-      'ten-1',
-      getWorkspaceSchemaName('ds-dest', 'quickbooks'),
-      SchemaPlan.OUTBOUND_ACTIVE,
-      { appName: 'quickbooks', appProfile: 'standard' } // default fallback is 'standard'
-    );
-
-    expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalledWith('outbox-1');
-  });
-
-  it('throws and retries if data sources are missing for stitch', async () => {
-    registryPort.fetchGlobalOutboxRecord.mockResolvedValue({
-      id: 'outbox-1',
-      tenantId: 'ten-1',
-      action: 'UPSERT',
-      status: 'PENDING',
-      entityType: 'INTEGRATION_STITCH',
-      entityId: 'stitch-1',
-      payload: { srcDataSourceId: 'ds-src', destDataSourceId: 'ds-dest' },
-    });
-
-    registryPort.getStitchDataSources.mockResolvedValue([
-      { id: 'ds-src', appName: 'salesforce', metadata: {} }
-    ]); // dest missing
-
-    await expect((service as any).processMessage('outbox-1')).rejects.toThrow('Stitch data sources not yet replicated');
-    expect(dbManager.applyPlan).not.toHaveBeenCalled();
-    expect(registryPort.markGlobalOutboxSuccess).not.toHaveBeenCalled();
-  });
 
   it('retries on foreign key constraint violation and eventually succeeds', async () => {
     registryPort.fetchGlobalOutboxRecord.mockResolvedValue({

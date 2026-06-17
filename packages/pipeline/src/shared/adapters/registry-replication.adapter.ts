@@ -74,12 +74,13 @@ export class RegistryReplicationAdapter implements IRegistryReplicationPort {
 
   async replicateEntity(
     tenantId: string,
-    action: "UPSERT" | "DELETE",
+    action: "UPSERT" | "DELETE" | "APPLY",
     entityType:
       | "APP_CONNECTION"
       | "UI_WORKSPACE"
       | "INTEGRATION_STITCH"
-      | "FIELD_MAPPING",
+      | "FIELD_MAPPING"
+      | "SCHEMA_PROVISION",
     entityId: string,
     payload: Record<string, unknown> | null,
   ): Promise<void> {
@@ -160,6 +161,7 @@ export class RegistryReplicationAdapter implements IRegistryReplicationPort {
       .select({
         id: schema.dataSources.id,
         appName: schema.dataSources.appName,
+        vendorTenantId: schema.dataSources.vendorTenantId,
         metadata: schema.dataSources.metadata,
       })
       .from(schema.dataSources)
@@ -176,5 +178,12 @@ export class RegistryReplicationAdapter implements IRegistryReplicationPort {
       .update(globalRegistryOutbox)
       .set({ status: "SUCCESS" })
       .where(eq(globalRegistryOutbox.id, outboxId));
+  }
+
+  async markConnectionStatus(tenantId: string, connectionId: string, status: string): Promise<void> {
+    await this.globalDb
+      .update(schema.credentials)
+      .set({ status: status as any })
+      .where(eq(schema.credentials.dataSourceId, connectionId));
   }
 }

@@ -1,7 +1,7 @@
 /**
  * upgrade-existing-schemas.mjs
  *
- * Upgrades all existing NAMESPACE_ONLY connection schemas to NORMALIZE_ACTIVE
+ * Upgrades all existing NAMESPACE_ONLY connection schemas to STANDARD_ACTIVE
  * (L1→L3 pipeline tables), aligning them with the new provisioning contract
  * where L1-L3 is provisioned at connection creation time.
  *
@@ -49,7 +49,7 @@ await catalogClient.connect();
 // Fetch all connections that need upgrading
 const { rows: connections } = await catalogClient.query(
   `SELECT id, app_name, schema_name, schema_plan FROM data_source WHERE schema_plan = ANY($1)`,
-  [['NAMESPACE_ONLY', 'NORMALIZE_ACTIVE']]
+  [['NAMESPACE_ONLY', 'STANDARD_ACTIVE']]
 );
 
 if (connections.length === 0) {
@@ -59,7 +59,7 @@ if (connections.length === 0) {
 }
 
 
-console.log(`Upgrading ${connections.length} connection schema(s) to OUTBOUND_ACTIVE...\n`);
+console.log(`Upgrading ${connections.length} connection schema(s) to STANDARD_ACTIVE...\n`);
 
 // Helper function to safely quote schema-qualified identifiers
 function schemaTable(schema, table) {
@@ -322,11 +322,11 @@ for (const conn of connections) {
 
     // 8. Update schemaPlan in data_source
     await catalogClient.query(
-      `UPDATE data_source SET schema_plan = 'OUTBOUND_ACTIVE' WHERE id = $1`,
+      `UPDATE data_source SET schema_plan = 'STANDARD_ACTIVE' WHERE id = $1`,
       [id]
     );
 
-    console.log(`    ✓ Provisioned ${schemaName} to OUTBOUND_ACTIVE`);
+    console.log(`    ✓ Provisioned ${schemaName} to STANDARD_ACTIVE`);
   } catch (err) {
     console.error(`    ✗ Failed: ${err.message}`);
   }

@@ -49,8 +49,9 @@ export class ReplicaOutboxPoller {
 
             for (const connection of connections) {
               const schemaName = getWorkspaceSchemaName(
-                connection.id,
+                connection.tenantId,
                 connection.appName,
+                connection.vendorTenantId as string,
               );
               await this.executeSafeSchemaOperation(
                 tenant.tenantId,

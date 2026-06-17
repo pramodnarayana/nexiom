@@ -1,12 +1,12 @@
 import { Logger } from '@nestjs/common';
 import type { AppConnectionRepositoryPort } from '../ports/outbound/app-connection-repository.port.js';
-import type { TenantSchemaPort } from '../ports/outbound/tenant-schema.port.js';
+import type { ConnectionLifecyclePort } from '../ports/outbound/connection-lifecycle.port.js';
 import type { StoreOAuthConnectionOptions } from '../types/connection.types.js';
 
 export class StoreOAuthConnectionUseCase {
   constructor(
     private readonly appConnectionRepository: AppConnectionRepositoryPort,
-    private readonly tenantSchemaPort: TenantSchemaPort,
+    private readonly connectionLifecyclePort: ConnectionLifecyclePort,
     private readonly defaultRegionContext?: string,
   ) {}
 
@@ -34,8 +34,8 @@ export class StoreOAuthConnectionUseCase {
         regionContext: finalRegionContext || 'unknown',
       });
 
-    // 2. Provision Namespace via TenantSchemaPort
-    await this.tenantSchemaPort.provisionNamespace(
+    // 2. Activate connection and enqueue provisioning
+    await this.connectionLifecyclePort.activateAndProvision(
       options.tenantId,
       provisionInfo,
       options.providerName,
