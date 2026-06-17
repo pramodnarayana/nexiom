@@ -36,6 +36,7 @@ export class TenantOffboardingService {
         id: dataSources.id,
         appName: dataSources.appName,
         vendorTenantId: dataSources.vendorTenantId,
+        schemaName: dataSources.schemaName,
       })
       .from(dataSources)
       .where(eq(dataSources.tenantId, tenantId));
@@ -45,22 +46,25 @@ export class TenantOffboardingService {
     } else {
       // Best-effort schema cleanup - idempotent and safe to retry
       for (const currConnection of connections) {
-        if (
-          !currConnection.vendorTenantId ||
-          currConnection.vendorTenantId.trim() === ''
-        ) {
-          this.logger.warn(
-            `Skipping schema cleanup for connection ${currConnection.id}: vendorTenantId is missing or blank`,
-          );
-          continue;
-        }
+        let dataNamespace = currConnection.schemaName;
 
-        // Compute the deterministic schema name using the shared helper
-        const dataNamespace = getWorkspaceSchemaName(
-          tenantId,
-          currConnection.appName,
-          currConnection.vendorTenantId,
-        );
+        if (!dataNamespace) {
+          if (
+            !currConnection.vendorTenantId ||
+            currConnection.vendorTenantId.trim() === ''
+          ) {
+            this.logger.warn(
+              `Skipping schema cleanup for connection ${currConnection.id}: schemaName and vendorTenantId are missing`,
+            );
+            continue;
+          }
+
+          dataNamespace = getWorkspaceSchemaName(
+            tenantId,
+            currConnection.appName,
+            currConnection.vendorTenantId,
+          );
+        }
 
         this.logger.log(`Safely dropping physical schema: ${dataNamespace}`);
         try {

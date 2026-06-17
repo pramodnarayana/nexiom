@@ -111,6 +111,13 @@ export class DrizzleConnectionLifecycleAdapter implements ConnectionLifecyclePor
               )
               .returning();
 
+            if (!failedConn) {
+              this.logger.warn(
+                `Could not find connection ${workspaceProvisionInfo.dataSourceId} to rollback status`,
+              );
+              return;
+            }
+
             await tx
               .update(credentials)
               .set({ status: AppConnectionStatus.FAILED })

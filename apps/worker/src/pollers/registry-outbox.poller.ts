@@ -55,7 +55,7 @@ export class RegistryOutboxPoller {
             };
             const type = (outboxRow.entityType ||
               outboxRow.entity_type) as string;
-            if (this.logger.isLevelEnabled?.("debug")) {
+            if (Logger.isLevelEnabled?.("debug")) {
               this.logger.debug(
                 `OUTBOX ROW IN POLLER: ${JSON.stringify(outboxRow)}`,
               );
