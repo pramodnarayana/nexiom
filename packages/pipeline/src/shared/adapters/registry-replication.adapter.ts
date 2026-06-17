@@ -74,18 +74,25 @@ export class RegistryReplicationAdapter implements IRegistryReplicationPort {
 
   async replicateEntity(
     tenantId: string,
-    action: "UPSERT" | "DELETE",
+    action: "UPSERT" | "DELETE" | "APPLY",
     entityType:
       | "APP_CONNECTION"
       | "UI_WORKSPACE"
       | "INTEGRATION_STITCH"
-      | "FIELD_MAPPING",
+      | "FIELD_MAPPING"
+      | "SCHEMA_PROVISION",
     entityId: string,
     payload: Record<string, unknown> | null,
   ): Promise<void> {
     const tenantDb = await this.dbManager.getTenantDb(tenantId);
 
     await tenantDb.transaction(async (tx) => {
+      if (action === "APPLY" || entityType === "SCHEMA_PROVISION") {
+        throw new Error(
+          `Unhandled action and entityType combination: action=${action}, entityType=${entityType}`
+        );
+      }
+
       if (action === "UPSERT") {
         if (!payload) {
           throw new Error(
@@ -160,6 +167,7 @@ export class RegistryReplicationAdapter implements IRegistryReplicationPort {
       .select({
         id: schema.dataSources.id,
         appName: schema.dataSources.appName,
+        vendorTenantId: schema.dataSources.vendorTenantId,
         metadata: schema.dataSources.metadata,
       })
       .from(schema.dataSources)
@@ -176,5 +184,30 @@ export class RegistryReplicationAdapter implements IRegistryReplicationPort {
       .update(globalRegistryOutbox)
       .set({ status: "SUCCESS" })
       .where(eq(globalRegistryOutbox.id, outboxId));
+  }
+
+  async markConnectionStatus(tenantId: string, connectionId: string, status: 'ACTIVE' | 'INACTIVE' | 'EXPIRED' | 'REVOKED' | 'PROVISIONING' | 'FAILED'): Promise<void> {
+    // Verify the connection belongs to the tenant before updating credentials
+    const [dataSource] = await this.globalDb
+      .select({ id: schema.dataSources.id })
+      .from(schema.dataSources)
+      .where(
+        and(
+          eq(schema.dataSources.id, connectionId),
+          eq(schema.dataSources.tenantId, tenantId),
+        ),
+      )
+      .limit(1);
+
+    if (!dataSource) {
+      throw new Error(
+        `Connection ${connectionId} not found or does not belong to tenant ${tenantId}`,
+      );
+    }
+
+    await this.globalDb
+      .update(schema.credentials)
+      .set({ status })
+      .where(eq(schema.credentials.dataSourceId, connectionId));
   }
 }

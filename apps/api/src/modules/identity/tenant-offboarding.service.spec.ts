@@ -62,7 +62,9 @@ describe('TenantOffboardingService', () => {
 
   it('should perform hard deletion of schemas and logical cascade', async () => {
     // First query: get connections for tenant
-    db.where.mockResolvedValueOnce([{ id: 'conn-1', appName: 'testapp' }]);
+    db.where.mockResolvedValueOnce([
+      { id: 'conn-1', appName: 'testapp', vendorTenantId: 'vendor-tenant-123' },
+    ]);
 
     await service.offboardTenant('test-tenant');
 
@@ -88,7 +90,9 @@ describe('TenantOffboardingService', () => {
 
   it('should handle schema drop errors gracefully without halting', async () => {
     // First query: get connections for tenant
-    db.where.mockResolvedValueOnce([{ id: 'conn-1', appName: 'testapp' }]);
+    db.where.mockResolvedValueOnce([
+      { id: 'conn-1', appName: 'testapp', vendorTenantId: 'vendor-tenant-123' },
+    ]);
 
     db.execute.mockRejectedValueOnce(new Error('PG Connection Dead'));
 
@@ -129,8 +133,8 @@ describe('TenantOffboardingService', () => {
   it('should handle tenant with multiple connections', async () => {
     // First query: get connections for tenant - return multiple connections
     db.where.mockResolvedValueOnce([
-      { id: 'conn-1', appName: 'app1' },
-      { id: 'conn-2', appName: 'app2' },
+      { id: 'conn-1', appName: 'app1', vendorTenantId: 'vendor-tenant-123' },
+      { id: 'conn-2', appName: 'app2', vendorTenantId: 'vendor-tenant-123' },
     ]);
 
     await service.offboardTenant('test-tenant');
@@ -144,8 +148,8 @@ describe('TenantOffboardingService', () => {
   it('should deterministically drop schemas for all returned connections', async () => {
     // First query: get connections for tenant
     db.where.mockResolvedValueOnce([
-      { id: 'conn-1', appName: 'app1' },
-      { id: 'conn-2', appName: 'app2' },
+      { id: 'conn-1', appName: 'app1', vendorTenantId: 'vendor-tenant-123' },
+      { id: 'conn-2', appName: 'app2', vendorTenantId: 'vendor-tenant-123' },
     ]);
 
     // Should resolve without throwing
@@ -160,8 +164,12 @@ describe('TenantOffboardingService', () => {
   it('should normalize mixed-case provider names when building schema names', async () => {
     // First query: get connections for tenant - include a mixed-case appName
     db.where.mockResolvedValueOnce([
-      { id: 'conn-1', appName: 'app1' },
-      { id: 'conn-2', appName: 'SalesForce-API' },
+      { id: 'conn-1', appName: 'app1', vendorTenantId: 'vendor-tenant-123' },
+      {
+        id: 'conn-2',
+        appName: 'SalesForce-API',
+        vendorTenantId: 'vendor-tenant-123',
+      },
     ]);
 
     // Should resolve without throwing
@@ -175,8 +183,9 @@ describe('TenantOffboardingService', () => {
     // Import the schema helper to compute the expected normalized schema name
     const { getWorkspaceSchemaName } = await import('@soopa/dbmanager');
     const expectedSchemaName = getWorkspaceSchemaName(
-      'conn-2',
+      'test-tenant',
       'SalesForce-API',
+      'vendor-tenant-123',
     );
 
     // Assert that at least one db.execute call contains the normalized schema prefix for SalesForce-API

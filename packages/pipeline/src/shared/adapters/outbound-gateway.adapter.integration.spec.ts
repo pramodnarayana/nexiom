@@ -27,7 +27,7 @@ describe("OutboundGatewayAdapter", () => {
 
   beforeEach(async () => {
     currentSchemaName = "ws_" + uuidv4().replace(/-/g, "");
-    await dbManager.applyPlan(tenantId, currentSchemaName, SchemaPlan.OUTBOUND_ACTIVE, {
+    await dbManager.applyPlan(tenantId, currentSchemaName, SchemaPlan.STANDARD_ACTIVE, {
       appName: "test_app",
       appProfile: "standard",
     });

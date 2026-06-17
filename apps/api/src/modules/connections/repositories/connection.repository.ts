@@ -92,6 +92,19 @@ export class ConnectionRepository extends BaseRepository<typeof dataSources> {
     return result[0] || null;
   }
 
+  async updateDisplayName(
+    id: string,
+    tenantId: string,
+    displayName: string,
+    ctx?: RepositoryContext,
+  ): Promise<void> {
+    const exec = this.getExecutor(ctx);
+    await exec
+      .update(dataSources)
+      .set({ displayName, updatedAt: new Date() })
+      .where(and(eq(dataSources.id, id), eq(dataSources.tenantId, tenantId)));
+  }
+
   async findActiveWithCredentialsByTenant(
     tenantId: string,
     limit: number,

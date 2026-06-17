@@ -16,7 +16,7 @@ import { buildTenantSchema, assertValidSchemaName } from '@soopa/database';
 import { TokenManagerService } from '@soopa/credentials';
 import type { OAuthCredentialBlob } from '@soopa/credentials';
 import type { Piece } from '@soopa/piece-framework';
-import { DB_MANAGER, type DatabaseManager } from '@soopa/dbmanager';
+import { DB_MANAGER, SchemaPlan, type DatabaseManager } from '@soopa/dbmanager';
 import { REDIS_CLIENT, type Redis } from '@soopa/cache';
 import {
   StorageResolverService,
@@ -134,6 +134,25 @@ export class ConnectionSyncRunner {
 
     // Resolve the piece
     const piece = this.resolvePiece(conn.appName);
+
+    // Just-In-Time Provisioning (Approach 2)
+    // Provision the plugin-specific canonical entity tables for this app right before syncing.
+    // Standard tables were already created at connection time.
+    const schemaName =
+      await this.storageResolver.resolveSchemaName(connectionId);
+    const metadataAppProfile = (conn.metadata as Record<string, unknown>)
+      ?.appProfile;
+    const appProfile =
+      typeof metadataAppProfile === 'string' ? metadataAppProfile : 'standard';
+    await this.dbManager.applyPlan(
+      conn.orgId,
+      schemaName,
+      SchemaPlan.CANONICAL_ACTIVE,
+      {
+        appName: conn.appName,
+        appProfile,
+      },
+    );
 
     // Get ALL streams for the connection if objectType is not provided
     let streams: StreamDescriptor[] = [];
@@ -368,6 +387,7 @@ export class ConnectionSyncRunner {
         id: dataSources.id,
         appName: dataSources.appName,
         orgId: dataSources.tenantId,
+        metadata: dataSources.metadata,
       })
       .from(dataSources)
       .where(eq(dataSources.id, dataSourceId))

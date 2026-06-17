@@ -9,9 +9,10 @@ import { Logger } from "@nestjs/common";
 export interface ProcessOutboxUseCaseConfig {
   maxAttempts: number;
   batchSize: number;
-  queueName: QueueName;
+  queueName: QueueName | ((row: OutboxRow) => QueueName);
   payloadMapper?: (row: OutboxRow) => unknown;
   markSuccessImmediately?: boolean;
+  onPermanentFailure?: (row: OutboxRow, errorMessage: string) => Promise<void>;
 }
 
 export class ProcessOutboxUseCase {
@@ -32,8 +33,12 @@ export class ProcessOutboxUseCase {
 
     if (rows.length === 0) return;
 
+    const queueNameLog =
+      typeof this.config.queueName === "function"
+        ? "dynamic"
+        : this.config.queueName;
     this.logger.debug(
-      `[${schemaName}] Claimed ${rows.length} outbox rows for queue ${this.config.queueName}`,
+      `[${schemaName}] Claimed ${rows.length} outbox rows for queue ${queueNameLog}`,
     );
 
     const CONCURRENCY_LIMIT = 10;
@@ -56,7 +61,12 @@ export class ProcessOutboxUseCase {
         ? this.config.payloadMapper(row)
         : row.payload;
 
-      await this.queuePublisher.send(this.config.queueName, payload);
+      const targetQueue =
+        typeof this.config.queueName === "function"
+          ? this.config.queueName(row)
+          : this.config.queueName;
+
+      await this.queuePublisher.send(targetQueue, payload);
       published = true;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -71,8 +81,12 @@ export class ProcessOutboxUseCase {
           row.id,
           row.claimToken,
         );
+        const targetQueueLog =
+          typeof this.config.queueName === "function"
+            ? this.config.queueName(row)
+            : this.config.queueName;
         this.logger.debug(
-          `[${schemaName}] Delivered L${this.config.queueName} row=${row.id}`,
+          `[${schemaName}] Delivered L${targetQueueLog} row=${row.id}`,
         );
       } catch (dbErr) {
         const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
@@ -104,6 +118,16 @@ export class ProcessOutboxUseCase {
         this.logger.error(
           `[${schemaName}] Outbox delivery permanently failed for row id=${row.id}: ${errorMessage}`,
         );
+
+        if (this.config.onPermanentFailure) {
+          try {
+            await this.config.onPermanentFailure(row, errorMessage);
+          } catch (hookErr) {
+            this.logger.error(
+              `[${schemaName}] onPermanentFailure hook failed for row id=${row.id}: ${hookErr instanceof Error ? hookErr.message : String(hookErr)}`,
+            );
+          }
+        }
       } else {
         const delayMs = Math.pow(2, attempts) * 1_000;
         const nextRetryAt = new Date(Date.now() + delayMs);

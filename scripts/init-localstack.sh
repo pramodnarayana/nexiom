@@ -20,6 +20,7 @@ QUEUES=(
   "active-fetch-queue"
   "ai-copilot-queue"
   "registry-replication-queue"
+  "schema-provision-queue"
   "plugin-install-queue"
 )
 

@@ -49,6 +49,7 @@ import { DeliveryRetryService } from "./delivery/delivery-retry.service.js";
 import { GemHydrationService } from "./delivery/gem-hydration.service.js";
 import { RegistryReplicationService } from "./replication/registry-replication.service.js";
 import { DependencySweeperService } from "./normalization/dependency-sweeper.service.js";
+import { SchemaProvisionWorker } from "./provisioning/schema-provision.worker.js";
 
 import { OutboundGatewayAdapter } from "./shared/adapters/outbound-gateway.adapter.js";
 import { RegistryReplicationAdapter } from "./shared/adapters/registry-replication.adapter.js";
@@ -136,6 +137,7 @@ import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-ca
     GemHydrationService,
     DependencySweeperService,
     RegistryReplicationService,
+    SchemaProvisionWorker,
     
     PipelineHookBrokerService,
     RegistryOAuthRefreshClient,
@@ -158,5 +160,6 @@ export class PipelineCoreModule {
   constructor(
     private readonly deliveryService: DeliveryService,
     private readonly registryReplicationService: RegistryReplicationService,
+    private readonly schemaProvisionWorker: SchemaProvisionWorker,
   ) {}
 }

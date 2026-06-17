@@ -25,13 +25,13 @@ import { ConnectionRepository } from './repositories/connection.repository.js';
 import { CredentialRepository } from './repositories/credential.repository.js';
 
 import type { AppConnectionRepositoryPort } from './core/ports/outbound/app-connection-repository.port.js';
-import type { TenantSchemaPort } from './core/ports/outbound/tenant-schema.port.js';
+import type { ConnectionLifecyclePort } from './core/ports/outbound/connection-lifecycle.port.js';
 import type { PieceRegistryPort } from './core/ports/outbound/piece-registry.port.js';
 import type { OAuthClientPort } from './core/ports/outbound/oauth-client.port.js';
 
 // --- Hexagonal Architecture Adapters ---
 import { DrizzleAppConnectionRepositoryAdapter } from './adapters/outbound/drizzle-app-connection.repository.js';
-import { DrizzleTenantSchemaAdapter } from './adapters/outbound/drizzle-tenant-schema.adapter.js';
+import { DrizzleConnectionLifecycleAdapter } from './adapters/outbound/drizzle-connection-lifecycle.adapter.js';
 import { HttpOAuthClientAdapter } from './adapters/outbound/http-oauth-client.adapter.js';
 import { NestPieceRegistryAdapter } from './adapters/outbound/nest-piece-registry.adapter.js';
 import { PipelineStorageResolverAdapter } from './adapters/outbound/pipeline-storage-resolver.adapter.js';
@@ -85,7 +85,7 @@ import { DeleteConnectionUseCase } from './core/use-cases/delete-connection.use-
 
     // --- Adapters ---
     DrizzleAppConnectionRepositoryAdapter,
-    DrizzleTenantSchemaAdapter,
+    DrizzleConnectionLifecycleAdapter,
     HttpOAuthClientAdapter,
     NestPieceRegistryAdapter,
     PipelineStorageResolverAdapter,
@@ -95,17 +95,17 @@ import { DeleteConnectionUseCase } from './core/use-cases/delete-connection.use-
       provide: StoreOAuthConnectionUseCase,
       useFactory: (
         appConnectionRepo: AppConnectionRepositoryPort,
-        tenantSchemaAdapter: TenantSchemaPort,
+        connectionLifecycleAdapter: ConnectionLifecyclePort,
       ) => {
         return new StoreOAuthConnectionUseCase(
           appConnectionRepo,
-          tenantSchemaAdapter,
+          connectionLifecycleAdapter,
           process.env.DEFAULT_REGION_CONTEXT,
         );
       },
       inject: [
         DrizzleAppConnectionRepositoryAdapter,
-        DrizzleTenantSchemaAdapter,
+        DrizzleConnectionLifecycleAdapter,
       ],
     },
     {
@@ -144,10 +144,10 @@ import { DeleteConnectionUseCase } from './core/use-cases/delete-connection.use-
     },
     {
       provide: DeleteConnectionUseCase,
-      useFactory: (tenantSchemaAdapter: TenantSchemaPort) => {
-        return new DeleteConnectionUseCase(tenantSchemaAdapter);
+      useFactory: (connectionLifecycleAdapter: ConnectionLifecyclePort) => {
+        return new DeleteConnectionUseCase(connectionLifecycleAdapter);
       },
-      inject: [DrizzleTenantSchemaAdapter],
+      inject: [DrizzleConnectionLifecycleAdapter],
     },
   ],
   exports: [

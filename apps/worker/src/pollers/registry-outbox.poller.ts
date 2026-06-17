@@ -8,11 +8,13 @@ import {
 import { QueueName } from "@soopa/queue";
 
 import { ProcessOutboxUseCase } from "../core/use-cases/outbox/process-outbox.use-case.js";
+import { ENTITY_TYPE_CONFIG_MAP } from "./registry-outbox.routing.js";
 import {
   DrizzleOutboxRepositoryAdapter,
   type OutboxTableSchema,
 } from "../adapters/outbound/drizzle-outbox.repository.js";
 import { NestQueuePublisherAdapter } from "../adapters/outbound/nest-queue.publisher.js";
+import type { OutboxRow } from "../core/ports/outbound/outbox-repository.port.js";
 
 const BATCH_SIZE = 50;
 
@@ -46,9 +48,38 @@ export class RegistryOutboxPoller {
         {
           batchSize: BATCH_SIZE,
           maxAttempts: 6,
-          queueName: QueueName.RegistryReplicationQueue,
+          queueName: (row: OutboxRow) => {
+            const outboxRow = row as OutboxRow & {
+              entityType?: string;
+              entity_type?: string;
+            };
+            const type = (outboxRow.entityType ||
+              outboxRow.entity_type) as string;
+            if (Logger.isLevelEnabled?.("debug")) {
+              this.logger.debug(
+                `OUTBOX ROW IN POLLER: ${JSON.stringify(outboxRow)}`,
+              );
+              this.logger.debug(`RESOLVED TYPE: ${type}`);
+            }
+            return (
+              ENTITY_TYPE_CONFIG_MAP[type]?.queueName ||
+              QueueName.RegistryReplicationQueue
+            );
+          },
           payloadMapper: (row) => ({ outboxId: row.id }),
           markSuccessImmediately: false,
+          onPermanentFailure: async (row) => {
+            const outboxRow = row as OutboxRow & {
+              entityType?: string;
+              entity_type?: string;
+            };
+            const type = (outboxRow.entityType ||
+              outboxRow.entity_type) as string;
+            const handler = ENTITY_TYPE_CONFIG_MAP[type]?.onPermanentFailure;
+            if (handler) {
+              await handler(row, this.globalDb);
+            }
+          },
         },
       );
 

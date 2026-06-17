@@ -1,9 +1,8 @@
 import type { NormalizerFn, NormalizedRecord } from '@soopa/piece-framework';
 
-import fs from 'node:fs';
-import path from 'node:path';
 import jsonata from 'jsonata';
 import type { Expression } from 'jsonata';
+import { normalizeRevenovaToTmsMapping } from './normalizeRevenovaToTmsMapping.js';
 
 // ---------------------------------------------------------------------------
 // Revenova → TMS canonical normalizer (GitOps Mappings Phase 1)
@@ -18,9 +17,7 @@ let expression: Expression | null = null;
 let compilationError: Error | null = null;
 
 try {
-    const mappingFilePath = path.resolve(__dirname, '../mappings/normalizeRevenovaToTms.jsonata');
-    const expressionSource = fs.readFileSync(mappingFilePath, 'utf8');
-    expression = jsonata(expressionSource);
+    expression = jsonata(normalizeRevenovaToTmsMapping);
 } catch (err) {
     compilationError = err instanceof Error ? err : new Error(String(err));
     console.error('[normalizeRevenovaToTms] Failed to load or compile JSONata mapping:', compilationError);

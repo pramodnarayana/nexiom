@@ -1,6 +1,6 @@
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and, isNotNull, ne } from "drizzle-orm";
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -45,12 +45,28 @@ export class ReplicaOutboxPoller {
             const connections = await this.globalDb
               .select()
               .from(dataSources)
-              .where(eq(dataSources.tenantId, tenant.tenantId));
+              .where(
+                and(
+                  eq(dataSources.tenantId, tenant.tenantId),
+                  isNotNull(dataSources.vendorTenantId),
+                  ne(dataSources.vendorTenantId, ""),
+                ),
+              );
 
             for (const connection of connections) {
+              if (
+                !connection.vendorTenantId ||
+                connection.vendorTenantId.trim() === ""
+              ) {
+                this.logger.warn(
+                  `Skipping connection ${connection.id} due to missing or blank vendorTenantId`,
+                );
+                continue;
+              }
               const schemaName = getWorkspaceSchemaName(
-                connection.id,
+                connection.tenantId,
                 connection.appName,
+                connection.vendorTenantId,
               );
               await this.executeSafeSchemaOperation(
                 tenant.tenantId,

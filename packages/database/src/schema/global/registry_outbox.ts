@@ -16,6 +16,7 @@ import type { OutboxStatus } from '../tenant/pipeline.js';
 export const registryOutboxActionEnum = pgEnum('registry_outbox_action_enum', [
     'UPSERT',
     'DELETE',
+    'APPLY',
 ]);
 
 export const registryOutboxEntityEnum = pgEnum('registry_outbox_entity_enum', [
@@ -23,6 +24,7 @@ export const registryOutboxEntityEnum = pgEnum('registry_outbox_entity_enum', [
     'UI_WORKSPACE',
     'INTEGRATION_STITCH',
     'FIELD_MAPPING',
+    'SCHEMA_PROVISION',
 ]);
 
 /**

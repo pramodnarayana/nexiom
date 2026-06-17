@@ -22,7 +22,7 @@ export function register(): Piece {
     frameworkApi.registerNormalizer('salesforce', 'revenova', normalizeRevenovaToTms);
     frameworkApi.registerNormalizedWriter('salesforce', 'revenova', domainTmsApi.tmsNormalizedWriter);
     frameworkApi.registerTargetBuilder('salesforce', 'revenova', domainTmsApi.tmsTargetBuilder);
-    frameworkApi.registerDomainProvisioner('salesforce', (db, schemaName) =>
+    frameworkApi.registerDomainProvisioner('salesforce-revenova', (db, schemaName) =>
         domainTmsApi.provisionTmsTables(db as AppsConnectorDb, schemaName)
     );
 

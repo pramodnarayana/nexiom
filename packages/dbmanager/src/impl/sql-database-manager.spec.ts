@@ -45,8 +45,8 @@ describe('SqlDatabaseManager', () => {
         expect(db._queryMock.mock.calls[0][0]).toContain('CREATE SCHEMA IF NOT EXISTS');
     });
 
-    it('GATEWAY_ACTIVE calls CREATE SCHEMA + gateway DDL', async () => {
-        await manager.applyPlan('ws_test', SchemaPlan.GATEWAY_ACTIVE);
+    it('STANDARD_ACTIVE calls CREATE SCHEMA + gateway DDL', async () => {
+        await manager.applyPlan('ws_test', SchemaPlan.STANDARD_ACTIVE);
 
         // 1 CREATE SCHEMA + 3 rename checks + 4 inbound_gateway (CREATE TABLE + RENAME + 2 ADD COLUMN)
         // + 3 indexes (ext_id, object_type, status) + DROP idx_l1_payload_gin + CREATE idx_l1_request_gin
@@ -66,31 +66,31 @@ describe('SqlDatabaseManager', () => {
         expect(allSql).toContain('idx_inbound_outbox_claim');
         expect(allSql).toContain('idx_inbound_outbox_trace');
         // Snapshot the count to catch unintentional DDL additions
-        expect(count).toMatchSnapshot('GATEWAY_ACTIVE DDL count');
+        expect(count).toMatchSnapshot('STANDARD_ACTIVE DDL count');
     });
 
-    it('REPLICA_ACTIVE calls schema + gateway + replica DDL', async () => {
-        await manager.applyPlan('ws_test', SchemaPlan.REPLICA_ACTIVE);
+    it('STANDARD_ACTIVE calls schema + gateway + replica DDL', async () => {
+        await manager.applyPlan('ws_test', SchemaPlan.STANDARD_ACTIVE);
 
         const allSql = db._queryMock.mock.calls.map((c: any[]) => String(c[0])).join('\n');
         expect(allSql).toContain('inbound_gateway');
         expect(allSql).toContain('replica_entity');
         expect(allSql).toContain('sync_cursor');
         expect(allSql).toContain('replica_outbox');
-        expect(db._queryMock.mock.calls.length).toMatchSnapshot('REPLICA_ACTIVE DDL count');
+        expect(db._queryMock.mock.calls.length).toMatchSnapshot('STANDARD_ACTIVE DDL count');
     });
 
-    it('NORMALIZE_ACTIVE calls schema + gateway + replica + normalize DDL', async () => {
-        await manager.applyPlan('ws_test', SchemaPlan.NORMALIZE_ACTIVE);
+    it('STANDARD_ACTIVE calls schema + gateway + replica + normalize DDL', async () => {
+        await manager.applyPlan('ws_test', SchemaPlan.STANDARD_ACTIVE);
 
         const allSql = db._queryMock.mock.calls.map((c: any[]) => String(c[0])).join('\n');
         expect(allSql).toContain('normalized_entity');
         expect(allSql).toContain('normalized_outbox');
-        expect(db._queryMock.mock.calls.length).toMatchSnapshot('NORMALIZE_ACTIVE DDL count');
+        expect(db._queryMock.mock.calls.length).toMatchSnapshot('STANDARD_ACTIVE DDL count');
     });
 
-    it('OUTBOUND_ACTIVE calls all five provisioning stages', async () => {
-        await manager.applyPlan('ws_test', SchemaPlan.OUTBOUND_ACTIVE, { appName: 'test', appProfile: 'test' });
+    it('STANDARD_ACTIVE calls all five provisioning stages', async () => {
+        await manager.applyPlan('ws_test', SchemaPlan.STANDARD_ACTIVE, { appName: 'test', appProfile: 'test' });
 
         const allSql = db._queryMock.mock.calls.map((c: any[]) => String(c[0])).join('\n');
 
@@ -105,6 +105,6 @@ describe('SqlDatabaseManager', () => {
         expect(allSql).toContain('replica_outbox');
         expect(allSql).toContain('outbound_outbox');
         expect(allSql).toContain('attempts');
-        expect(db._queryMock.mock.calls.length).toMatchSnapshot('OUTBOUND_ACTIVE DDL count');
+        expect(db._queryMock.mock.calls.length).toMatchSnapshot('STANDARD_ACTIVE DDL count');
     });
 });

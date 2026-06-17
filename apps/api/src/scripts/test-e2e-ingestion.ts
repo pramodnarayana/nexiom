@@ -5,6 +5,7 @@ interface ConnectionRow {
   id: string;
   workspace_id: string;
   app_name: string;
+  vendor_tenant_id: string;
   metadata: Record<string, any> | null;
 }
 
@@ -56,10 +57,13 @@ async function run() {
   try {
     // Find any active connection for testing
     const res = await pool.query(`
-            SELECT id, workspace_id, app_name, metadata
+            SELECT id, workspace_id, app_name, metadata, vendor_tenant_id
             FROM app_connection
             WHERE status = 'ACTIVE'
             AND app_name = 'salesforce'
+            AND vendor_tenant_id IS NOT NULL
+            AND vendor_tenant_id != ''
+            AND TRIM(vendor_tenant_id) != ''
             ORDER BY id ASC
             LIMIT 1
         `);
@@ -129,7 +133,11 @@ async function run() {
     console.log('⏳ Polling for pipeline completion (L2/L3)...');
 
     // Let's check the database schema
-    const schemaName = getWorkspaceSchemaName(conn.id, conn.app_name);
+    const schemaName = getWorkspaceSchemaName(
+      conn.workspace_id,
+      conn.app_name,
+      conn.vendor_tenant_id,
+    );
 
     console.log(`🔍 Inspecting Tenant Schema: ${schemaName}`);
 

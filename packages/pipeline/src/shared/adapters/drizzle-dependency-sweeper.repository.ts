@@ -24,6 +24,7 @@ export class DrizzleDependencySweeperRepositoryAdapter implements DependencySwee
         id: dataSources.id,
         appName: dataSources.appName,
         tenantId: dataSources.tenantId,
+        vendorTenantId: dataSources.vendorTenantId,
         schemaName: dataSources.schemaName,
       })
       .from(dataSources)
@@ -34,7 +35,7 @@ export class DrizzleDependencySweeperRepositoryAdapter implements DependencySwee
       .where(
         and(
           eq(integrationStitches.status, "ACTIVE"),
-          sql`${dataSources.schemaPlan} IN ('OUTBOUND_ACTIVE', 'GATEWAY_ACTIVE', 'NORMALIZE_ACTIVE')`,
+          sql`${dataSources.schemaPlan} IN ('STANDARD_ACTIVE', 'CANONICAL_ACTIVE')`,
         ),
       );
   }

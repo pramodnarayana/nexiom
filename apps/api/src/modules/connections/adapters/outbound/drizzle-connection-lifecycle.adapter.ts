@@ -19,14 +19,14 @@ import type { DrizzleDb } from '@soopa/database';
 import { eq, and, or, sql } from 'drizzle-orm';
 import { DB_MANAGER, SchemaPlan } from '@soopa/dbmanager';
 import type { DatabaseManager } from '@soopa/dbmanager';
-import type { TenantSchemaPort } from '../../core/ports/outbound/tenant-schema.port.js';
+import type { ConnectionLifecyclePort } from '../../core/ports/outbound/connection-lifecycle.port.js';
 import type { ProvisionInfo } from '../../core/types/connection.types.js';
 import type { StorageResolverPort } from '../../core/ports/outbound/storage-resolver.port.js';
 import { PipelineStorageResolverAdapter } from './pipeline-storage-resolver.adapter.js';
 
 @Injectable()
-export class DrizzleTenantSchemaAdapter implements TenantSchemaPort {
-  private readonly logger = new Logger(DrizzleTenantSchemaAdapter.name);
+export class DrizzleConnectionLifecycleAdapter implements ConnectionLifecyclePort {
+  private readonly logger = new Logger(DrizzleConnectionLifecycleAdapter.name);
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
@@ -35,7 +35,7 @@ export class DrizzleTenantSchemaAdapter implements TenantSchemaPort {
     private readonly storageResolver: StorageResolverPort,
   ) {}
 
-  async provisionNamespace(
+  async activateAndProvision(
     tenantId: string,
     workspaceProvisionInfo: ProvisionInfo,
     providerName: string,
@@ -46,26 +46,27 @@ export class DrizzleTenantSchemaAdapter implements TenantSchemaPort {
     }
 
     try {
-      await this.dbManager.applyPlan(
-        tenantId,
-        workspaceProvisionInfo.schemaName,
-        SchemaPlan.CANONICAL_ACTIVE,
-        {
-          appName: providerName,
-          appProfile: (metadata?.appProfile as string) || 'standard',
-        },
-      );
-
       await this.db.transaction(async (tx) => {
         const [activeConn] = await tx
           .update(dataSources)
-          .set({ schemaPlan: SchemaPlan.CANONICAL_ACTIVE })
-          .where(eq(dataSources.id, workspaceProvisionInfo.dataSourceId))
+          .set({ schemaPlan: SchemaPlan.STANDARD_ACTIVE })
+          .where(
+            and(
+              eq(dataSources.id, workspaceProvisionInfo.dataSourceId),
+              eq(dataSources.tenantId, tenantId),
+            ),
+          )
           .returning();
+
+        if (!activeConn) {
+          throw new InternalServerErrorException(
+            `Connection ${workspaceProvisionInfo.dataSourceId} not found or does not belong to tenant ${tenantId}`,
+          );
+        }
 
         await tx
           .update(credentials)
-          .set({ status: AppConnectionStatus.ACTIVE })
+          .set({ status: AppConnectionStatus.PROVISIONING })
           .where(
             eq(credentials.dataSourceId, workspaceProvisionInfo.dataSourceId),
           );
@@ -76,6 +77,19 @@ export class DrizzleTenantSchemaAdapter implements TenantSchemaPort {
           entityId: activeConn.id,
           action: 'UPSERT',
           payload: activeConn,
+        });
+
+        await tx.insert(globalRegistryOutbox).values({
+          tenantId: activeConn.tenantId,
+          entityType: 'SCHEMA_PROVISION',
+          entityId: activeConn.id,
+          action: 'APPLY',
+          payload: {
+            plan: SchemaPlan.STANDARD_ACTIVE,
+            schemaName: workspaceProvisionInfo.schemaName,
+            appName: providerName,
+            appProfile: (metadata?.appProfile as string) || 'standard',
+          },
         });
       });
     } catch (applyError) {
@@ -89,8 +103,20 @@ export class DrizzleTenantSchemaAdapter implements TenantSchemaPort {
             const [failedConn] = await tx
               .update(dataSources)
               .set({ updatedAt: new Date() })
-              .where(eq(dataSources.id, workspaceProvisionInfo.dataSourceId))
+              .where(
+                and(
+                  eq(dataSources.id, workspaceProvisionInfo.dataSourceId),
+                  eq(dataSources.tenantId, tenantId),
+                ),
+              )
               .returning();
+
+            if (!failedConn) {
+              this.logger.warn(
+                `Could not find connection ${workspaceProvisionInfo.dataSourceId} to rollback status`,
+              );
+              return;
+            }
 
             await tx
               .update(credentials)
@@ -132,15 +158,14 @@ export class DrizzleTenantSchemaAdapter implements TenantSchemaPort {
     }
   }
 
-  async teardownNamespace(
-    tenantId: string,
-    dataSourceId: string,
-  ): Promise<void> {
-    const lockKey = `${tenantId}:${dataSourceId}`;
-    const lockId = this.hashLockKey(lockKey);
+  async safeTeardown(tenantId: string, dataSourceId: string): Promise<void> {
+    const lockId1 = this.hashLockKey(tenantId);
+    const lockId2 = this.hashLockKey(dataSourceId);
 
     await this.db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockId})`);
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(${lockId1}, ${lockId2})`,
+      );
 
       const [lockedConn] = await tx
         .select({ id: dataSources.id })
@@ -239,8 +264,8 @@ export class DrizzleTenantSchemaAdapter implements TenantSchemaPort {
     for (let i = 0; i < key.length; i++) {
       const char = key.charCodeAt(i);
       hash = (hash << 5) - hash + char;
-      hash = hash | 0;
+      hash = hash | 0; // Convert to 32bit integer
     }
-    return Math.abs(hash);
+    return hash;
   }
 }

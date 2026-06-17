@@ -3,6 +3,7 @@ import { DependencySweeperService } from "./dependency-sweeper.service.js";
 import { QueueName } from "@soopa/queue";
 import { FakeDependencySweeperRepository } from "../shared/fakes/fake-dependency-sweeper.repository.js";
 import { v4 as uuidv4 } from "uuid";
+import { getWorkspaceSchemaName } from "@soopa/dbmanager";
 
 describe("DependencySweeperService (Unit)", () => {
   let service: DependencySweeperService;
@@ -30,6 +31,7 @@ describe("DependencySweeperService (Unit)", () => {
       id: uuidv4(),
       appName: "testApp",
       tenantId,
+      vendorTenantId: "vendor1",
       schemaName,
     });
     
@@ -77,6 +79,7 @@ describe("DependencySweeperService (Unit)", () => {
       id: uuidv4(),
       appName: "testApp",
       tenantId,
+      vendorTenantId: "vendor1",
       schemaName,
     });
     
@@ -109,6 +112,7 @@ describe("DependencySweeperService (Unit)", () => {
       id: uuidv4(),
       appName: "testApp",
       tenantId,
+      vendorTenantId: "vendor1",
       schemaName,
     });
     
@@ -144,6 +148,7 @@ describe("DependencySweeperService (Unit)", () => {
       id: uuidv4(),
       appName: "testApp",
       tenantId,
+      vendorTenantId: "vendor1",
       schemaName,
     });
     
@@ -173,8 +178,8 @@ describe("DependencySweeperService (Unit)", () => {
     
     // Two connections for same tenant
     repo.activeConnections.push(
-      { tenantId: 'tenant-1', id: 'conn-1', appName: 'app1', schemaName: 'ws_conn1' },
-      { tenantId: 'tenant-1', id: 'conn-2', appName: 'app2', schemaName: 'ws_conn2' }
+      { tenantId: 'tenant-1', id: 'conn-1', appName: 'app1', schemaName: 'ws_conn1', vendorTenantId: 'vendor1' },
+      { tenantId: 'tenant-1', id: 'conn-2', appName: 'app2', schemaName: 'ws_conn2', vendorTenantId: 'vendor1' }
     );
 
     // Both schemas return the same traceId
@@ -205,7 +210,7 @@ describe("DependencySweeperService (Unit)", () => {
   it('handles per-trace error without crashing tenant loop', async () => {
     repo.tenants.push({ tenantId: 'tenant-1' });
     repo.activeConnections.push(
-      { tenantId: 'tenant-1', id: 'conn-1', appName: 'app', schemaName: 'ws_conn1' },
+      { tenantId: 'tenant-1', id: 'conn-1', appName: 'app', schemaName: 'ws_conn1', vendorTenantId: 'vendor1' },
     );
 
     repo.deferredTraces.push(
@@ -234,8 +239,8 @@ describe("DependencySweeperService (Unit)", () => {
   it('handles per-connection error without crashing tenant loop', async () => {
     repo.tenants.push({ tenantId: 'tenant-1' });
     repo.activeConnections.push(
-      { tenantId: 'tenant-1', id: 'conn-bad', appName: 'app', schemaName: 'ws_bad' },
-      { tenantId: 'tenant-1', id: 'conn-good', appName: 'app', schemaName: 'ws_good' }
+      { tenantId: 'tenant-1', id: 'conn-bad', appName: 'app', schemaName: 'ws_bad', vendorTenantId: 'vendor1' },
+      { tenantId: 'tenant-1', id: 'conn-good', appName: 'app', schemaName: 'ws_good', vendorTenantId: 'vendor1' }
     );
 
     // Make getDeferredTraces fail for ws_bad
@@ -255,6 +260,44 @@ describe("DependencySweeperService (Unit)", () => {
     expect(queueService.send).toHaveBeenCalledTimes(1);
   });
 
+  it('falls back to vendor-qualified schema derivation when schemaName is missing', async () => {
+    repo.tenants.push({ tenantId: 'tenant-1' });
+    repo.activeConnections.push({
+      tenantId: 'tenant-1',
+      id: 'conn-1',
+      appName: 'app1',
+      schemaName: null as any,
+      vendorTenantId: 'vendor1',
+    });
+
+    const expectedSchema = getWorkspaceSchemaName('tenant-1', 'app1', 'vendor1');
+
+    vi.spyOn(repo, 'getDeferredTraces').mockResolvedValue([{ traceId: 'trace-1', routeId: 'rt-1' }]);
+    repo.replicaDataSources.push({ tenantId: 'tenant-1', schemaName: expectedSchema, traceId: 'trace-1', dataSourceId: 'ds-1' });
+
+    vi.spyOn(repo, 'claimDeferredTrace').mockResolvedValue(true);
+
+    await service.sweepDeferredDependencies();
+
+    expect(repo.claimDeferredTrace).toHaveBeenCalledWith('tenant-1', expectedSchema, 'trace-1', 'rt-1');
+    expect(queueService.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('handles invalid connection metadata gracefully during fallback schema derivation', async () => {
+    repo.tenants.push({ tenantId: 'tenant-1' });
+    repo.activeConnections.push({
+      tenantId: 'tenant-1',
+      id: 'conn-1',
+      appName: 'app1',
+      schemaName: null as any,
+      vendorTenantId: null as any,
+    });
+
+    // Should handle the error locally in the connection loop and not crash the tenant processing
+    await expect(service.sweepDeferredDependencies()).resolves.not.toThrow();
+    expect(queueService.send).not.toHaveBeenCalled();
+  });
+
   it('handles per-tenant error', async () => {
     repo.tenants.push(
       { tenantId: 'tenant-bad' },
@@ -262,8 +305,8 @@ describe("DependencySweeperService (Unit)", () => {
     );
     
     repo.activeConnections.push(
-      { tenantId: 'tenant-bad', id: 'conn-bad', appName: 'app', schemaName: 'ws_bad' },
-      { tenantId: 'tenant-good', id: 'conn-good', appName: 'app', schemaName: 'ws_good' }
+      { tenantId: 'tenant-bad', id: 'conn-bad', appName: 'app', schemaName: 'ws_bad', vendorTenantId: 'vendor1' },
+      { tenantId: 'tenant-good', id: 'conn-good', appName: 'app', schemaName: 'ws_good', vendorTenantId: 'vendor1' }
     );
 
     vi.spyOn(repo, 'getDeferredTraces').mockImplementation(async (tenantId, schema, older) => {

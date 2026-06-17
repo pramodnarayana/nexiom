@@ -208,22 +208,57 @@ export class TenantDatabaseManager implements DatabaseManager {
         return creationPromise;
     }
 
+    private async withSchemaLock<T>(tenantDb: DrizzleDb, schemaName: string, fn: () => Promise<T>): Promise<T> {
+        const db = tenantDb as any;
+        let lockClient: any = null;
+        
+        // Generate a 32-bit positive integer lock ID from the schema name
+        const lockId = Array.from(schemaName).reduce((hash, char) => {
+            return (hash << 5) - hash + char.charCodeAt(0);
+        }, 0) & 0x7FFFFFFF;
+
+        try {
+            if (db.$client?.connect) {
+                this.logger.debug(`Acquiring advisory lock for schema provisioning: ${schemaName}`);
+                lockClient = await db.$client.connect();
+                await lockClient.query(`SELECT pg_advisory_lock(${lockId})`);
+            }
+            return await fn();
+        } finally {
+            if (lockClient) {
+                try {
+                    await lockClient.query(`SELECT pg_advisory_unlock(${lockId})`);
+                } catch (unlockErr) {
+                    this.logger.warn?.(`Failed to unlock advisory lock for schema ${schemaName}: ${unlockErr instanceof Error ? unlockErr.message : String(unlockErr)}`);
+                } finally {
+                    lockClient.release();
+                    this.logger.debug(`Released advisory lock for schema: ${schemaName}`);
+                }
+            }
+        }
+    }
+
     /**
      * Idempotently bring the schema up to the desired plan level.
      */
     async applyPlan(tenantId: string, schemaName: string, plan: SchemaPlan, context?: { appName: string, appProfile: string }): Promise<void> {
         const tenantDb = await this.getTenantDb(tenantId);
         const sqlManager = new SqlDatabaseManager(tenantDb, this.logger, this.domainProvisionerResolver);
-        await sqlManager.applyPlan(schemaName, plan, context);
+        
+        await this.withSchemaLock(tenantDb, schemaName, async () => {
+            await sqlManager.applyPlan(schemaName, plan, context);
+        });
     }
 
     /**
-     * Migrates an existing tenant schema to OUTBOUND_ACTIVE state.
+     * Migrates an existing tenant schema to STANDARD_ACTIVE state.
      */
-    async migrateToOutboundActive(tenantId: string, schemaName: string, context?: { appName: string, appProfile: string }): Promise<void> {
+    async migrateToStandardActive(tenantId: string, schemaName: string): Promise<void> {
         const tenantDb = await this.getTenantDb(tenantId);
         const sqlManager = new SqlDatabaseManager(tenantDb, this.logger, this.domainProvisionerResolver);
-        await sqlManager.migrateToOutboundActive(schemaName, context);
+        await this.withSchemaLock(tenantDb, schemaName, async () => {
+            await sqlManager.migrateToStandardActive(schemaName);
+        });
     }
 
     /**

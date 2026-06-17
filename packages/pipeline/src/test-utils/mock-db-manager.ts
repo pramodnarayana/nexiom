@@ -15,9 +15,7 @@ export class MockDatabaseManager implements DatabaseManager {
         await this.sqlManager.applyPlan(schemaName, plan, context);
     }
 
-    async migrateToOutboundActive(tenantId: string, schemaName: string, context?: { appName: string, appProfile: string }): Promise<void> {
-        if (this.sqlManager.migrateToOutboundActive) {
-            await this.sqlManager.migrateToOutboundActive(schemaName, context);
-        }
+    async migrateToStandardActive(tenantId: string, schemaName: string): Promise<void> {
+        await this.sqlManager.migrateToStandardActive(schemaName);
     }
 }
