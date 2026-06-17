@@ -55,10 +55,12 @@ export class RegistryOutboxPoller {
             };
             const type = (outboxRow.entityType ||
               outboxRow.entity_type) as string;
-            this.logger.debug(
-              `OUTBOX ROW IN POLLER: ${JSON.stringify(outboxRow)}`,
-            );
-            this.logger.debug(`RESOLVED TYPE: ${type}`);
+            if (this.logger.isLevelEnabled?.("debug")) {
+              this.logger.debug(
+                `OUTBOX ROW IN POLLER: ${JSON.stringify(outboxRow)}`,
+              );
+              this.logger.debug(`RESOLVED TYPE: ${type}`);
+            }
             return (
               ENTITY_TYPE_CONFIG_MAP[type]?.queueName ||
               QueueName.RegistryReplicationQueue

@@ -58,6 +58,9 @@ export class ReplicaOutboxPoller {
                 !connection.vendorTenantId ||
                 connection.vendorTenantId.trim() === ""
               ) {
+                this.logger.warn(
+                  `Skipping connection ${connection.id} due to missing or blank vendorTenantId`,
+                );
                 continue;
               }
               const schemaName = getWorkspaceSchemaName(
