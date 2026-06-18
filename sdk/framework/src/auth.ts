@@ -44,6 +44,7 @@ export interface OAuth2Auth {
     tokenUrl: string;
     scope: string[];
     grantType?: OAuth2GrantType;
+    authorizationMethod?: 'body' | 'header';
     /**
      * Optional piece-level validation of the vendor token exchange response.
      * Called after a successful token exchange to verify vendor-specific required fields

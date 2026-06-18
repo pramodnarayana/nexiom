@@ -122,14 +122,8 @@ function validateVendorParams(
   vendorParams: Record<string, string> | undefined,
 ): void {
   const params = vendorParams ?? {};
-  const paramKeys = Object.keys(params);
 
   if (!schema) {
-    if (paramKeys.length > 0) {
-      throw new BadRequestException(
-        'No vendor parameters are allowed for this provider',
-      );
-    }
     return;
   }
 
@@ -148,9 +142,7 @@ function validateVendorParams(
 
   for (const [key, val] of Object.entries(params)) {
     if (!declaredKeys.has(key)) {
-      throw new BadRequestException(
-        `Undeclared vendor parameter: "${key}" is not allowed`,
-      );
+      continue;
     }
     assertPropValue(key, val, schema[key]);
   }
@@ -430,6 +422,8 @@ export class OAuthController {
     }
     let externalId = toKebabSlug(body.providerName, trimmedDisplayName);
     let preservedOrganizationId: string | undefined = undefined;
+    let existingClientId: string | undefined = undefined;
+    let existingClientSecret: string | undefined = undefined;
     if (body.dataSourceId) {
       try {
         const existing = await this.connectionRepository.findByIdAndTenant(
@@ -446,6 +440,27 @@ export class OAuthController {
         externalId = existing.externalId;
         if (existing.organizationId) {
           preservedOrganizationId = existing.organizationId;
+        }
+
+        try {
+          const creds =
+            await this.connectionRepository.getConnectionCredentials(
+              body.dataSourceId,
+              tenantId,
+            );
+          if (creds && creds.value) {
+            const decryptedValue = await this.crypto.decrypt(creds.value);
+            const parsedValue = JSON.parse(decryptedValue) as {
+              clientId?: string;
+              clientSecret?: string;
+            };
+            existingClientId = parsedValue.clientId;
+            existingClientSecret = parsedValue.clientSecret;
+          }
+        } catch (e) {
+          this.logger.warn(
+            `Failed to parse existing connection value to extract credentials for reconnect: ${e}`,
+          );
         }
         this.logger.log(
           `[OAuth Exchange] Overriding externalId with existing: ${externalId}`,
@@ -494,7 +509,18 @@ export class OAuthController {
     );
 
     let tokens: Record<string, unknown>;
+    let finalClientId: string | undefined;
+    let finalClientSecret: string | undefined;
     try {
+      finalClientId = body.clientId || existingClientId;
+      finalClientSecret = body.clientSecret || existingClientSecret;
+
+      if (!finalClientId || !finalClientSecret) {
+        throw new BadRequestException(
+          `Cannot reconnect: Client ID or Client Secret is missing. The existing credentials could not be decrypted. Please recreate the connection.`,
+        );
+      }
+
       const stringifiedVendorParams = Object.fromEntries(
         Object.entries(vendorParams).map(([k, v]) => [k, String(v)]),
       );
@@ -502,8 +528,8 @@ export class OAuthController {
       tokens = await this.exchangeOAuthTokenUseCase.execute(
         body.providerName,
         body.code,
-        body.clientId ?? '',
-        body.clientSecret ?? '',
+        finalClientId,
+        finalClientSecret,
         stringifiedVendorParams,
       );
     } catch (err: unknown) {
@@ -519,6 +545,11 @@ export class OAuthController {
           status = (err as { status: number }).status;
         }
       }
+
+      this.logger.error(
+        `Failed to exchange code with ${body.providerName}. Status: ${status}. Message: ${message}`,
+        err instanceof Error ? err.stack : undefined,
+      );
 
       if (status === 400)
         throw new BadRequestException(
@@ -540,15 +571,16 @@ export class OAuthController {
     const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
 
     const valueBlob: Record<string, any> = {
-      clientId: body.clientId,
-      clientSecret: body.clientSecret,
-      access_token: tokens.access_token as string,
+      clientId: finalClientId,
+      clientSecret: finalClientSecret,
+      accessToken: tokens.access_token as string,
+      data: tokens,
       vendorParams,
     };
 
     const refreshToken = extractRefreshToken(tokens);
     if (refreshToken) {
-      valueBlob.refresh_token = refreshToken;
+      valueBlob.refreshToken = refreshToken;
     }
 
     // Keep verified metadata as authoritative, only add appProfile if not already set

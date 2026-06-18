@@ -26,6 +26,7 @@ export const quickbooksAuth = PieceAuth.OAuth2({
     authUrl: 'https://appcenter.intuit.com/connect/oauth2',
     tokenUrl: 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer',
     scope: ['com.intuit.quickbooks.accounting'],
+    authorizationMethod: 'header',
     extractOrganizationId: (tokens: Record<string, unknown>) => {
         const realmId = typeof tokens.realmId === 'string' && tokens.realmId.trim().length > 0 
             ? tokens.realmId 

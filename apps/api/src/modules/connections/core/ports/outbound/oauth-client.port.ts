@@ -9,5 +9,6 @@ export interface OAuthClientPort {
     clientSecret: string,
     code: string,
     providerName: string,
+    authorizationMethod?: 'body' | 'header',
   ): Promise<Record<string, unknown>>;
 }
