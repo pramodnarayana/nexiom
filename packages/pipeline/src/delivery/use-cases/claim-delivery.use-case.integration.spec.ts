@@ -32,7 +32,7 @@ describe("ClaimDeliveryUseCase", () => {
     hydratedPayload: { data: 1 },
     canonicalType: "Contact",
     srcAppName: "App",
-    srcTenantId: TENANT_ID,
+    srcOrganizationId: TENANT_ID,
     start: Date.now(),
     writeL6ResultFn: vi.fn().mockResolvedValue(true),
   };
@@ -58,7 +58,7 @@ describe("ClaimDeliveryUseCase", () => {
         env_type text NOT NULL DEFAULT 'PRODUCTION',
         created_at timestamptz NOT NULL DEFAULT now(),
         updated_at timestamptz NOT NULL DEFAULT now(),
-        vendor_tenant_id varchar(255),
+        organization_id varchar(255),
         schema_name varchar(100),
         last_scheduled_at timestamptz
       )

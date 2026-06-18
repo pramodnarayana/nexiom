@@ -22,11 +22,11 @@ export class GemHydrationService {
         traceId: params.traceId,
         routeId: params.routeId,
         sourceAppName: params.srcAppName,
-        sourceEntityId: params.srcVendorId,
+        sourceEntityId: params.srcEntityId,
         destAppName: params.targetAppName,
-        destEntityId: params.destVendorId,
+        destEntityId: params.destEntityId,
       },
-      `Successfully wrote GEM linkage: ${params.srcAppName}[${params.srcVendorId}] -> ${params.targetAppName}[${params.destVendorId}]`,
+      `Successfully wrote GEM linkage: ${params.srcAppName}[${params.srcEntityId}] -> ${params.targetAppName}[${params.destEntityId}]`,
     );
   }
 }

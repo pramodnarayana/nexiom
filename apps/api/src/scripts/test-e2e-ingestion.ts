@@ -108,7 +108,7 @@ async function run() {
     console.log(
       `🚀 Sending mock webhook payload (L1) with testRunId=${testRunId}...`,
     );
-    const webhookUrl = `http://localhost:3000/v1/webhooks/${conn.id}`;
+    const webhookUrl = `http://localhost:3000/ent1/webhooks/${conn.id}`;
 
     const response = await fetch(webhookUrl, {
       method: 'POST',

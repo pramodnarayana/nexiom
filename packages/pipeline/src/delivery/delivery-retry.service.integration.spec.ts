@@ -35,7 +35,7 @@ describe("DeliveryRetryService", () => {
     outboundGatewayRepository = {
       fetchOutboundGatewayResult: vi.fn().mockResolvedValue({
         response: { id: "res1" },
-        destVendorId: "vend1",
+        destEntityId: "org1",
         attempts: 1,
         statusCode: 200,
       }),
@@ -78,7 +78,7 @@ describe("DeliveryRetryService", () => {
   });
 
   describe("retrySourceFinalization", () => {
-    it("should retry and invoke writeL6Result with correct destVendorId", async () => {
+    it("should retry and invoke writeL6Result with correct destEntityId", async () => {
       const result = await service.retrySourceFinalization(
         "destSchema",
         "srcSchema",
@@ -92,7 +92,7 @@ describe("DeliveryRetryService", () => {
         "Contact",
         "srcApp",
         "srcTenant",
-        "srcVendor",
+        "srcEntity",
         12345,
         "tenant1"
       );
@@ -126,14 +126,14 @@ describe("DeliveryRetryService", () => {
         200, // statusCode
         "SUCCESS", // finalStatus
         12345, // start
-        "vend1", // destVendorId
+        "org1", // destEntityId
         "Contact", // canonicalType
         "srcApp",
         "srcTenant",
-        "srcVendor",
+        "srcEntity",
         "tgtConn",
         "App", // targetAppName
-        "tenant1", // targetTenantId
+        "tenant1", // targetOrganizationId
         "Contact", // targetObject
         "tenant1" // tenantId
       );
@@ -158,7 +158,7 @@ describe("DeliveryRetryService", () => {
           "Contact",
           "srcApp",
           "srcTenant",
-          "srcVendor",
+          "srcEntity",
           12345,
           "tenant1"
         )

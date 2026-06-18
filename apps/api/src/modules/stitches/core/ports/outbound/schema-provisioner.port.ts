@@ -9,7 +9,7 @@ export interface SchemaProvisionerPort {
     orgId: string,
     destDataSourceId: string,
     destAppName: string,
-    destVendorTenantId: string,
+    destOrganizationId: string,
     destAppProfile?: string,
   ): Promise<void>;
 }

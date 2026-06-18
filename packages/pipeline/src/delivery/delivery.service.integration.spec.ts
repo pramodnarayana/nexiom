@@ -97,7 +97,7 @@ describe("DeliveryService", () => {
         tenantId: currentWorkspaceId,
         tenantDb: testDbManager.db!,
         targetAppName: "test",
-        targetTenantId: "tenant_2",
+        targetOrganizationId: "tenant_2",
       }),
     };
 
@@ -249,14 +249,14 @@ describe("DeliveryService", () => {
         500, // statusCode
         "SUCCESS", // finalStatus
         Date.now(), // start
-        undefined, // destVendorId
+        undefined, // destEntityId
         "RAW", // canonicalType
         "app", // srcAppName
-        currentWorkspaceId, // srcTenantId
-        undefined, // srcVendorId
+        currentWorkspaceId, // srcOrganizationId
+        undefined, // srcEntityId
         "tgt", // targetConnectionId
         undefined, // targetAppName
-        undefined, // targetTenantId
+        undefined, // targetOrganizationId
         undefined, // targetObject
         currentWorkspaceId, // tenantId
       );
@@ -279,11 +279,11 @@ describe("DeliveryService", () => {
         200,
         "SUCCESS",
         Date.now(),
-        "destVendorId",
+        "destEntityId",
         "RAW",
         "app",
         currentWorkspaceId,
-        "srcVendorId",
+        "srcEntityId",
         "tgt",
         "targetApp",
         "targetTenant",

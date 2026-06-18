@@ -234,8 +234,8 @@ export class CredentialController {
         createdAt: conn.createdAt,
         updatedAt: conn.updatedAt,
         hasCredentials,
-        vendorTenantId: conn.vendorTenantId,
-        webhookUrl: `${apiUrl}/v1/webhooks/${conn.id}`,
+        organizationId: conn.organizationId,
+        webhookUrl: `${apiUrl}/ent1/webhooks/${conn.id}`,
       };
     });
 

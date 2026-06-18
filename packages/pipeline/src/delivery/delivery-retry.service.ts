@@ -81,9 +81,9 @@ export class DeliveryRetryService {
     finalStatus: "SUCCESS" | "FAIL",
     defaultStatusCode: number,
     canonicalType: string,
-    srcAppName: string,
-    srcTenantId: string,
-    srcVendorId: string | undefined,
+    srcAppName: string | undefined,
+    srcOrganizationId: string | undefined,
+    srcEntityId: string | undefined,
     start: number,
     tenantId: string,
   ): Promise<boolean> {
@@ -103,7 +103,7 @@ export class DeliveryRetryService {
     );
 
     const targetAppName = connRows?.appName;
-    const targetTenantId = connRows?.tenantId;
+    const targetOrganizationId = connRows?.organizationId ?? undefined;
 
     const stitch = await this.stitchRepository.findById(tenantId, routeId);
     const targetObject = stitch?.targetObject ?? "";
@@ -112,7 +112,7 @@ export class DeliveryRetryService {
       string,
       unknown
     > | null;
-    const destVendorId = existingResult.destVendorId ?? undefined;
+    const destEntityId = existingResult.destEntityId ?? undefined;
 
     return await this.deliveryService.writeL6Result(
       destSchemaName,
@@ -127,14 +127,14 @@ export class DeliveryRetryService {
       existingResult.statusCode ?? defaultStatusCode,
       finalStatus,
       start,
-      destVendorId,
+      destEntityId,
       canonicalType,
       srcAppName,
-      srcTenantId,
-      srcVendorId,
+      srcOrganizationId,
+      srcEntityId,
       targetConnectionId,
       targetAppName,
-      targetTenantId,
+      targetOrganizationId,
       targetObject,
       tenantId,
     );

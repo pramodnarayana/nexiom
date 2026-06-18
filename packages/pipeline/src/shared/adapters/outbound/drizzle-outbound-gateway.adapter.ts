@@ -186,7 +186,7 @@ export class DrizzleOutboundGatewayRepositoryAdapter implements OutboundGatewayR
     statusCode: number,
     responsePayload: Record<string, unknown> | null,
     sentPayload: Record<string, unknown> | null,
-    destVendorId?: string,
+    destEntityId?: string,
     replicaUpdate?: {
       traceId: string;
       dataSourceId: string;
@@ -206,15 +206,15 @@ export class DrizzleOutboundGatewayRepositoryAdapter implements OutboundGatewayR
         SET status = ${status},
             status_code = ${statusCode},
             response = ${responsePayload ? JSON.stringify(responsePayload) : null},
-            dest_vendor_id = ${destVendorId ?? null},
+            dest_vendor_id = ${destEntityId ?? null},
             updated_at = NOW()
         WHERE id = ${outboundGatewayId} AND attempts = ${attemptCount}
       `);
 
-      if (replicaUpdate && destVendorId && status === "SUCCESS") {
+      if (replicaUpdate && destEntityId && status === "SUCCESS") {
         await destTx.execute(sql`
           INSERT INTO replica_entity (trace_id, data_source_id, entity_type, entity_id, data, created_at, updated_at)
-          VALUES (${replicaUpdate.traceId}, ${replicaUpdate.dataSourceId}, ${replicaUpdate.targetObject}, ${destVendorId}, ${sentPayload ? JSON.stringify(sentPayload) : null}, NOW(), NOW())
+          VALUES (${replicaUpdate.traceId}, ${replicaUpdate.dataSourceId}, ${replicaUpdate.targetObject}, ${destEntityId}, ${sentPayload ? JSON.stringify(sentPayload) : null}, NOW(), NOW())
           ON CONFLICT (data_source_id, entity_type, entity_id)
           DO UPDATE SET
             data = ${sentPayload ? JSON.stringify(sentPayload) : null},
@@ -233,7 +233,7 @@ export class DrizzleOutboundGatewayRepositoryAdapter implements OutboundGatewayR
     attempts: number;
     statusCode: number | null;
     response: Record<string, unknown> | null;
-    destVendorId: string | null;
+    destEntityId: string | null;
   } | null> {
     const tenantDb = await this.dbManager.getTenantDb(tenantId);
 
@@ -263,7 +263,7 @@ export class DrizzleOutboundGatewayRepositoryAdapter implements OutboundGatewayR
         attempts: result.rows[0].attempts,
         statusCode: result.rows[0].status_code,
         response: result.rows[0].response,
-        destVendorId: result.rows[0].dest_vendor_id,
+        destEntityId: result.rows[0].dest_vendor_id,
       };
     });
   }

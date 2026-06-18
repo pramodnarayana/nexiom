@@ -129,7 +129,7 @@ describe('SystemAdminController', () => {
 
   describe('createSystemInvitation', () => {
     it('should create system invitation', async () => {
-      const mockInvitation = { id: 'inv1', email: 'test@example.com' };
+      const mockInvitation = { id: 'inent1', email: 'test@example.com' };
       mockAuthProvider.createInvitation.mockResolvedValue(mockInvitation);
       mockRoleProvider.findById.mockResolvedValue({ id: 'owner-role-id' });
 

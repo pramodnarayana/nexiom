@@ -8,6 +8,7 @@ import {
 } from 'class-validator';
 
 import { VALID_PROVIDER_NAME_REGEX } from './constants.js';
+import { IsVendorConfig } from './vendor-config.validator.js';
 
 export class ExchangeOAuthCode {
   @IsString()
@@ -44,7 +45,7 @@ export class ExchangeOAuthCode {
 
   @IsOptional()
   @IsString()
-  vendorTenantId?: string;
+  organizationId?: string;
 
   @IsOptional()
   @IsString()
@@ -55,4 +56,8 @@ export class ExchangeOAuthCode {
       'appProfile must contain only lowercase letters, numbers, and hyphens, and start with a letter or number',
   })
   appProfile?: string;
+
+  @IsOptional()
+  @IsVendorConfig()
+  vendorParams?: Record<string, string | boolean | number>;
 }

@@ -152,7 +152,7 @@ export class DrizzleStitchRepositoryAdapter implements StitchRepositoryPort {
     return {
       stitch,
       destConnAppName: destConn.appName,
-      destVendorTenantId: destConn.vendorTenantId,
+      destOrganizationId: destConn.organizationId,
       destAppProfile:
         destConn.metadata &&
         typeof destConn.metadata === 'object' &&

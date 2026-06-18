@@ -6,21 +6,21 @@ import { createHash } from 'node:crypto';
  *
  * @param tenantId The UUID of the tenant
  * @param appName The provider/app name (e.g., "salesforce", "quickbooks")
- * @param vendorTenantId The unique identifier of the 3rd party account (e.g. Realm ID, Org ID)
+ * @param organizationId The unique identifier of the 3rd party account (e.g. Realm ID, Org ID)
  * @returns The isolated schema name (e.g., "ws_salesforce_8f3a9b...")
  */
 export function getWorkspaceSchemaName(
   tenantId: string,
   appName: string,
-  vendorTenantId: string,
+  organizationId: string,
 ): string {
-  if (!vendorTenantId || vendorTenantId.trim() === '') {
+  if (!organizationId || organizationId.trim() === '') {
     throw new Error(
-      `vendorTenantId is strictly required to generate a workspace schema name for ${appName}. The provider must return a unique tenant identifier.`,
+      `organizationId is strictly required to generate a workspace schema name for ${appName}. The provider must return a unique tenant identifier.`,
     );
   }
 
-  const deterministicKey = `${tenantId}-${vendorTenantId}`;
+  const deterministicKey = `${tenantId}-${organizationId}`;
 
   const hashedSuffix = createHash('sha256')
     .update(deterministicKey)

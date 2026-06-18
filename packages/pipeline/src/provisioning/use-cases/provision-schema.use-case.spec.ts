@@ -15,7 +15,7 @@ describe('ProvisionSchemaUseCase', () => {
       replicateEntity: vi.fn(),
       markGlobalOutboxSuccess: vi.fn(),
       getStitchDataSources: vi.fn(),
-      markConnectionStatus: vi.fn(),
+      activateConnection: vi.fn(),
     };
     
     dbManager = {
@@ -57,6 +57,7 @@ describe('ProvisionSchemaUseCase', () => {
       SchemaPlan.STANDARD_ACTIVE,
       { appName: 'test-app', appProfile: 'test-profile' }
     );
+    expect(registryPort.activateConnection).toHaveBeenCalledWith('tenant-1', 'conn-1', SchemaPlan.STANDARD_ACTIVE);
     expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalledWith('123');
   });
 

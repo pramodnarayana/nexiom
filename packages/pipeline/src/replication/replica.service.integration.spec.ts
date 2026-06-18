@@ -97,7 +97,7 @@ describe("ReplicaService", () => {
       tenantId: currentWorkspaceId,
       appName: "mock-app",
       metadata,
-      vendorTenantId: "v1"
+      organizationId: "org1"
     });
   };
 

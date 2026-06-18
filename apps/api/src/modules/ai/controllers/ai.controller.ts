@@ -36,7 +36,7 @@ export class AiController {
   }
 
   /**
-   * POST /api/v1/ai/chat
+   * POST /api/ent1/ai/chat
    *
    * Accepts the standard Vercel AI SDK `messages` array from the frontend
    * `useChat` hook. Resolves the tenant's active OAuth connections, builds a
@@ -104,7 +104,7 @@ export class AiController {
   }
 
   /**
-   * GET /api/v1/ai/conversations
+   * GET /api/ent1/ai/conversations
    * Retrieves all historical conversations for the current tenant.
    */
   @Get('conversations')
@@ -123,7 +123,7 @@ export class AiController {
   }
 
   /**
-   * GET /api/v1/ai/conversations/:id/messages
+   * GET /api/ent1/ai/conversations/:id/messages
    * Retrieves the full human-readable lineage of a specific conversation.
    */
   @Get('conversations/:id/messages')

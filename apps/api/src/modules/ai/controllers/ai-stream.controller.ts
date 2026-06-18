@@ -17,7 +17,7 @@ export class AiStreamController {
   }
 
   /**
-   * GET /api/v1/ai/jobs/:jobId/stream
+   * GET /api/ent1/ai/jobs/:jobId/stream
    *
    * Subscribes to the async CopilotWorker's Redis channel for this specific job
    * and pushes Vercel AI streaming chunks directly to the frontend via SSE.

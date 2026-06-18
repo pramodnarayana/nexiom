@@ -74,7 +74,7 @@ export interface OutboundGatewayRepositoryPort {
     statusCode: number,
     responsePayload: Record<string, unknown> | null,
     sentPayload: Record<string, unknown> | null,
-    destVendorId?: string,
+    destEntityId?: string,
     replicaUpdate?: {
       traceId: string;
       dataSourceId: string;
@@ -93,7 +93,7 @@ export interface OutboundGatewayRepositoryPort {
     attempts: number;
     statusCode: number | null;
     response: Record<string, unknown> | null;
-    destVendorId: string | null;
+    destEntityId: string | null;
   } | null>;
 }
 

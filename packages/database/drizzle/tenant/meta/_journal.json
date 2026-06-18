@@ -92,6 +92,13 @@
       "when": 1781111559194,
       "tag": "0012_military_black_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1781757761808,
+      "tag": "0013_bright_molten_man",
+      "breakpoints": true
     }
   ]
 }

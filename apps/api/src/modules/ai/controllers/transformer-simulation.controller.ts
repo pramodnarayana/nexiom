@@ -48,7 +48,7 @@ export class TransformerSimulationController {
   }
 
   /**
-   * POST /api/v1/ai/transformer/simulate
+   * POST /api/ent1/ai/transformer/simulate
    *
    * Provides administrators and developers an enterprise testing harness to
    * verify live canonical transformations without spending LLM tokens.

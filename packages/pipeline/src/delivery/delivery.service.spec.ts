@@ -64,10 +64,10 @@ describe('DeliveryService', () => {
     destDataSourceId: 'ds-2',
     routeId: 'rt-1',
     hydratedPayload: { foo: 'bar' },
-    srcVendorId: 'vend-1',
+    srcEntityId: 'ent-1',
     canonicalType: 'Contact',
     srcAppName: 'salesforce',
-    srcTenantId: 'ten-1',
+    srcOrganizationId: 'ten-1',
   };
 
   it('initializes queue consumer on module init', () => {
@@ -113,7 +113,7 @@ describe('DeliveryService', () => {
       attemptCount: 1,
       tenantId: 'ten-1',
       targetAppName: 'quickbooks',
-      targetTenantId: 'ten-1',
+      targetOrganizationId: 'ten-1',
     });
 
     await expect((serviceWithoutTokenManager as any).processMessage(validMsg)).rejects.toThrow('TokenManagerService unavailable');
@@ -128,7 +128,7 @@ describe('DeliveryService', () => {
       attemptCount: 1,
       tenantId: 'ten-1',
       targetAppName: 'quickbooks',
-      targetTenantId: 'ten-1',
+      targetOrganizationId: 'ten-1',
     });
 
     tokenManagerService.getValidCredentials.mockResolvedValue({ accessToken: 'abc' } as any);
@@ -139,7 +139,7 @@ describe('DeliveryService', () => {
       retry: false,
       body: {},
       sentPayload: { foo: 'bar' },
-      entityId: 'qb-vend-1',
+      entityId: 'qb-ent-1',
     });
 
     const writeL6Spy = vi.spyOn(service, 'writeL6Result');
@@ -154,8 +154,8 @@ describe('DeliveryService', () => {
 
     expect(writeL6Spy).toHaveBeenCalled();
     expect(gemService.writeGemMapping).toHaveBeenCalledWith('ten-1', expect.objectContaining({
-      srcVendorId: 'vend-1',
-      destVendorId: 'qb-vend-1',
+      srcEntityId: 'ent-1',
+      destEntityId: 'qb-ent-1',
     }));
     
     // Checks that the result was recorded in destination schema
@@ -172,7 +172,7 @@ describe('DeliveryService', () => {
       attemptCount: 1,
       tenantId: 'ten-1',
       targetAppName: 'quickbooks',
-      targetTenantId: 'ten-1',
+      targetOrganizationId: 'ten-1',
     });
 
     tokenManagerService.getValidCredentials.mockResolvedValue({ accessToken: 'abc' } as any);
@@ -199,11 +199,11 @@ describe('DeliveryService', () => {
       attemptCount: 1,
       tenantId: 'ten-1',
       targetAppName: 'quickbooks',
-      targetTenantId: 'ten-1',
+      targetOrganizationId: 'ten-1',
     });
 
     tokenManagerService.getValidCredentials.mockResolvedValue({ accessToken: 'abc' } as any);
-    outboundDispatcher.dispatch.mockResolvedValue({ statusCode: 200, retry: false, entityId: 'qb-vend-1', body: {} });
+    outboundDispatcher.dispatch.mockResolvedValue({ statusCode: 200, retry: false, entityId: 'qb-ent-1', body: {} });
 
     // Make GEM writing fail to trigger source commit failure
     gemService.writeGemMapping.mockRejectedValue(new Error('DB connection lost'));

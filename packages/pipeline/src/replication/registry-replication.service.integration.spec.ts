@@ -201,10 +201,10 @@ describe("RegistryReplicationService", () => {
       {
         id: ds1Id,
         appName: "mock_app",
-        vendorTenantId: "vendor1",
+        organizationId: "org1",
         metadata: { appProfile: "standard" },
       },
-      { id: ds2Id, appName: "hubspot", vendorTenantId: "vendor1", metadata: { appProfile: "default" } },
+      { id: ds2Id, appName: "hubspot", organizationId: "org1", metadata: { appProfile: "default" } },
     ]);
 
     service.onModuleInit();
@@ -222,11 +222,11 @@ describe("RegistryReplicationService", () => {
     expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalled();
 
     // Verify schemas were actually created in DB
-    const schema1 = getWorkspaceSchemaName(tenantId, "mock_app", "vendor1");
+    const schema1 = getWorkspaceSchemaName(tenantId, "mock_app", "org1");
     const res1 = await testDbManager.db!.execute(sql`SELECT schema_name FROM information_schema.schemata WHERE schema_name = ${schema1}`);
     expect(res1.rows.length).toBe(1);
     
-    const schema2 = getWorkspaceSchemaName(tenantId, "hubspot", "vendor1");
+    const schema2 = getWorkspaceSchemaName(tenantId, "hubspot", "org1");
     const res2 = await testDbManager.db!.execute(sql`SELECT schema_name FROM information_schema.schemata WHERE schema_name = ${schema2}`);
     expect(res2.rows.length).toBe(1);
   }, 30000);

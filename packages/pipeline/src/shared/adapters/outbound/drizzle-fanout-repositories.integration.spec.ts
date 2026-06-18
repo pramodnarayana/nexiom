@@ -67,7 +67,7 @@ describe("Fanout Drizzle Adapters", () => {
 
     connectionAdapter = new DrizzleConnectionRepositoryAdapter(testDbManager.db!, mockDbManager);
     fieldMappingAdapter = new DrizzleFieldMappingRepositoryAdapter(mockDbManager);
-    gemAdapter = new DrizzleGlobalEntityMapRepositoryAdapter(testDbManager.db!, mockDbManager);
+    gemAdapter = new DrizzleGlobalEntityMapRepositoryAdapter(mockDbManager as any);
     outboxAdapter = new DrizzleOutboundGatewayRepositoryAdapter(mockDbManager);
     stateAdapter = new DrizzlePipelineStateRepositoryAdapter(mockDbManager);
     stitchAdapter = new DrizzleSharedStitchRepositoryAdapter(mockDbManager);
@@ -245,7 +245,7 @@ describe("Fanout Drizzle Adapters", () => {
         destAppName: "test",
       });
 
-      const destId = await gemAdapter.getDestinationEntityId(stitchId, sourceDataSourceId, "ext-1");
+      const destId = await gemAdapter.getDestinationEntityId(currentTenantId, stitchId, sourceDataSourceId, "ext-1");
       expect(destId).toBe("ext-2");
     });
   });

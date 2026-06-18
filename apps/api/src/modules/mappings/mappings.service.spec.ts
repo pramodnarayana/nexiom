@@ -178,7 +178,7 @@ describe('MappingsService', () => {
       expect(result.appName).toBe('testapp');
     });
 
-    it('should default version to v1 if not provided on update', async () => {
+    it('should not update version if not provided on update', async () => {
       const dto = new UpdateMapping();
       // @ts-expect-error test mock
       vi.spyOn(service, 'findOne').mockResolvedValue({ id: '123' });
@@ -191,7 +191,26 @@ describe('MappingsService', () => {
       const result = await service.update('tenant1', '123', dto);
 
       expect(setSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ version: 'v1' }),
+        expect.not.objectContaining({ version: expect.anything() }),
+      );
+      expect(result.version).toBe('v1');
+    });
+
+    it('should not update version if provided as whitespace-only string', async () => {
+      const dto = new UpdateMapping();
+      dto.version = '   ';
+      // @ts-expect-error test mock
+      vi.spyOn(service, 'findOne').mockResolvedValue({ id: '123' });
+
+      const returningSpy = vi.fn().mockResolvedValue([{ version: 'v1' }]);
+      const whereSpy = vi.fn().mockReturnValue({ returning: returningSpy });
+      const setSpy = vi.fn().mockReturnValue({ where: whereSpy });
+      mockDb.update = vi.fn().mockReturnValue({ set: setSpy });
+
+      const result = await service.update('tenant1', '123', dto);
+
+      expect(setSpy).toHaveBeenCalledWith(
+        expect.not.objectContaining({ version: expect.anything() }),
       );
       expect(result.version).toBe('v1');
     });

@@ -2,6 +2,7 @@ export interface ConnectionMetadata {
   tenantId: string;
   appName: string;
   appProfile: string;
+  organizationId: string | null;
 }
 
 export interface ConnectionRepositoryPort {

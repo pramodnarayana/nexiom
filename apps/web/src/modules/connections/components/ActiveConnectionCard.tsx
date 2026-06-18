@@ -416,11 +416,11 @@ export function ActiveConnectionCard({ connection, provider, onDelete }: Readonl
                                 </code>
                             </div>
 
-                            {connection.vendorTenantId && (
+                            {connection.organizationId && (
                                 <div className="flex flex-col gap-1.5">
-                                    <span className="text-xs font-medium text-muted-foreground">Vendor Tenant ID (Realm / Org ID)</span>
+                                    <span className="text-xs font-medium text-muted-foreground">Organization ID</span>
                                     <code className="text-xs bg-secondary/50 p-2 rounded-md break-all border border-border/50">
-                                        {connection.vendorTenantId}
+                                        {connection.organizationId}
                                     </code>
                                 </div>
                             )}

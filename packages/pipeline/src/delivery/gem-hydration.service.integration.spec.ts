@@ -109,13 +109,13 @@ describe("GemHydrationService", () => {
       routeId,
       srcAppName: "MockApp",
       dataSourceId: srcDsId,
-      srcTenantId: tenantId,
+      srcOrganizationId: tenantId,
       canonicalType: "Contact",
-      srcVendorId: "v1",
+      srcEntityId: "ent1",
       targetAppName: "Hubspot",
       targetConnectionId: destDsId,
-      targetTenantId: "ten2",
-      destVendorId: "dv1",
+      targetOrganizationId: "ten2",
+      destEntityId: "dent1",
     };
 
     await service.writeGemMapping(tenantId, params);
@@ -128,8 +128,8 @@ describe("GemHydrationService", () => {
         .where(
           (t: any) =>
             t.stitchId === routeId &&
-            t.sourceEntityId === "v1" &&
-            t.destEntityId === "dv1"
+            t.sourceEntityId === "ent1" &&
+            t.destEntityId === "dent1"
         );
 
       expect(result1.length).toBe(1);
@@ -143,7 +143,7 @@ describe("GemHydrationService", () => {
     const updateParams: GemMappingParams = {
       ...params,
       traceId: newTraceId,
-      destVendorId: "dv2", // Updating the dest entity id
+      destEntityId: "dent2", // Updating the dest entity id
     };
 
     await service.writeGemMapping(tenantId, updateParams);
@@ -156,7 +156,7 @@ describe("GemHydrationService", () => {
         .where((t: any) => t.stitchId === routeId);
 
       expect(result2.length).toBe(1); // Should still be 1 row
-      expect(result2[0].destEntityId).toBe("dv2");
+      expect(result2[0].destEntityId).toBe("dent2");
       expect(result2[0].destTraceId).toBe(newTraceId);
     });
   }, 30000);

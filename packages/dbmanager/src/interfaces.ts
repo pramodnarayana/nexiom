@@ -23,6 +23,12 @@ export enum SchemaPlan {
      * Provisioned when delivery is activated for a connection.
      */
     STANDARD_ACTIVE = 'STANDARD_ACTIVE',
+
+    /**
+     * Represents a connection that is actively having its STANDARD tables provisioned
+     * in the background worker. Will transition to STANDARD_ACTIVE upon success.
+     */
+    STANDARD_PROVISIONING = 'STANDARD_PROVISIONING',
 }
 
 /**

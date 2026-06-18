@@ -31,6 +31,7 @@ export class DrizzleConnectionRepositoryAdapter implements ConnectionRepositoryP
         appName: dataSources.appName,
         tenantId: dataSources.tenantId,
         metadata: dataSources.metadata,
+        organizationId: dataSources.organizationId,
       })
       .from(dataSources)
       .where(eq(dataSources.id, dataSourceId))
@@ -48,6 +49,7 @@ export class DrizzleConnectionRepositoryAdapter implements ConnectionRepositoryP
       tenantId: srcConnRows[0].tenantId,
       appName: srcConnRows[0].appName,
       appProfile,
+      organizationId: srcConnRows[0].organizationId,
     };
   }
 }

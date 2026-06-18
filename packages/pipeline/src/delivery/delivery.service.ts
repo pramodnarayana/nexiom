@@ -101,14 +101,14 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     const hydratedPayload = msg.hydratedPayload as Record<string, unknown>;
 
     // GEM fields threaded from L4 FanOutService
-    const srcVendorId =
-      typeof msg.srcVendorId === "string" ? msg.srcVendorId : undefined;
+    const srcEntityId =
+      typeof msg.srcEntityId === "string" ? msg.srcEntityId : undefined;
     const canonicalType =
       typeof msg.canonicalType === "string" ? msg.canonicalType : "RAW";
     const srcAppName =
-      typeof msg.srcAppName === "string" ? msg.srcAppName : "unknown";
-    const srcTenantId =
-      typeof msg.srcTenantId === "string" ? msg.srcTenantId : "unknown";
+      typeof msg.srcAppName === "string" ? msg.srcAppName : undefined;
+    const srcOrganizationId =
+      typeof msg.srcOrganizationId === "string" ? msg.srcOrganizationId : undefined;
     const start = Date.now();
 
     this.logger.log(
@@ -133,10 +133,10 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         targetConnectionId,
         routeId,
         hydratedPayload,
-        srcVendorId,
+        srcEntityId,
         canonicalType,
         srcAppName,
-        srcTenantId,
+        srcOrganizationId,
         start,
         writeL6ResultFn: this.writeL6Result.bind(this),
       });
@@ -152,7 +152,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         srcSchemaName,
         tenantId,
         targetAppName,
-        targetTenantId,
+        targetOrganizationId,
       } = claimResult;
 
       if (!this.tokenManagerService) {
@@ -203,7 +203,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       );
 
       // ── TX-3 (L6): Write result, GEM upsert, sync_log ────────────────────
-      const destVendorId =
+      const destEntityId =
         finalStatus === "SUCCESS" ? dispatchResp?.entityId : undefined;
 
       sourceFinalized = await this.writeL6Result(
@@ -219,14 +219,14 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         statusCode,
         finalStatus,
         start,
-        destVendorId,
+        destEntityId,
         canonicalType,
         srcAppName,
-        srcTenantId,
-        srcVendorId,
+        srcOrganizationId,
+        srcEntityId,
         targetConnectionId,
         targetAppName,
-        targetTenantId,
+        targetOrganizationId,
         targetObject,
         tenantId,
       );
@@ -294,14 +294,14 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     statusCode: number,
     finalStatus: "SUCCESS" | "FAIL" | "RETRY",
     start: number,
-    destVendorId: string | undefined,
+    destEntityId: string | undefined,
     canonicalType: string,
-    srcAppName: string,
-    srcTenantId: string,
-    srcVendorId: string | undefined,
+    srcAppName: string | undefined,
+    srcOrganizationId: string | undefined,
+    srcEntityId: string | undefined,
     targetConnectionId: string,
     targetAppName: string | undefined,
-    targetTenantId: string | undefined,
+    targetOrganizationId: string | undefined,
     targetObject: string | undefined,
     tenantId: string,
   ): Promise<boolean> {
@@ -322,7 +322,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       statusCode,
       resPayload,
       sentPayload,
-      destVendorId,
+      destEntityId,
       replicaUpdate
         ? {
             traceId: replicaUpdate.traceId,
@@ -338,23 +338,25 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       // ── Write GEM (Control Plane) before source commit succeeds ──────────────
       if (
         finalStatus === "SUCCESS" &&
-        srcVendorId &&
-        destVendorId &&
+        srcEntityId &&
+        destEntityId &&
+        srcAppName &&
+        srcOrganizationId &&
         targetAppName &&
-        targetTenantId
+        targetOrganizationId
       ) {
         await this.gemService.writeGemMapping(tenantId, {
           traceId,
           routeId,
           srcAppName,
           dataSourceId,
-          srcTenantId,
+          srcOrganizationId,
           canonicalType,
-          srcVendorId,
+          srcEntityId,
           targetAppName,
           targetConnectionId,
-          targetTenantId,
-          destVendorId,
+          targetOrganizationId,
+          destEntityId,
         });
       }
 

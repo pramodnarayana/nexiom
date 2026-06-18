@@ -45,6 +45,7 @@ export class SqlDatabaseManager {
 
         const PLAN_TASKS: Record<SchemaPlan, ProvisioningTask[]> = {
             [SchemaPlan.NAMESPACE_ONLY]: ['namespace'],
+            [SchemaPlan.STANDARD_PROVISIONING]: ['namespace'],
             [SchemaPlan.STANDARD_ACTIVE]: ['namespace', 'gateway', 'replica', 'normalize', 'outbound'],
             [SchemaPlan.CANONICAL_ACTIVE]: ['namespace', 'canonical'],
         };

@@ -18,10 +18,10 @@ export interface ClaimDeliveryInput {
   targetConnectionId: string;
   routeId: string;
   hydratedPayload: Record<string, unknown>;
-  srcVendorId?: string;
+  srcEntityId?: string;
   canonicalType: string;
-  srcAppName: string;
-  srcTenantId: string;
+  srcAppName?: string;
+  srcOrganizationId?: string;
   start: number;
   writeL6ResultFn: (
     destSchemaName: string,
@@ -36,14 +36,14 @@ export interface ClaimDeliveryInput {
     statusCode: number,
     finalStatus: "SUCCESS" | "FAIL" | "RETRY",
     start: number,
-    destVendorId: string | undefined,
+    destEntityId: string | undefined,
     canonicalType: string,
-    srcAppName: string,
-    srcTenantId: string,
-    srcVendorId: string | undefined,
+    srcAppName: string | undefined,
+    srcOrganizationId: string | undefined,
+    srcEntityId: string | undefined,
     targetConnectionId: string,
     targetAppName: string | undefined,
-    targetTenantId: string | undefined,
+    targetOrganizationId: string | undefined,
     targetObject: string | undefined,
     tenantId: string,
   ) => Promise<boolean>;
@@ -58,7 +58,7 @@ export type ClaimDeliveryResult =
       attemptCount: number;
       tenantId: string;
       targetAppName: string;
-      targetTenantId: string;
+      targetOrganizationId?: string;
     }
   | { status: "TERMINATED" }; // For MAX_ATTEMPTS or Duplicates
 
@@ -83,10 +83,10 @@ export class ClaimDeliveryUseCase {
       targetConnectionId,
       routeId,
       hydratedPayload,
-      srcVendorId,
+      srcEntityId,
       canonicalType,
       srcAppName,
-      srcTenantId,
+      srcOrganizationId,
       start,
       writeL6ResultFn,
     } = input;
@@ -152,8 +152,8 @@ export class ClaimDeliveryUseCase {
         undefined,
         canonicalType,
         srcAppName,
-        srcTenantId,
-        srcVendorId,
+        srcOrganizationId,
+        srcEntityId,
         targetConnectionId,
         undefined,
         undefined,
@@ -217,8 +217,8 @@ export class ClaimDeliveryUseCase {
           200,
           canonicalType,
           srcAppName,
-          srcTenantId,
-          srcVendorId,
+          srcOrganizationId,
+          srcEntityId,
           start,
           tenantId,
         );
@@ -281,8 +281,8 @@ export class ClaimDeliveryUseCase {
           500,
           canonicalType,
           srcAppName,
-          srcTenantId,
-          srcVendorId,
+          srcOrganizationId,
+          srcEntityId,
           start,
           tenantId,
         );
@@ -314,7 +314,7 @@ export class ClaimDeliveryUseCase {
     }
 
     const targetAppName = connRows.appName;
-    const targetTenantId = connRows.tenantId;
+    const targetOrganizationId = connRows.organizationId ?? undefined;
 
     // ── TX-2: Atomic claim — transition PENDING/RETRY → PROCESSING ────────
     const claimRes = await this.outboundGatewayRepository.claimForProcessing(
@@ -344,7 +344,7 @@ export class ClaimDeliveryUseCase {
       attemptCount: claimRes.attemptCount,
       tenantId,
       targetAppName,
-      targetTenantId,
+      targetOrganizationId,
     };
   }
 }
