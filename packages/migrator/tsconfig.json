@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "baseUrl": ".",
+    "skipLibCheck": true,
+    "paths": {
+      "@soopa/*": ["../../packages/*/src", "../../plugins/*/src"]
+    }
+  },
+  "include": ["src/**/*"]
+}

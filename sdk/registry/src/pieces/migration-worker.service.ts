@@ -6,6 +6,7 @@ import { QUEUE_SERVICE, QueueName } from '@soopa/queue';
 import type { IQueueService, PluginMigrationEvent } from '@soopa/queue';
 import { DB_MANAGER } from '@soopa/dbmanager';
 import type { DatabaseManager } from '@soopa/dbmanager';
+import { MIGRATION_RUNNER, MigrationRunnerPort } from '@soopa/migrator';
 
 /**
  * Handles Just-In-Time provisioning of dynamically downloaded domain tables.
@@ -28,6 +29,7 @@ export class MigrationWorkerService implements OnModuleInit {
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
     @Inject(QUEUE_SERVICE) private readonly queueService: IQueueService,
+    @Inject(MIGRATION_RUNNER) private readonly migrator: MigrationRunnerPort,
   ) {}
 
   onModuleInit(): void {
@@ -104,7 +106,7 @@ export class MigrationWorkerService implements OnModuleInit {
 
     try {
       const tenantDb = await this.getTenantDbConnection(event.tenantId);
-      await migrate(tenantDb, { migrationsFolder });
+      await this.migrator.runMigrations(tenantDb, { migrationsFolder });
       this.logger.debug(
         `[Worker] Successfully migrated tenant: ${event.tenantId}`,
       );

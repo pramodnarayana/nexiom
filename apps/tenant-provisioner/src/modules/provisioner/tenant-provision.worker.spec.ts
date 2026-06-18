@@ -56,9 +56,12 @@ describe("TenantProvisionWorker", () => {
       consume: vi.fn(),
     };
 
+    const migratorMock = { runMigrations: vi.fn() };
+
     // Manually instantiate to avoid SWC decorator metadata issues in vitest
     worker = new TenantProvisionWorker(
       queueServiceMock as unknown as QueueService,
+      migratorMock as any,
     );
   });
 
@@ -68,7 +71,10 @@ describe("TenantProvisionWorker", () => {
     delete process.env.DATABASE_URL;
     expect(
       () =>
-        new TenantProvisionWorker(queueServiceMock as unknown as QueueService),
+        new TenantProvisionWorker(
+          queueServiceMock as unknown as QueueService,
+          { runMigrations: vi.fn() } as any,
+        ),
     ).toThrow("TenantProvisionWorker requires DATABASE_URL");
     // Restore for subsequent tests
     process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/testdb";
@@ -139,6 +145,7 @@ describe("TenantProvisionWorker", () => {
       vi.stubEnv("DATABASE_URL", "postgresql://user@localhost:5432/postgres");
       worker = new TenantProvisionWorker(
         queueServiceMock as unknown as QueueService,
+        { runMigrations: vi.fn() } as any,
       );
       worker.onModuleInit();
       handler = queueServiceMock.consume.mock.calls[1][1] as (
@@ -230,6 +237,7 @@ describe("TenantProvisionWorker", () => {
       process.env.DATABASE_URL = "postgresql://localhost:5432/testdb";
       worker = new TenantProvisionWorker(
         queueServiceMock as unknown as QueueService,
+        { runMigrations: vi.fn() } as any,
       );
       worker.onModuleInit();
       handler = queueServiceMock.consume.mock.calls[1][1] as (
