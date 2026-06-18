@@ -41,7 +41,7 @@ export class ProvisionSchemaUseCase {
 
       // Update connection status to ACTIVE now that schema is fully provisioned
       if (row.entityId) {
-        await this.registryPort.markConnectionStatus(row.tenantId, row.entityId, 'ACTIVE');
+        await this.registryPort.activateConnection(row.tenantId, row.entityId, payload.plan);
       }
 
       this.logger.debug(

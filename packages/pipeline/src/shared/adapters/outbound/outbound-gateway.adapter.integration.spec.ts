@@ -113,7 +113,7 @@ describe("OutboundGatewayAdapter", () => {
     const ob = await tenantDb.select().from(outboundGateway);
     expect(ob[0].status).toBe("SUCCESS");
     expect(ob[0].statusCode).toBe(201);
-    expect(ob[0].destVendorId).toBe("ext_123");
+    expect(ob[0].destEntityId).toBe("ext_123");
 
     const rep = await tenantDb.select().from(replicaEntity);
     expect(rep).toHaveLength(1);

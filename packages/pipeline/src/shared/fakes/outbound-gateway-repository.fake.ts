@@ -90,7 +90,7 @@ export class FakeOutboundGatewayRepository implements OutboundGatewayRepositoryP
     statusCode: number,
     responsePayload: Record<string, unknown> | null,
     sentPayload: Record<string, unknown> | null,
-    destVendorId?: string,
+    destEntityId?: string,
     replicaUpdate?: any
   ): Promise<void> {
     const rec = Array.from(this.data.values()).find(v => v.id === outboundGatewayId);
@@ -99,7 +99,7 @@ export class FakeOutboundGatewayRepository implements OutboundGatewayRepositoryP
       rec.statusCode = statusCode;
       rec.responsePayload = responsePayload;
       rec.sentPayload = sentPayload;
-      rec.destVendorId = destVendorId;
+      rec.destEntityId = destEntityId;
     } else {
       this.data.set(outboundGatewayId, {
         id: outboundGatewayId,
@@ -107,7 +107,7 @@ export class FakeOutboundGatewayRepository implements OutboundGatewayRepositoryP
         statusCode,
         responsePayload,
         sentPayload,
-        destVendorId
+        destEntityId
       });
     }
   }
@@ -123,7 +123,7 @@ export class FakeOutboundGatewayRepository implements OutboundGatewayRepositoryP
       attempts: rec.attempts || 1,
       statusCode: rec.statusCode || null,
       response: rec.responsePayload || null,
-      destVendorId: rec.destVendorId || null,
+      destEntityId: rec.destEntityId || null,
     };
   }
 }

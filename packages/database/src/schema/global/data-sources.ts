@@ -26,7 +26,7 @@ export const dataSources = pgTable('data_source', {
 
     // The stable physical identifier of the vendor tenant (e.g., Salesforce org ID, QuickBooks realmId).
     // This allows auto-linking new credentials to the same logical data source.
-    vendorTenantId: varchar('vendor_tenant_id', { length: 255 }),
+    organizationId: varchar('organization_id', { length: 255 }),
 
     // Plain-text metadata (e.g., instance_url, appProfile, environment labels)
     metadata: jsonb('metadata').default({}).notNull(),
@@ -51,7 +51,7 @@ export const dataSources = pgTable('data_source', {
     uniqueIndex('ds_tenant_app_display_name_lower_idx').on(table.tenantId, table.appName, sql`lower(${table.displayName})`),
     // Unique index to prevent two logical data sources from pointing to the exact same physical vendor instance
     // Note: NULLs are allowed (for apps that don't have a stable tenant ID) and are not considered equal by Postgres
-    uniqueIndex('ds_tenant_vendor_id_idx').on(table.tenantId, table.appName, table.envType, table.vendorTenantId),
+    uniqueIndex('ds_tenant_organization_id_idx').on(table.tenantId, table.appName, table.envType, table.organizationId),
 ]);
 
 export type InsertDataSource = typeof dataSources.$inferInsert;

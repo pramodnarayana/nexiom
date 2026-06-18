@@ -25,7 +25,7 @@ export interface StitchRepositoryPort {
   ): Promise<{
     stitch: unknown;
     destConnAppName: string;
-    destVendorTenantId: string | null;
+    destEntityanizationId: string | null;
     destAppProfile?: string;
   }>;
 

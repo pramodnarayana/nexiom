@@ -39,7 +39,7 @@ export class DependencySweeperService {
       // Group by tenantId for O(1) lookup inside the per-tenant loop
       const connectionsByTenant = new Map<
         string,
-        Array<{ id: string; appName: string; schemaName: string | null; vendorTenantId: string | null }>
+        Array<{ id: string; appName: string; schemaName: string | null; organizationId: string | null }>
       >();
       for (const conn of allConnections) {
         if (!connectionsByTenant.has(conn.tenantId)) {
@@ -49,7 +49,7 @@ export class DependencySweeperService {
           id: conn.id,
           appName: conn.appName,
           schemaName: conn.schemaName,
-          vendorTenantId: conn.vendorTenantId,
+          organizationId: conn.organizationId,
         });
       }
 
@@ -66,15 +66,15 @@ export class DependencySweeperService {
             let schemaName: string | undefined;
             try {
               // Use persisted schema name if available, otherwise compute
-              if (!conn.schemaName && (!conn.vendorTenantId || conn.vendorTenantId.trim() === "")) {
+              if (!conn.schemaName && (!conn.organizationId || conn.organizationId.trim() === "")) {
                 throw new Error(
-                  `Cannot resolve schema name: schemaName is empty and vendorTenantId is missing for connection ${conn.id}`
+                  `Cannot resolve schema name: schemaName is empty and organizationId is missing for connection ${conn.id}`
                 );
               }
               schemaName =
                 conn.schemaName && conn.schemaName.trim() !== ""
                   ? conn.schemaName
-                  : getWorkspaceSchemaName(tenant.tenantId, conn.appName, conn.vendorTenantId!);
+                  : getWorkspaceSchemaName(tenant.tenantId, conn.appName, conn.organizationId!);
 
               const staleRecords = await this.sweeperRepo.getDeferredTraces(tenant.tenantId, schemaName, 5);
 

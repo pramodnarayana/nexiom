@@ -60,8 +60,8 @@ export class FanoutBatchProcessor {
     dataSourceId: string,
     srcAppName: string,
     appProfile: string,
-    srcTenantId: string,
-    srcVendorId: string | undefined,
+    srcOrganizationId: string,
+    srcEntityId: string | undefined,
     canonicalType: string,
     normalizedData: Record<string, unknown>,
     stitch: ActiveStitch,
@@ -74,7 +74,7 @@ export class FanoutBatchProcessor {
 
       if (!matched) {
         await this.syncLogRepo.writeSyncLog(
-          srcTenantId,
+          srcOrganizationId,
           schemaName,
           traceId,
           stitch.id,
@@ -86,7 +86,7 @@ export class FanoutBatchProcessor {
       }
 
       const mappingRules = await this.fieldMappingRepo.getMappingRules(
-        srcTenantId,
+        srcOrganizationId,
         stitch.id,
         canonicalType
       );
@@ -103,7 +103,7 @@ export class FanoutBatchProcessor {
           `[DEBUG] No field mapping rules configured for canonicalType=${canonicalType}, skipping stitch route`,
         );
         await this.syncLogRepo.writeSyncLog(
-          srcTenantId,
+          srcOrganizationId,
           schemaName,
           traceId,
           stitch.id,
@@ -119,12 +119,12 @@ export class FanoutBatchProcessor {
         srcAppName,
         appProfile,
         canonicalType,
-        srcVendorId,
+        srcEntityId,
         normalizedData,
         mappingRules,
       );
 
-      const destConnMeta = await this.connRepo.getTenantConnectionMeta(stitch.destDataSourceId, srcTenantId);
+      const destConnMeta = await this.connRepo.getTenantConnectionMeta(stitch.destDataSourceId, srcOrganizationId);
 
       if (!destConnMeta) {
         throw new DependenciesMissingError([
@@ -155,11 +155,11 @@ export class FanoutBatchProcessor {
       let destEntityId: string | undefined;
       let destState: Record<string, unknown> | undefined;
 
-      if (srcVendorId) {
+      if (srcEntityId) {
         const gemDestId = await this.gemRepo.getDestinationEntityId(
           stitch.id,
           dataSourceId,
-          srcVendorId
+          srcEntityId
         );
 
         if (gemDestId) {
@@ -175,7 +175,7 @@ export class FanoutBatchProcessor {
             );
             
             const state = await this.stateRepo.getDestinationEntityState(
-              srcTenantId,
+              srcOrganizationId,
               targetSchemaName,
               stitch.destDataSourceId,
               stitch.targetObject,
@@ -208,8 +208,8 @@ export class FanoutBatchProcessor {
           }
         } else {
           this.logger.log(
-            { event: "l4.debug.gem_miss", traceId, srcVendorId },
-            `[DEBUG] No GEM mapping found for srcVendorId=${srcVendorId} — create route`,
+            { event: "l4.debug.gem_miss", traceId, srcEntityId },
+            `[DEBUG] No GEM mapping found for srcEntityId=${srcEntityId} — create route`,
           );
         }
       }
@@ -244,7 +244,7 @@ export class FanoutBatchProcessor {
       assertValidSchemaName(destSchemaName);
 
       const shouldPublish = await this.outboxRepo.upsertPendingOutboundGateway(
-        srcTenantId,
+        srcOrganizationId,
         destSchemaName,
         traceId,
         stitch.id,
@@ -260,10 +260,10 @@ export class FanoutBatchProcessor {
             srcDataSourceId: dataSourceId,
             destDataSourceId: stitch.destDataSourceId,
             routeId: stitch.id,
-            srcVendorId: srcVendorId ?? null,
+            srcEntityId: srcEntityId ?? null,
             canonicalType,
             srcAppName,
-            srcTenantId,
+            srcOrganizationId,
             hydratedPayload,
           });
         } catch (sendErr) {
@@ -278,7 +278,7 @@ export class FanoutBatchProcessor {
           );
 
           await this.outboxRepo.markOutboundGatewayFailed(
-            srcTenantId,
+            srcOrganizationId,
             destSchemaName,
             traceId,
             stitch.id
@@ -288,7 +288,7 @@ export class FanoutBatchProcessor {
         }
 
         await this.syncLogRepo.writeSyncLog(
-          srcTenantId,
+          srcOrganizationId,
           schemaName,
           traceId,
           stitch.id,
@@ -327,7 +327,7 @@ export class FanoutBatchProcessor {
         assertValidSchemaName(destSchemaName);
 
         const shouldPublishActiveFetch = await this.outboxRepo.upsertDeferredOutboundGateway(
-          srcTenantId,
+          srcOrganizationId,
           destSchemaName,
           traceId,
           stitch.id,
@@ -356,7 +356,7 @@ export class FanoutBatchProcessor {
           }
 
           await this.syncLogRepo.writeSyncLog(
-            srcTenantId,
+            srcOrganizationId,
             schemaName,
             traceId,
             stitch.id,
@@ -393,7 +393,7 @@ export class FanoutBatchProcessor {
         `L4 stitch fan-out failed — recording failure and continuing to next route: ${safeErrStr}`,
       );
       await this.syncLogRepo.writeSyncLog(
-        srcTenantId,
+        srcOrganizationId,
         schemaName,
         traceId,
         stitch.id,
@@ -403,7 +403,7 @@ export class FanoutBatchProcessor {
         err instanceof Error ? err.message : String(err)
       );
     } finally {
-      if (srcVendorId) {
+      if (srcEntityId) {
         lockRefCount.count--;
       }
     }

@@ -113,7 +113,7 @@ describe('MappingsService', () => {
               category: 'tms',
               entity: 'Load__c',
               viewMode: 'summary',
-              version: 'v1',
+              version: 'ent1',
             },
           ]),
         }),
@@ -124,7 +124,7 @@ describe('MappingsService', () => {
       expect(result.id).toBe('123');
     });
 
-    it('should default version to v1 if not provided', async () => {
+    it('should default version to ent1 if not provided', async () => {
       const dto = new CreateMapping();
       dto.appName = 'salesforce';
       dto.category = 'tms';
@@ -132,16 +132,16 @@ describe('MappingsService', () => {
       dto.viewMode = 'summary';
       dto.mappingConfig = {};
 
-      const returningSpy = vi.fn().mockResolvedValue([{ version: 'v1' }]);
+      const returningSpy = vi.fn().mockResolvedValue([{ version: 'ent1' }]);
       const valuesSpy = vi.fn().mockReturnValue({ returning: returningSpy });
       mockDb.insert = vi.fn().mockReturnValue({ values: valuesSpy });
 
       const result = await service.create('tenant1', dto);
 
       expect(valuesSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ version: 'v1' }),
+        expect.objectContaining({ version: 'ent1' }),
       );
-      expect(result.version).toBe('v1');
+      expect(result.version).toBe('ent1');
     });
 
     it('should log and throw BadRequestException on insert error', async () => {
@@ -169,7 +169,7 @@ describe('MappingsService', () => {
           where: vi.fn().mockReturnValue({
             returning: vi
               .fn()
-              .mockResolvedValue([{ appName: 'testapp', version: 'v1' }]),
+              .mockResolvedValue([{ appName: 'testapp', version: 'ent1' }]),
           }),
         }),
       });
@@ -178,12 +178,12 @@ describe('MappingsService', () => {
       expect(result.appName).toBe('testapp');
     });
 
-    it('should default version to v1 if not provided on update', async () => {
+    it('should default version to ent1 if not provided on update', async () => {
       const dto = new UpdateMapping();
       // @ts-expect-error test mock
       vi.spyOn(service, 'findOne').mockResolvedValue({ id: '123' });
 
-      const returningSpy = vi.fn().mockResolvedValue([{ version: 'v1' }]);
+      const returningSpy = vi.fn().mockResolvedValue([{ version: 'ent1' }]);
       const whereSpy = vi.fn().mockReturnValue({ returning: returningSpy });
       const setSpy = vi.fn().mockReturnValue({ where: whereSpy });
       mockDb.update = vi.fn().mockReturnValue({ set: setSpy });
@@ -191,9 +191,9 @@ describe('MappingsService', () => {
       const result = await service.update('tenant1', '123', dto);
 
       expect(setSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ version: 'v1' }),
+        expect.objectContaining({ version: 'ent1' }),
       );
-      expect(result.version).toBe('v1');
+      expect(result.version).toBe('ent1');
     });
 
     it('should throw BadRequestException wrapping the internal missing record on update', async () => {
@@ -233,7 +233,7 @@ describe('MappingsService', () => {
         category: 'tms',
         entity: 'x',
         viewMode: 'y',
-        version: 'v1',
+        version: 'ent1',
       });
       mockDb.delete = vi
         .fn()

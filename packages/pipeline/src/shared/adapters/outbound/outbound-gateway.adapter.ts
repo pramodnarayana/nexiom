@@ -123,7 +123,7 @@ export class OutboundGatewayAdapter implements OutboundGatewayPort {
     statusCode: number,
     response: Record<string, unknown> | null,
     sentPayload: Record<string, unknown> | null,
-    destVendorId?: string,
+    destEntityId?: string,
     replicaUpdate?: {
       traceId: string;
       dataSourceId: string;
@@ -148,7 +148,7 @@ export class OutboundGatewayAdapter implements OutboundGatewayPort {
           statusCode,
           status,
           ...(sentPayload && { payload: sentPayload }),
-          ...(destVendorId && { destVendorId }),
+          ...(destEntityId && { destEntityId }),
         })
         .where(
           sql`${outboundGateway.id} = ${id} AND ${outboundGateway.attempts} = ${attemptCount}`,
@@ -161,14 +161,14 @@ export class OutboundGatewayAdapter implements OutboundGatewayPort {
         );
       }
 
-      if (status === "SUCCESS" && response && destVendorId && replicaUpdate) {
+      if (status === "SUCCESS" && response && destEntityId && replicaUpdate) {
         await tx
           .insert(replicaEntity)
           .values({
             traceId: replicaUpdate.traceId,
             dataSourceId: replicaUpdate.dataSourceId,
             entityType: replicaUpdate.targetObject,
-            entityId: destVendorId,
+            entityId: destEntityId,
             data: response,
             version: 1,
           })

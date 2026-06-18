@@ -26,19 +26,7 @@ function rehydrateDates(obj: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-const APP_CONNECTION_GLOBAL_ONLY_KEYS = new Set(["schemaName", "schemaPlan"]);
 
-function prepareAppConnectionPayload(
-  payload: Record<string, unknown>,
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(payload)) {
-    if (!APP_CONNECTION_GLOBAL_ONLY_KEYS.has(k)) {
-      out[k] = v;
-    }
-  }
-  return out;
-}
 
 @Injectable()
 export class RegistryReplicationAdapter implements RegistryReplicationPort {
@@ -102,13 +90,12 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
         const data = rehydrateDates(payload);
 
         if (entityType === "APP_CONNECTION") {
-          const connData = prepareAppConnectionPayload(data);
           await tx
             .insert(schema.dataSources)
-            .values(connData as typeof schema.dataSources.$inferInsert)
+            .values(data as typeof schema.dataSources.$inferInsert)
             .onConflictDoUpdate({
               target: [schema.dataSources.id],
-              set: connData as typeof schema.dataSources.$inferInsert,
+              set: data as typeof schema.dataSources.$inferInsert,
             });
         } else if (entityType === "UI_WORKSPACE") {
           await tx
@@ -167,7 +154,7 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
       .select({
         id: schema.dataSources.id,
         appName: schema.dataSources.appName,
-        vendorTenantId: schema.dataSources.vendorTenantId,
+        organizationId: schema.dataSources.organizationId,
         metadata: schema.dataSources.metadata,
       })
       .from(schema.dataSources)
@@ -186,28 +173,40 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
       .where(eq(globalRegistryOutbox.id, outboxId));
   }
 
-  async markConnectionStatus(tenantId: string, connectionId: string, status: 'ACTIVE' | 'INACTIVE' | 'EXPIRED' | 'REVOKED' | 'PROVISIONING' | 'FAILED'): Promise<void> {
-    // Verify the connection belongs to the tenant before updating credentials
-    const [dataSource] = await this.globalDb
-      .select({ id: schema.dataSources.id })
-      .from(schema.dataSources)
-      .where(
-        and(
-          eq(schema.dataSources.id, connectionId),
-          eq(schema.dataSources.tenantId, tenantId),
-        ),
-      )
-      .limit(1);
+  async activateConnection(tenantId: string, connectionId: string, schemaPlan: string): Promise<void> {
+    await this.globalDb.transaction(async (tx) => {
+      // Verify and update data source
+      const [updatedDataSource] = await tx
+        .update(schema.dataSources)
+        .set({ schemaPlan })
+        .where(
+          and(
+            eq(schema.dataSources.id, connectionId),
+            eq(schema.dataSources.tenantId, tenantId),
+          ),
+        )
+        .returning();
 
-    if (!dataSource) {
-      throw new Error(
-        `Connection ${connectionId} not found or does not belong to tenant ${tenantId}`,
-      );
-    }
+      if (!updatedDataSource) {
+        throw new Error(
+          `Connection ${connectionId} not found or does not belong to tenant ${tenantId}`,
+        );
+      }
 
-    await this.globalDb
-      .update(schema.credentials)
-      .set({ status })
-      .where(eq(schema.credentials.dataSourceId, connectionId));
+      // Update credentials to ACTIVE
+      await tx
+        .update(schema.credentials)
+        .set({ status: 'ACTIVE' })
+        .where(eq(schema.credentials.dataSourceId, connectionId));
+
+      // Push updated data source to tenant outbox so replication picks up STANDARD_ACTIVE
+      await tx.insert(globalRegistryOutbox).values({
+        tenantId,
+        entityType: 'APP_CONNECTION',
+        entityId: connectionId,
+        action: 'UPSERT',
+        payload: updatedDataSource,
+      });
+    });
   }
 }

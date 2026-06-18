@@ -408,9 +408,9 @@ describe("App Installer Subdomain", () => {
         name: "test-piece",
         displayName: "Test",
         packageName: "test-package",
-        version: "v1-alpha",
+        version: "ent1-alpha",
       });
-      registry.latestVersions.set("test-package", "v1-beta");
+      registry.latestVersions.set("test-package", "ent1-beta");
 
       const useCase = new CheckPieceUpdatesUseCase(
         repository,

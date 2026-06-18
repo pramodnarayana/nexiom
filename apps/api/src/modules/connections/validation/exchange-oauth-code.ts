@@ -44,7 +44,7 @@ export class ExchangeOAuthCode {
 
   @IsOptional()
   @IsString()
-  vendorTenantId?: string;
+  organizationId?: string;
 
   @IsOptional()
   @IsString()
@@ -55,4 +55,7 @@ export class ExchangeOAuthCode {
       'appProfile must contain only lowercase letters, numbers, and hyphens, and start with a letter or number',
   })
   appProfile?: string;
+
+  @IsOptional()
+  vendorParams?: Record<string, string | boolean | number>;
 }

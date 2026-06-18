@@ -21,7 +21,7 @@ describe('RegistryReplicationService', () => {
       replicateEntity: vi.fn(),
       getStitchDataSources: vi.fn(),
       markGlobalOutboxSuccess: vi.fn(),
-      markConnectionStatus: vi.fn(),
+      activateConnection: vi.fn(),
     };
 
     dbManager = {

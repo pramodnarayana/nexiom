@@ -45,7 +45,7 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
     expiresAt,
     metadata,
     envType,
-    vendorTenantId,
+    organizationId,
   }: StoreOAuthConnectionOptions): Promise<ProvisionInfo> {
     return await this.db.transaction(async (tx) => {
       // Explicit update via id
@@ -60,7 +60,7 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
               metadata,
               updatedAt: new Date(),
               ...(envType !== undefined && { envType }),
-              ...(vendorTenantId !== undefined && { vendorTenantId }),
+              ...(organizationId !== undefined && { organizationId }),
             })
             .where(
               and(
@@ -130,7 +130,7 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
             displayName,
             metadata,
             envType: envType ?? 'PRODUCTION',
-            vendorTenantId,
+            organizationId,
           })
           .returning();
 
@@ -149,18 +149,18 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
         });
 
         if (
-          !vendorTenantId ||
-          typeof vendorTenantId !== 'string' ||
-          vendorTenantId.trim() === ''
+          !organizationId ||
+          typeof organizationId !== 'string' ||
+          organizationId.trim() === ''
         ) {
           throw new InternalServerErrorException(
-            'vendorTenantId is required but was not provided or is empty',
+            'organizationId is required but was not provided or is empty',
           );
         }
         const schemaNameToStore = getWorkspaceSchemaName(
           tenantId,
           providerName,
-          vendorTenantId,
+          organizationId,
         );
         await tx
           .update(dataSources)
@@ -262,18 +262,18 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
 
           if (existingFailed) {
             if (
-              !vendorTenantId ||
-              typeof vendorTenantId !== 'string' ||
-              vendorTenantId.trim() === ''
+              !organizationId ||
+              typeof organizationId !== 'string' ||
+              organizationId.trim() === ''
             ) {
               throw new InternalServerErrorException(
-                'vendorTenantId is required but was not provided or is empty',
+                'organizationId is required but was not provided or is empty',
               );
             }
             const recoveredSchemaName = getWorkspaceSchemaName(
               tenantId,
               providerName,
-              vendorTenantId,
+              organizationId,
             );
             const [updated] = await tx
               .update(dataSources)
@@ -282,7 +282,7 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
                 externalId,
                 metadata,
                 envType: envType ?? 'PRODUCTION',
-                vendorTenantId,
+                organizationId,
                 schemaName: recoveredSchemaName,
                 updatedAt: new Date(),
               })
@@ -327,18 +327,18 @@ export class DrizzleAppConnectionRepositoryAdapter implements AppConnectionRepos
       let schemaName = connection.schemaName;
       if (!schemaName) {
         if (
-          !vendorTenantId ||
-          typeof vendorTenantId !== 'string' ||
-          vendorTenantId.trim() === ''
+          !organizationId ||
+          typeof organizationId !== 'string' ||
+          organizationId.trim() === ''
         ) {
           throw new InternalServerErrorException(
-            'vendorTenantId is required but was not provided or is empty',
+            'organizationId is required but was not provided or is empty',
           );
         }
         schemaName = getWorkspaceSchemaName(
           tenantId,
           providerName,
-          vendorTenantId,
+          organizationId,
         );
       }
 

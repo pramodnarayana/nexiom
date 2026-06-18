@@ -13,7 +13,7 @@ const BaseMappingSchema = z.object({
 
 // Create schema with default for version
 export const CreateMappingSchema = BaseMappingSchema.extend({
-  version: z.string().optional().default('v1'),
+  version: z.string().optional().default('ent1'),
 });
 
 // Update schema without defaults

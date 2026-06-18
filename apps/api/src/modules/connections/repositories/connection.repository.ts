@@ -131,7 +131,7 @@ export class ConnectionRepository extends BaseRepository<typeof dataSources> {
           expiresAt: credentials.expiresAt,
           createdAt: dataSources.createdAt,
           updatedAt: dataSources.updatedAt,
-          vendorTenantId: dataSources.vendorTenantId,
+          organizationId: dataSources.organizationId,
           hasCredentials: sql<boolean>`${credentials.value} IS NOT NULL`,
         })
         .from(dataSources)

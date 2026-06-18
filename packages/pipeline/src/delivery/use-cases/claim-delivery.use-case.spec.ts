@@ -44,7 +44,7 @@ describe('ClaimDeliveryUseCase', () => {
     hydratedPayload: { foo: 'bar' },
     canonicalType: 'Contact',
     srcAppName: 'test-app',
-    srcTenantId: 'ten-1',
+    srcOrganizationId: 'ten-1',
     start: Date.now(),
     writeL6ResultFn: vi.fn(),
   };

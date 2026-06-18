@@ -24,7 +24,7 @@ export class DrizzleDependencySweeperRepositoryAdapter implements DependencySwee
         id: dataSources.id,
         appName: dataSources.appName,
         tenantId: dataSources.tenantId,
-        vendorTenantId: dataSources.vendorTenantId,
+        organizationId: dataSources.organizationId,
         schemaName: dataSources.schemaName,
       })
       .from(dataSources)

@@ -35,38 +35,41 @@ export class ReplicaOutboxPoller {
   @Cron(CronExpression.EVERY_5_SECONDS)
   async processOutbox(): Promise<void> {
     try {
-      const tenants = await this.globalDb.select().from(tenantStorageRegistry);
+      const tenants = await this.globalDb
+        .select()
+        .from(tenantStorageRegistry)
+        .where(eq(tenantStorageRegistry.status, "ACTIVE"));
       if (tenants.length === 0) return;
 
       await Promise.allSettled(
         tenants.map(async (tenant) => {
           try {
             const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
-            const connections = await this.globalDb
+            const connections = await tenantDb
               .select()
               .from(dataSources)
               .where(
                 and(
                   eq(dataSources.tenantId, tenant.tenantId),
-                  isNotNull(dataSources.vendorTenantId),
-                  ne(dataSources.vendorTenantId, ""),
+                  isNotNull(dataSources.organizationId),
+                  ne(dataSources.organizationId, ""),
                 ),
               );
 
             for (const connection of connections) {
               if (
-                !connection.vendorTenantId ||
-                connection.vendorTenantId.trim() === ""
+                !connection.organizationId ||
+                connection.organizationId.trim() === ""
               ) {
                 this.logger.warn(
-                  `Skipping connection ${connection.id} due to missing or blank vendorTenantId`,
+                  `Skipping connection ${connection.id} due to missing or blank organizationId`,
                 );
                 continue;
               }
               const schemaName = getWorkspaceSchemaName(
                 connection.tenantId,
                 connection.appName,
-                connection.vendorTenantId,
+                connection.organizationId,
               );
               await this.executeSafeSchemaOperation(
                 tenant.tenantId,

@@ -56,7 +56,7 @@ export interface OAuth2Auth {
      * Called after a successful token exchange to extract the unique account identifier 
      * (e.g. Salesforce Org ID) from the token payload.
      */
-    extractVendorTenantId?: (response: Record<string, unknown>) => string | undefined;
+    extractOrganizationId?: (response: Record<string, unknown>) => string | undefined;
 }
 
 export interface CustomAuth {

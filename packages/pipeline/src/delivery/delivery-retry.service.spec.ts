@@ -48,7 +48,7 @@ describe('DeliveryRetryService', () => {
       outboundGatewayRepository.fetchOutboundGatewayResult.mockResolvedValue(null);
 
       await expect(
-        service.retrySourceFinalization('ws_2', 'ws_1', 'gw-1', 'tr-1', 'rt-1', 'ds-1', 'conn-1', 'SUCCESS', 200, 'Customer', 'app-1', 'ten-1', 'vend-1', 100, 'ten-1')
+        service.retrySourceFinalization('ws_2', 'ws_1', 'gw-1', 'tr-1', 'rt-1', 'ds-1', 'conn-1', 'SUCCESS', 200, 'Customer', 'app-1', 'ten-1', 'ent-1', 100, 'ten-1')
       ).rejects.toThrow('Outbound gateway result not found for retry');
     });
 
@@ -58,7 +58,7 @@ describe('DeliveryRetryService', () => {
         attempts: 2,
         statusCode: 201,
         response: { foo: 'bar' },
-        destVendorId: 'dest-vend-1'
+        destEntityId: 'dest-org-1'
       });
 
       connectionRepository.getTenantConnectionMeta.mockResolvedValue({
@@ -73,12 +73,12 @@ describe('DeliveryRetryService', () => {
       deliveryService.writeL6Result.mockResolvedValue(true);
 
       const res = await service.retrySourceFinalization(
-        'ws_2', 'ws_1', 'gw-1', 'tr-1', 'rt-1', 'ds-1', 'conn-1', 'SUCCESS', 200, 'Customer', 'app-1', 'ten-1', 'vend-1', 100, 'ten-1'
+        'ws_2', 'ws_1', 'gw-1', 'tr-1', 'rt-1', 'ds-1', 'conn-1', 'SUCCESS', 200, 'Customer', 'app-1', 'ten-1', 'ent-1', 100, 'ten-1'
       );
 
       expect(res).toBe(true);
       expect(deliveryService.writeL6Result).toHaveBeenCalledWith(
-        'ws_2', 'ws_1', 'gw-1', 2, 'ds-1', 'tr-1', 'rt-1', { foo: 'bar' }, null, 201, 'SUCCESS', 100, 'dest-vend-1', 'Customer', 'app-1', 'ten-1', 'vend-1', 'conn-1', 'quickbooks', 'qb-ten-1', 'Invoice', 'ten-1'
+        'ws_2', 'ws_1', 'gw-1', 2, 'ds-1', 'tr-1', 'rt-1', { foo: 'bar' }, null, 201, 'SUCCESS', 100, 'dest-org-1', 'Customer', 'app-1', 'ten-1', 'ent-1', 'conn-1', 'quickbooks', 'qb-ten-1', 'Invoice', 'ten-1'
       );
     });
     
@@ -95,12 +95,12 @@ describe('DeliveryRetryService', () => {
       deliveryService.writeL6Result.mockResolvedValue(false);
 
       const res = await service.retrySourceFinalization(
-        'ws_2', 'ws_1', 'gw-1', 'tr-1', 'rt-1', 'ds-1', 'conn-1', 'FAIL', 500, 'Customer', 'app-1', 'ten-1', 'vend-1', 100, 'ten-1'
+        'ws_2', 'ws_1', 'gw-1', 'tr-1', 'rt-1', 'ds-1', 'conn-1', 'FAIL', 500, 'Customer', 'app-1', 'ten-1', 'ent-1', 100, 'ten-1'
       );
 
       expect(res).toBe(false);
       expect(deliveryService.writeL6Result).toHaveBeenCalledWith(
-        'ws_2', 'ws_1', 'gw-1', 1, 'ds-1', 'tr-1', 'rt-1', null, null, 500, 'FAIL', 100, undefined, 'Customer', 'app-1', 'ten-1', 'vend-1', 'conn-1', undefined, undefined, '', 'ten-1'
+        'ws_2', 'ws_1', 'gw-1', 1, 'ds-1', 'tr-1', 'rt-1', null, null, 500, 'FAIL', 100, undefined, 'Customer', 'app-1', 'ten-1', 'ent-1', 'conn-1', undefined, undefined, '', 'ten-1'
       );
     });
   });

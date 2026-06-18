@@ -45,61 +45,40 @@ export class NormalizedOutboxPoller {
         return;
       }
 
-      const allConnections = await this.globalDb
-        .selectDistinct({
-          id: dataSources.id,
-          appName: dataSources.appName,
-          tenantId: dataSources.tenantId,
-          vendorTenantId: dataSources.vendorTenantId,
-        })
-        .from(dataSources)
-        .where(
-          sql`${dataSources.schemaPlan} IN ('STANDARD_ACTIVE', 'CANONICAL_ACTIVE')`,
-        );
-
-      if (allConnections.length === 0) {
-        return;
-      }
-
-      const connectionsByTenant = new Map<
-        string,
-        Array<{ id: string; appName: string; vendorTenantId: string | null }>
-      >();
-      for (const conn of allConnections) {
-        if (!connectionsByTenant.has(conn.tenantId)) {
-          connectionsByTenant.set(conn.tenantId, []);
-        }
-        connectionsByTenant.get(conn.tenantId)!.push({
-          id: conn.id,
-          appName: conn.appName,
-          vendorTenantId: conn.vendorTenantId,
-        });
-      }
-
       const TENANT_CONCURRENCY = 5;
       await processInChunks(tenants, TENANT_CONCURRENCY, async (tenant) => {
         try {
-          const tenantConnections = connectionsByTenant.get(tenant.tenantId);
+          const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
+
+          const tenantConnections = await tenantDb
+            .selectDistinct({
+              id: dataSources.id,
+              appName: dataSources.appName,
+              organizationId: dataSources.organizationId,
+            })
+            .from(dataSources)
+            .where(
+              sql`${dataSources.schemaPlan} IN ('STANDARD_ACTIVE', 'CANONICAL_ACTIVE')`,
+            );
+
           if (!tenantConnections || tenantConnections.length === 0) {
             return;
           }
 
-          const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
-
           for (const connection of tenantConnections) {
             if (
-              !connection.vendorTenantId ||
-              connection.vendorTenantId.trim() === ""
+              !connection.organizationId ||
+              connection.organizationId.trim() === ""
             ) {
               this.logger.warn(
-                `Skipping connection ${connection.id} due to missing or blank vendorTenantId`,
+                `Skipping connection ${connection.id} due to missing or blank organizationId`,
               );
               continue;
             }
             const schemaName = getWorkspaceSchemaName(
               tenant.tenantId,
               connection.appName,
-              connection.vendorTenantId,
+              connection.organizationId,
             );
             await this.executeSafeSchemaOperation(
               tenant.tenantId,

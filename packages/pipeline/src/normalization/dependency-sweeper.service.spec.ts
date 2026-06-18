@@ -31,7 +31,7 @@ describe("DependencySweeperService (Unit)", () => {
       id: uuidv4(),
       appName: "testApp",
       tenantId,
-      vendorTenantId: "vendor1",
+      organizationId: "org1",
       schemaName,
     });
     
@@ -79,7 +79,7 @@ describe("DependencySweeperService (Unit)", () => {
       id: uuidv4(),
       appName: "testApp",
       tenantId,
-      vendorTenantId: "vendor1",
+      organizationId: "org1",
       schemaName,
     });
     
@@ -112,7 +112,7 @@ describe("DependencySweeperService (Unit)", () => {
       id: uuidv4(),
       appName: "testApp",
       tenantId,
-      vendorTenantId: "vendor1",
+      organizationId: "org1",
       schemaName,
     });
     
@@ -148,7 +148,7 @@ describe("DependencySweeperService (Unit)", () => {
       id: uuidv4(),
       appName: "testApp",
       tenantId,
-      vendorTenantId: "vendor1",
+      organizationId: "org1",
       schemaName,
     });
     
@@ -178,8 +178,8 @@ describe("DependencySweeperService (Unit)", () => {
     
     // Two connections for same tenant
     repo.activeConnections.push(
-      { tenantId: 'tenant-1', id: 'conn-1', appName: 'app1', schemaName: 'ws_conn1', vendorTenantId: 'vendor1' },
-      { tenantId: 'tenant-1', id: 'conn-2', appName: 'app2', schemaName: 'ws_conn2', vendorTenantId: 'vendor1' }
+      { tenantId: 'tenant-1', id: 'conn-1', appName: 'app1', schemaName: 'ws_conn1', organizationId: 'org1' },
+      { tenantId: 'tenant-1', id: 'conn-2', appName: 'app2', schemaName: 'ws_conn2', organizationId: 'org1' }
     );
 
     // Both schemas return the same traceId
@@ -210,7 +210,7 @@ describe("DependencySweeperService (Unit)", () => {
   it('handles per-trace error without crashing tenant loop', async () => {
     repo.tenants.push({ tenantId: 'tenant-1' });
     repo.activeConnections.push(
-      { tenantId: 'tenant-1', id: 'conn-1', appName: 'app', schemaName: 'ws_conn1', vendorTenantId: 'vendor1' },
+      { tenantId: 'tenant-1', id: 'conn-1', appName: 'app', schemaName: 'ws_conn1', organizationId: 'org1' },
     );
 
     repo.deferredTraces.push(
@@ -239,8 +239,8 @@ describe("DependencySweeperService (Unit)", () => {
   it('handles per-connection error without crashing tenant loop', async () => {
     repo.tenants.push({ tenantId: 'tenant-1' });
     repo.activeConnections.push(
-      { tenantId: 'tenant-1', id: 'conn-bad', appName: 'app', schemaName: 'ws_bad', vendorTenantId: 'vendor1' },
-      { tenantId: 'tenant-1', id: 'conn-good', appName: 'app', schemaName: 'ws_good', vendorTenantId: 'vendor1' }
+      { tenantId: 'tenant-1', id: 'conn-bad', appName: 'app', schemaName: 'ws_bad', organizationId: 'org1' },
+      { tenantId: 'tenant-1', id: 'conn-good', appName: 'app', schemaName: 'ws_good', organizationId: 'org1' }
     );
 
     // Make getDeferredTraces fail for ws_bad
@@ -267,10 +267,10 @@ describe("DependencySweeperService (Unit)", () => {
       id: 'conn-1',
       appName: 'app1',
       schemaName: null as any,
-      vendorTenantId: 'vendor1',
+      organizationId: 'org1',
     });
 
-    const expectedSchema = getWorkspaceSchemaName('tenant-1', 'app1', 'vendor1');
+    const expectedSchema = getWorkspaceSchemaName('tenant-1', 'app1', 'org1');
 
     vi.spyOn(repo, 'getDeferredTraces').mockResolvedValue([{ traceId: 'trace-1', routeId: 'rt-1' }]);
     repo.replicaDataSources.push({ tenantId: 'tenant-1', schemaName: expectedSchema, traceId: 'trace-1', dataSourceId: 'ds-1' });
@@ -290,7 +290,7 @@ describe("DependencySweeperService (Unit)", () => {
       id: 'conn-1',
       appName: 'app1',
       schemaName: null as any,
-      vendorTenantId: null as any,
+      organizationId: null as any,
     });
 
     // Should handle the error locally in the connection loop and not crash the tenant processing
@@ -305,8 +305,8 @@ describe("DependencySweeperService (Unit)", () => {
     );
     
     repo.activeConnections.push(
-      { tenantId: 'tenant-bad', id: 'conn-bad', appName: 'app', schemaName: 'ws_bad', vendorTenantId: 'vendor1' },
-      { tenantId: 'tenant-good', id: 'conn-good', appName: 'app', schemaName: 'ws_good', vendorTenantId: 'vendor1' }
+      { tenantId: 'tenant-bad', id: 'conn-bad', appName: 'app', schemaName: 'ws_bad', organizationId: 'org1' },
+      { tenantId: 'tenant-good', id: 'conn-good', appName: 'app', schemaName: 'ws_good', organizationId: 'org1' }
     );
 
     vi.spyOn(repo, 'getDeferredTraces').mockImplementation(async (tenantId, schema, older) => {

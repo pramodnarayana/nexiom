@@ -11,7 +11,7 @@ export interface GlobalOutboxRecord {
 export interface DataSourceMetadata {
   id: string;
   appName: string;
-  vendorTenantId: string | null;
+  organizationId: string | null;
   metadata: unknown;
 }
 
@@ -33,9 +33,9 @@ export interface RegistryReplicationPort {
   ): Promise<DataSourceMetadata[]>;
 
   markGlobalOutboxSuccess(outboxId: string): Promise<void>;
-  markConnectionStatus(
+  activateConnection(
     tenantId: string,
     connectionId: string,
-    status: 'ACTIVE' | 'INACTIVE' | 'EXPIRED' | 'REVOKED' | 'PROVISIONING' | 'FAILED'
+    schemaPlan: string
   ): Promise<void>;
 }

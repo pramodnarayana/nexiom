@@ -5,3 +5,4 @@ export * from './ports/registry-replication.port.js';
 export * from './ports/replica-state.port.js';
 export * from './events/domain-events.js';
 export * from './logic/delivery-status.evaluator.js';
+

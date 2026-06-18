@@ -3,13 +3,13 @@ export interface GemMappingParams {
   routeId: string;
   srcAppName: string;
   dataSourceId: string;
-  srcTenantId: string;
+  srcOrganizationId: string;
   canonicalType: string;
-  srcVendorId: string;
+  srcEntityId: string;
   targetAppName: string;
   targetConnectionId: string;
-  targetTenantId: string;
-  destVendorId: string;
+  targetOrganizationId: string;
+  destEntityId: string;
 }
 
 export interface GlobalEntityMapRepositoryPort {

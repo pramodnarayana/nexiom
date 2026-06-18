@@ -56,7 +56,7 @@ export class MappingsService {
           category: payload.category,
           entity: payload.entity,
           viewMode: payload.viewMode,
-          version: (payload.version?.trim() || 'v1') ?? 'v1',
+          version: (payload.version?.trim() || 'ent1') ?? 'ent1',
           mappingConfig: payload.mappingConfig,
         })
         .returning();
@@ -87,7 +87,7 @@ export class MappingsService {
           category: payload.category,
           entity: payload.entity,
           viewMode: payload.viewMode,
-          version: payload.version?.trim() || 'v1',
+          version: payload.version?.trim() || 'ent1',
           mappingConfig: payload.mappingConfig,
         })
         .where(

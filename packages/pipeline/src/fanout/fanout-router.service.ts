@@ -83,7 +83,7 @@ export class FanoutRouterService implements OnModuleInit {
 
       let normalizedData: Record<string, unknown> = {};
       let canonicalType = "RAW";
-      let srcVendorId: string | undefined;
+      let srcEntityId: string | undefined;
 
       const fanoutResult = await this.txManager.runInTenantTransaction(tenantId, schemaName, async (tx) => {
         const entityId = await this.stateRepo.getReplicaSourceVendorId(traceId, schemaName, tx);
@@ -92,7 +92,7 @@ export class FanoutRouterService implements OnModuleInit {
             `Replica record not found for GEM threading (traceId=${traceId})`,
           );
         }
-        srcVendorId = entityId;
+        srcEntityId = entityId;
 
         await tx.execute(sql`
           INSERT INTO ${sql.raw('"' + schemaName + '"')}.active_sync_locks (data_source_id, entity_id)
@@ -174,7 +174,7 @@ export class FanoutRouterService implements OnModuleInit {
               srcAppName,
               appProfile,
               tenantId,
-              srcVendorId,
+              srcEntityId,
               canonicalType,
               normalizedData,
               stitch,
@@ -197,13 +197,13 @@ export class FanoutRouterService implements OnModuleInit {
             }
           });
         } finally {
-          if (srcVendorId && lockRefCount.count === 0) {
-            await this.stateRepo.releaseSyncLock(dataSourceId, srcVendorId, schemaName, tenantId);
+          if (srcEntityId && lockRefCount.count === 0) {
+            await this.stateRepo.releaseSyncLock(dataSourceId, srcEntityId, schemaName, tenantId);
           }
         }
       } finally {
-        if (srcVendorId) {
-          await this.stateRepo.releaseSyncLock(dataSourceId, srcVendorId, schemaName, tenantId);
+        if (srcEntityId) {
+          await this.stateRepo.releaseSyncLock(dataSourceId, srcEntityId, schemaName, tenantId);
         }
       }
 

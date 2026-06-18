@@ -35,7 +35,7 @@ export class TenantOffboardingService {
       .select({
         id: dataSources.id,
         appName: dataSources.appName,
-        vendorTenantId: dataSources.vendorTenantId,
+        organizationId: dataSources.organizationId,
         schemaName: dataSources.schemaName,
       })
       .from(dataSources)
@@ -50,11 +50,11 @@ export class TenantOffboardingService {
 
         if (!dataNamespace) {
           if (
-            !currConnection.vendorTenantId ||
-            currConnection.vendorTenantId.trim() === ''
+            !currConnection.organizationId ||
+            currConnection.organizationId.trim() === ''
           ) {
             this.logger.warn(
-              `Skipping schema cleanup for connection ${currConnection.id}: schemaName and vendorTenantId are missing`,
+              `Skipping schema cleanup for connection ${currConnection.id}: schemaName and organizationId are missing`,
             );
             continue;
           }
@@ -62,7 +62,7 @@ export class TenantOffboardingService {
           dataNamespace = getWorkspaceSchemaName(
             tenantId,
             currConnection.appName,
-            currConnection.vendorTenantId,
+            currConnection.organizationId,
           );
         }
 

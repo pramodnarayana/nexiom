@@ -429,7 +429,7 @@ export class OAuthController {
       );
     }
     let externalId = toKebabSlug(body.providerName, trimmedDisplayName);
-    let preservedVendorTenantId: string | undefined = undefined;
+    let preservedOrganizationId: string | undefined = undefined;
     if (body.dataSourceId) {
       try {
         const existing = await this.connectionRepository.findByIdAndTenant(
@@ -444,8 +444,8 @@ export class OAuthController {
         }
 
         externalId = existing.externalId;
-        if (existing.vendorTenantId) {
-          preservedVendorTenantId = existing.vendorTenantId;
+        if (existing.organizationId) {
+          preservedOrganizationId = existing.organizationId;
         }
         this.logger.log(
           `[OAuth Exchange] Overriding externalId with existing: ${externalId}`,
@@ -481,16 +481,24 @@ export class OAuthController {
       );
     }
 
-    const { vendorParams, metadata } = statePayload;
+    const { vendorParams: stateVendorParams, metadata } = statePayload;
+    const vendorParams = {
+      ...(stateVendorParams || {}),
+      ...(body.vendorParams || {}),
+    };
 
     let tokens: Record<string, unknown>;
     try {
+      const stringifiedVendorParams = Object.fromEntries(
+        Object.entries(vendorParams).map(([k, v]) => [k, String(v)]),
+      );
+
       tokens = await this.exchangeOAuthTokenUseCase.execute(
         body.providerName,
         body.code,
         body.clientId ?? '',
         body.clientSecret ?? '',
-        vendorParams,
+        stringifiedVendorParams,
       );
     } catch (err: unknown) {
       let status = 500;
@@ -548,43 +556,46 @@ export class OAuthController {
 
     const envType = deriveEnvType(vendorParams);
 
-    // Extract vendorTenantId from frontend callback param OR from token payload via Piece Framework
+    // Extract organizationId from frontend callback param OR from token payload via Piece Framework
     const pieceDef = this.pieceRegistry.getPiece(body.providerName);
     const authDef = pieceDef?.auth;
-    let extractedVendorTenantId: string | undefined;
+    let extractedOrganizationId: string | undefined;
     if (
       authDef &&
-      'extractVendorTenantId' in authDef &&
-      typeof authDef.extractVendorTenantId === 'function'
+      'extractOrganizationId' in authDef &&
+      typeof authDef.extractOrganizationId === 'function'
     ) {
       try {
-        extractedVendorTenantId = authDef.extractVendorTenantId(tokens);
+        extractedOrganizationId = authDef.extractOrganizationId({
+          ...vendorParams,
+          ...tokens,
+        });
       } catch (e) {
         this.logger.warn(
-          `Failed to extract vendorTenantId for ${body.providerName}: ${e instanceof Error ? e.message : String(e)}`,
+          `Failed to extract organizationId for ${body.providerName}: ${e instanceof Error ? e.message : String(e)}`,
         );
       }
     }
 
-    // Prefer provider-extracted vendorTenantId; validate if both present
+    // Prefer provider-extracted organizationId; validate if both present
     if (
-      extractedVendorTenantId &&
-      body.vendorTenantId &&
-      extractedVendorTenantId !== body.vendorTenantId
+      extractedOrganizationId &&
+      body.organizationId &&
+      extractedOrganizationId !== body.organizationId
     ) {
       throw new BadRequestException(
-        `vendorTenantId mismatch: extracted="${extractedVendorTenantId}" vs supplied="${body.vendorTenantId}"`,
+        `organizationId mismatch: extracted="${extractedOrganizationId}" vs supplied="${body.organizationId}"`,
       );
     }
-    const finalVendorTenantId =
-      extractedVendorTenantId ??
-      body.vendorTenantId ??
-      preservedVendorTenantId ??
+    const finalOrganizationId =
+      extractedOrganizationId ??
+      body.organizationId ??
+      preservedOrganizationId ??
       undefined;
 
-    if (!finalVendorTenantId) {
+    if (!finalOrganizationId) {
       throw new BadRequestException(
-        `vendorTenantId is required for this provider. The connection cannot be created without a unique vendor tenant identifier.`,
+        `organizationId is required for this provider. The connection cannot be created without a unique organization identifier.`,
       );
     }
 
@@ -601,7 +612,7 @@ export class OAuthController {
       expiresAt,
       metadata: mergedMetadata,
       envType,
-      vendorTenantId: finalVendorTenantId,
+      organizationId: finalOrganizationId,
     });
 
     return {

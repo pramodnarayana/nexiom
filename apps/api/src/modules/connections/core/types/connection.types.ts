@@ -14,7 +14,7 @@ export interface StoreOAuthConnectionOptions {
   metadata: Record<string, unknown>;
   envType?: 'PRODUCTION' | 'SANDBOX';
   regionContext?: string;
-  vendorTenantId?: string;
+  organizationId?: string;
 }
 
 export interface ProvisionInfo {
