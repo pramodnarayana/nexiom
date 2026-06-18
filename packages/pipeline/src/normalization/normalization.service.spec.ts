@@ -64,6 +64,7 @@ describe("NormalizationService (Unit)", () => {
     connRepo.connections.push({
       dataSourceId,
       tenantId,
+      organizationId: "org_1",
       appName: "test_app",
       appProfile: "standard",
     });
@@ -123,13 +124,14 @@ describe("NormalizationService (Unit)", () => {
       appProfile: 'standard',
       appName: 'test-app',
       tenantId: 'ten-resolved',
+      organizationId: 'org_1',
       dataSourceId,
     });
     pieceRegistry.getPiece.mockReturnValue({ normalize: vi.fn().mockResolvedValue({ canonicalType: 'FOO', data: {} }) });
     
     // We can't easily mock findReplicaByTraceId on FakeNormalizationRepository since it's a real class method 
     // unless we spyOn it or add data. Let's just add data.
-    connRepo.connections.push({ dataSourceId, tenantId: 'ten-resolved', appName: 'test-app', appProfile: 'standard' });
+    connRepo.connections.push({ dataSourceId, tenantId: 'ten-resolved', organizationId: 'org_1', appName: 'test-app', appProfile: 'standard' });
     normRepo.replicas.push({
       id: uuidv4(), dataSourceId, traceId, entityId: "e-1", entityType: "bar", data: {}, createdAt: new Date(), updatedAt: new Date()
     });
@@ -145,7 +147,7 @@ describe("NormalizationService (Unit)", () => {
   it('uses normalizedFromShard if hookBroker.normalize returns a result', async () => {
     const traceId = uuidv4();
     const dataSourceId = uuidv4();
-    connRepo.connections.push({ dataSourceId, tenantId: 'tenant_1', appName: 'test-app', appProfile: 'standard' });
+    connRepo.connections.push({ dataSourceId, tenantId: 'tenant_1', organizationId: 'org_1', appName: 'test-app', appProfile: 'standard' });
     normRepo.replicas.push({
       id: uuidv4(), dataSourceId, traceId, entityId: "e-1", entityType: "bar", data: {}, createdAt: new Date(), updatedAt: new Date()
     });
@@ -164,7 +166,7 @@ describe("NormalizationService (Unit)", () => {
   it('throws error if canonicalData fails serialization', async () => {
     const traceId = uuidv4();
     const dataSourceId = uuidv4();
-    connRepo.connections.push({ dataSourceId, tenantId: 'tenant_1', appName: 'test-app', appProfile: 'standard' });
+    connRepo.connections.push({ dataSourceId, tenantId: 'tenant_1', organizationId: 'org_1', appName: 'test-app', appProfile: 'standard' });
     normRepo.replicas.push({
       id: uuidv4(), dataSourceId, traceId, entityId: "e-1", entityType: "bar", data: {}, createdAt: new Date(), updatedAt: new Date()
     });

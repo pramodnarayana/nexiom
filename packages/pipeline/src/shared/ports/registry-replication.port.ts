@@ -1,3 +1,5 @@
+import { SchemaPlan } from '@soopa/dbmanager';
+
 export interface GlobalOutboxRecord {
   id: string;
   tenantId: string;
@@ -36,6 +38,6 @@ export interface RegistryReplicationPort {
   activateConnection(
     tenantId: string,
     connectionId: string,
-    schemaPlan: 'STANDARD_ACTIVE' | 'STANDARD_PAUSED' | 'STANDARD_ARCHIVED'
+    schemaPlan: SchemaPlan
   ): Promise<void>;
 }

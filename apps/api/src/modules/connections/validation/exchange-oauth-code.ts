@@ -5,10 +5,10 @@ import {
   IsUUID,
   Matches,
   MaxLength,
-  IsObject,
 } from 'class-validator';
 
 import { VALID_PROVIDER_NAME_REGEX } from './constants.js';
+import { IsVendorConfig } from './vendor-config.validator.js';
 
 export class ExchangeOAuthCode {
   @IsString()
@@ -58,6 +58,6 @@ export class ExchangeOAuthCode {
   appProfile?: string;
 
   @IsOptional()
-  @IsObject()
+  @IsVendorConfig()
   vendorParams?: Record<string, string | boolean | number>;
 }

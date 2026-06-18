@@ -32,7 +32,7 @@ export class ReplicaOutboxPoller {
     private readonly queuePublisherAdapter: NestQueuePublisherAdapter,
   ) {}
 
-  @Cron(CronExpression.EVERY_5_SECONDS)
+  @Cron(process.env.OUTBOX_POLLER_CRON || CronExpression.EVERY_HOUR)
   async processOutbox(): Promise<void> {
     try {
       const tenants = await this.globalDb

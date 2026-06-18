@@ -17,6 +17,7 @@ export interface GlobalEntityMapRepositoryPort {
    * Retrieves the destination entity ID for a given mapping.
    */
   getDestinationEntityId(
+    tenantId: string,
     stitchId: string,
     sourceDataSourceId: string,
     sourceEntityId: string

@@ -245,7 +245,7 @@ describe("Fanout Drizzle Adapters", () => {
         destAppName: "test",
       });
 
-      const destId = await gemAdapter.getDestinationEntityId(stitchId, sourceDataSourceId, "ext-1");
+      const destId = await gemAdapter.getDestinationEntityId(currentTenantId, stitchId, sourceDataSourceId, "ext-1");
       expect(destId).toBe("ext-2");
     });
   });

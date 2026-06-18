@@ -485,10 +485,13 @@ export class OAuthController {
 
     const providerDef = this.pieceRegistry.getPiece(body.providerName);
     const mergedVendorParams = {
-      ...(stateVendorParams || {}),
       ...(body.vendorParams || {}),
+      ...(stateVendorParams || {}),
     };
-    const vendorParams = this.resolveVendorParams(providerDef, mergedVendorParams);
+    const vendorParams = this.resolveVendorParams(
+      providerDef,
+      mergedVendorParams,
+    );
 
     let tokens: Record<string, unknown>;
     try {

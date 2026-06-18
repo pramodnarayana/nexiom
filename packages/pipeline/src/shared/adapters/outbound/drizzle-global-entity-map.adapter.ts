@@ -13,18 +13,14 @@ export class DrizzleGlobalEntityMapRepositoryAdapter implements GlobalEntityMapR
   ) { }
 
   async getDestinationEntityId(
+    tenantId: string,
     stitchId: string,
     sourceDataSourceId: string,
     sourceEntityId: string
   ): Promise<string | null> {
-    // TODO: In Phase 3, we discovered global_entity_map is a tenant table.
-    // getDestinationEntityId should probably take tenantId. But right now
-    // it's used without tenantId in Fanout Batch Processor? Let's check how it's used.
-    // For now, if we must use globalDb, we use it, but wait! It was failing in tests because
-    // it's a tenant table. We should fix it. But wait, getDestinationEntityId is already
-    // used. Let me inject globalDb temporarily just so it compiles, but use dbManager for writeGemMapping.
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
 
-    const gemMappings = await this.globalDb
+    const gemMappings = await tenantDb
       .select()
       .from(globalEntityMap)
       .where(

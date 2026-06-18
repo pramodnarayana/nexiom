@@ -165,8 +165,7 @@ export class FanoutRouterService implements OnModuleInit {
 
         lockRefCount.count = stitches.length;
 
-        try {
-          const stitchResults = await processInChunks(stitches, 5, (stitch) =>
+        const stitchResults = await processInChunks(stitches, 5, (stitch) =>
             this.batchProcessor.processSingleStitch(
               schemaName,
               traceId,
@@ -196,10 +195,6 @@ export class FanoutRouterService implements OnModuleInit {
               );
             }
           });
-        } catch (err) {
-          // Error already handled by outer catch block
-          throw err;
-        }
       } finally {
         if (srcEntityId) {
           await this.stateRepo.releaseSyncLock(dataSourceId, srcEntityId, schemaName, tenantId);

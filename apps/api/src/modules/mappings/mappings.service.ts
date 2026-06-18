@@ -57,7 +57,9 @@ export class MappingsService {
           category: payload.category,
           entity: payload.entity,
           viewMode: payload.viewMode,
-          version: (payload.version?.trim() || DEFAULT_MAPPING_VERSION) ?? DEFAULT_MAPPING_VERSION,
+          version:
+            (payload.version?.trim() || DEFAULT_MAPPING_VERSION) ??
+            DEFAULT_MAPPING_VERSION,
           mappingConfig: payload.mappingConfig,
         })
         .returning();
@@ -88,7 +90,7 @@ export class MappingsService {
           category: payload.category,
           entity: payload.entity,
           viewMode: payload.viewMode,
-          version: payload.version?.trim() || DEFAULT_MAPPING_VERSION,
+          ...(payload.version && { version: payload.version.trim() }),
           mappingConfig: payload.mappingConfig,
         })
         .where(

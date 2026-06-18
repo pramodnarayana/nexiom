@@ -3,7 +3,7 @@ import { eq, inArray, and } from "drizzle-orm";
 import { DATABASE_CONNECTION, globalRegistryOutbox } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
 import { DB_MANAGER } from "@soopa/dbmanager";
-import type { DatabaseManager } from "@soopa/dbmanager";
+import type { DatabaseManager, SchemaPlan } from "@soopa/dbmanager";
 import * as schema from "@soopa/database";
 import type {
   RegistryReplicationPort,
@@ -173,7 +173,7 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
       .where(eq(globalRegistryOutbox.id, outboxId));
   }
 
-  async activateConnection(tenantId: string, connectionId: string, schemaPlan: 'STANDARD_ACTIVE' | 'STANDARD_PAUSED' | 'STANDARD_ARCHIVED'): Promise<void> {
+  async activateConnection(tenantId: string, connectionId: string, schemaPlan: SchemaPlan): Promise<void> {
     await this.globalDb.transaction(async (tx) => {
       // Verify and update data source
       const [updatedDataSource] = await tx

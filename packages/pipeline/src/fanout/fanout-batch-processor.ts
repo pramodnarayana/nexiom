@@ -157,6 +157,7 @@ export class FanoutBatchProcessor {
 
       if (srcEntityId) {
         const gemDestId = await this.gemRepo.getDestinationEntityId(
+          srcOrganizationId,
           stitch.id,
           dataSourceId,
           srcEntityId

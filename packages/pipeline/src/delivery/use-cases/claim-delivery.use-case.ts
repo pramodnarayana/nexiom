@@ -20,8 +20,8 @@ export interface ClaimDeliveryInput {
   hydratedPayload: Record<string, unknown>;
   srcEntityId?: string;
   canonicalType: string;
-  srcAppName: string;
-  srcOrganizationId: string;
+  srcAppName?: string;
+  srcOrganizationId?: string;
   start: number;
   writeL6ResultFn: (
     destSchemaName: string,
@@ -38,8 +38,8 @@ export interface ClaimDeliveryInput {
     start: number,
     destEntityId: string | undefined,
     canonicalType: string,
-    srcAppName: string,
-    srcOrganizationId: string,
+    srcAppName: string | undefined,
+    srcOrganizationId: string | undefined,
     srcEntityId: string | undefined,
     targetConnectionId: string,
     targetAppName: string | undefined,
@@ -58,7 +58,7 @@ export type ClaimDeliveryResult =
       attemptCount: number;
       tenantId: string;
       targetAppName: string;
-      targetOrganizationId: string;
+      targetOrganizationId?: string;
     }
   | { status: "TERMINATED" }; // For MAX_ATTEMPTS or Duplicates
 
