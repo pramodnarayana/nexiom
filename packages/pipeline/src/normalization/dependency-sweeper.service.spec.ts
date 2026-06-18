@@ -327,6 +327,12 @@ describe("DependencySweeperService (Unit)", () => {
     vi.spyOn(repo, 'getActiveTenants').mockRejectedValue(new Error('Critical DB failure'));
 
     // Should not throw, should be caught and logged
-    await expect(service.sweepDeferredDependencies()).resolves.not.toThrow();
+    let errorThrown = false;
+    try {
+      await service.sweepDeferredDependencies();
+    } catch (e) {
+      errorThrown = true;
+    }
+    expect(errorThrown).toBe(false);
   });
 });

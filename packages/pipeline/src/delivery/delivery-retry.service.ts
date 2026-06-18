@@ -103,7 +103,7 @@ export class DeliveryRetryService {
     );
 
     const targetAppName = connRows?.appName;
-    const targetOrganizationId = connRows?.tenantId;
+    const targetOrganizationId = connRows?.organizationId ?? undefined;
 
     const stitch = await this.stitchRepository.findById(tenantId, routeId);
     const targetObject = stitch?.targetObject ?? "";

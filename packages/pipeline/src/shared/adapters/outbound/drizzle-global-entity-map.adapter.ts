@@ -1,14 +1,12 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { sql } from "drizzle-orm";
-import { DATABASE_CONNECTION, globalEntityMap } from "@soopa/database";
-import type { DrizzleDb } from "@soopa/database";
+import { globalEntityMap } from "@soopa/database";
 import { GlobalEntityMapRepositoryPort, GemMappingParams } from '../../ports/global-entity-map.repository.port.js';
 import { DB_MANAGER, type DatabaseManager } from "@soopa/dbmanager";
 
 @Injectable()
 export class DrizzleGlobalEntityMapRepositoryAdapter implements GlobalEntityMapRepositoryPort {
   constructor(
-    @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) { }
 

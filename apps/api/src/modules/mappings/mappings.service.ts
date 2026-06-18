@@ -90,7 +90,8 @@ export class MappingsService {
           category: payload.category,
           entity: payload.entity,
           viewMode: payload.viewMode,
-          ...(payload.version && payload.version.trim() && { version: payload.version.trim() }),
+          ...(payload.version &&
+            payload.version.trim() && { version: payload.version.trim() }),
           mappingConfig: payload.mappingConfig,
         })
         .where(

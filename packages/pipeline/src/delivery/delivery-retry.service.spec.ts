@@ -63,6 +63,7 @@ describe('DeliveryRetryService', () => {
 
       connectionRepository.getTenantConnectionMeta.mockResolvedValue({
         appName: 'quickbooks',
+        organizationId: 'qb-ten-1',
         tenantId: 'qb-ten-1'
       });
 
