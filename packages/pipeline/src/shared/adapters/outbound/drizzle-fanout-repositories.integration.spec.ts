@@ -234,7 +234,7 @@ describe("Fanout Drizzle Adapters", () => {
         sourceEntityId: "ext-1",
         destEntityId: "ext-2",
         sourceOrgId: "org-1",
-        destEntityId: "org-2",
+        destOrgId: "org-2",
         sourceEntityType: "Contact",
         destEntityType: "Contact",
         sourceRefLayer: "L2",
