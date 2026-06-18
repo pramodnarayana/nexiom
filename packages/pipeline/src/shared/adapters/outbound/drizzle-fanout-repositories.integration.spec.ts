@@ -67,7 +67,7 @@ describe("Fanout Drizzle Adapters", () => {
 
     connectionAdapter = new DrizzleConnectionRepositoryAdapter(testDbManager.db!, mockDbManager);
     fieldMappingAdapter = new DrizzleFieldMappingRepositoryAdapter(mockDbManager);
-    gemAdapter = new DrizzleGlobalEntityMapRepositoryAdapter(testDbManager.db!, mockDbManager);
+    gemAdapter = new DrizzleGlobalEntityMapRepositoryAdapter(mockDbManager as any);
     outboxAdapter = new DrizzleOutboundGatewayRepositoryAdapter(mockDbManager);
     stateAdapter = new DrizzlePipelineStateRepositoryAdapter(mockDbManager);
     stitchAdapter = new DrizzleSharedStitchRepositoryAdapter(mockDbManager);
