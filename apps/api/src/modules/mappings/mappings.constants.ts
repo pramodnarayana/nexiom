@@ -1,1 +1,1 @@
-export const DEFAULT_MAPPING_VERSION = '1.0';
+export const DEFAULT_MAPPING_VERSION = 'v1';
