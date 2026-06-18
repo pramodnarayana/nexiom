@@ -10,19 +10,35 @@ export class HttpOAuthClientAdapter implements OAuthClientPort {
     clientSecret: string,
     code: string,
     providerName: string,
+    authorizationMethod: 'body' | 'header' = 'body',
   ): Promise<Record<string, unknown>> {
     let response: Response;
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      };
+
+      const params = new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+      });
+
+      if (authorizationMethod === 'header') {
+        const encoded = Buffer.from(`${clientId}:${clientSecret}`).toString(
+          'base64',
+        );
+        headers['Authorization'] = `Basic ${encoded}`;
+      } else {
+        params.append('client_id', clientId);
+        params.append('client_secret', clientSecret);
+      }
+
       response = await fetch(tokenUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          code,
-          redirect_uri: redirectUri,
-          client_id: clientId,
-          client_secret: clientSecret,
-        }).toString(),
+        headers,
+        body: params.toString(),
         signal: AbortSignal.timeout(10000),
       });
     } catch (err: unknown) {
