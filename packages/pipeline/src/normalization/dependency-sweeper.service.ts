@@ -66,7 +66,7 @@ export class DependencySweeperService {
             let schemaName: string | undefined;
             try {
               // Use persisted schema name if available, otherwise compute
-              if (!conn.schemaName && (!conn.organizationId || conn.organizationId.trim() === "")) {
+              if ((!conn.schemaName || conn.schemaName.trim() === "") && (!conn.organizationId || conn.organizationId.trim() === "")) {
                 throw new Error(
                   `Cannot resolve schema name: schemaName is empty and organizationId is missing for connection ${conn.id}`
                 );

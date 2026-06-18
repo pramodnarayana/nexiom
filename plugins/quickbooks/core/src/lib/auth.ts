@@ -27,6 +27,7 @@ export const quickbooksAuth = PieceAuth.OAuth2({
     tokenUrl: 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer',
     scope: ['com.intuit.quickbooks.accounting'],
     extractOrganizationId: (tokens: Record<string, unknown>) => {
-        return (tokens.realmId as string | undefined) || (tokens.data as any)?.realmId;
+        const realmId = tokens.realmId ?? (tokens.data as any)?.realmId;
+        return typeof realmId === 'string' ? realmId : undefined;
     }
 });

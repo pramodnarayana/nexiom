@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
+import { DEFAULT_MAPPING_VERSION } from './mappings.constants.js';
 
 // Base schema without defaults
 const BaseMappingSchema = z.object({
@@ -13,7 +14,7 @@ const BaseMappingSchema = z.object({
 
 // Create schema with default for version
 export const CreateMappingSchema = BaseMappingSchema.extend({
-  version: z.string().optional().default('ent1'),
+  version: z.string().optional().default(DEFAULT_MAPPING_VERSION),
 });
 
 // Update schema without defaults

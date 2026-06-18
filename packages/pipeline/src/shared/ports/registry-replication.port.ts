@@ -36,6 +36,6 @@ export interface RegistryReplicationPort {
   activateConnection(
     tenantId: string,
     connectionId: string,
-    schemaPlan: string
+    schemaPlan: 'STANDARD_ACTIVE' | 'STANDARD_PAUSED' | 'STANDARD_ARCHIVED'
   ): Promise<void>;
 }

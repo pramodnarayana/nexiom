@@ -482,10 +482,13 @@ export class OAuthController {
     }
 
     const { vendorParams: stateVendorParams, metadata } = statePayload;
-    const vendorParams = {
+
+    const providerDef = this.pieceRegistry.getPiece(body.providerName);
+    const mergedVendorParams = {
       ...(stateVendorParams || {}),
       ...(body.vendorParams || {}),
     };
+    const vendorParams = this.resolveVendorParams(providerDef, mergedVendorParams);
 
     let tokens: Record<string, unknown>;
     try {

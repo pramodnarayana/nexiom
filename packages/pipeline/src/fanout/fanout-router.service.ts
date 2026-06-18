@@ -196,10 +196,9 @@ export class FanoutRouterService implements OnModuleInit {
               );
             }
           });
-        } finally {
-          if (srcEntityId && lockRefCount.count === 0) {
-            await this.stateRepo.releaseSyncLock(dataSourceId, srcEntityId, schemaName, tenantId);
-          }
+        } catch (err) {
+          // Error already handled by outer catch block
+          throw err;
         }
       } finally {
         if (srcEntityId) {

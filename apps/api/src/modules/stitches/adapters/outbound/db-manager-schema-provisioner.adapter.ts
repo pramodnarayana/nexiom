@@ -19,13 +19,13 @@ export class DbManagerSchemaProvisionerAdapter implements SchemaProvisionerPort 
     orgId: string,
     _destDataSourceId: string,
     destAppName: string,
-    destEntityanizationId: string,
+    destOrganizationId: string,
     destAppProfile?: string,
   ): Promise<void> {
     const schemaName = getWorkspaceSchemaName(
       orgId,
       destAppName,
-      destEntityanizationId,
+      destOrganizationId,
     );
     try {
       await this.dbManager.applyPlan(

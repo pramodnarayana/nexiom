@@ -106,9 +106,9 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     const canonicalType =
       typeof msg.canonicalType === "string" ? msg.canonicalType : "RAW";
     const srcAppName =
-      typeof msg.srcAppName === "string" ? msg.srcAppName : "unknown";
+      typeof msg.srcAppName === "string" ? msg.srcAppName : undefined;
     const srcOrganizationId =
-      typeof msg.srcOrganizationId === "string" ? msg.srcOrganizationId : "unknown";
+      typeof msg.srcOrganizationId === "string" ? msg.srcOrganizationId : undefined;
     const start = Date.now();
 
     this.logger.log(
@@ -296,8 +296,8 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     start: number,
     destEntityId: string | undefined,
     canonicalType: string,
-    srcAppName: string,
-    srcOrganizationId: string,
+    srcAppName: string | undefined,
+    srcOrganizationId: string | undefined,
     srcEntityId: string | undefined,
     targetConnectionId: string,
     targetAppName: string | undefined,
@@ -340,6 +340,8 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         finalStatus === "SUCCESS" &&
         srcEntityId &&
         destEntityId &&
+        srcAppName &&
+        srcOrganizationId &&
         targetAppName &&
         targetOrganizationId
       ) {

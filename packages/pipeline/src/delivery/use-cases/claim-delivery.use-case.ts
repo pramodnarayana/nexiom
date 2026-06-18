@@ -314,7 +314,7 @@ export class ClaimDeliveryUseCase {
     }
 
     const targetAppName = connRows.appName;
-    const targetOrganizationId = connRows.tenantId;
+    const targetOrganizationId = connRows.organizationId ?? undefined;
 
     // ── TX-2: Atomic claim — transition PENDING/RETRY → PROCESSING ────────
     const claimRes = await this.outboundGatewayRepository.claimForProcessing(

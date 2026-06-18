@@ -5,6 +5,7 @@ import {
   IsUUID,
   Matches,
   MaxLength,
+  IsObject,
 } from 'class-validator';
 
 import { VALID_PROVIDER_NAME_REGEX } from './constants.js';
@@ -57,5 +58,6 @@ export class ExchangeOAuthCode {
   appProfile?: string;
 
   @IsOptional()
+  @IsObject()
   vendorParams?: Record<string, string | boolean | number>;
 }

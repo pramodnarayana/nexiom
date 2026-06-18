@@ -173,7 +173,7 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
       .where(eq(globalRegistryOutbox.id, outboxId));
   }
 
-  async activateConnection(tenantId: string, connectionId: string, schemaPlan: string): Promise<void> {
+  async activateConnection(tenantId: string, connectionId: string, schemaPlan: 'STANDARD_ACTIVE' | 'STANDARD_PAUSED' | 'STANDARD_ARCHIVED'): Promise<void> {
     await this.globalDb.transaction(async (tx) => {
       // Verify and update data source
       const [updatedDataSource] = await tx

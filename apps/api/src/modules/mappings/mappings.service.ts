@@ -11,6 +11,7 @@ import type { DatabaseManager } from '@soopa/dbmanager';
 import { canonicalMappings } from '@soopa/database';
 import { PinoLogger } from 'nestjs-pino';
 import type { CreateMapping, UpdateMapping } from './mappings.validation.js';
+import { DEFAULT_MAPPING_VERSION } from './mappings.constants.js';
 
 @Injectable()
 export class MappingsService {
@@ -56,7 +57,7 @@ export class MappingsService {
           category: payload.category,
           entity: payload.entity,
           viewMode: payload.viewMode,
-          version: (payload.version?.trim() || 'ent1') ?? 'ent1',
+          version: (payload.version?.trim() || DEFAULT_MAPPING_VERSION) ?? DEFAULT_MAPPING_VERSION,
           mappingConfig: payload.mappingConfig,
         })
         .returning();
@@ -87,7 +88,7 @@ export class MappingsService {
           category: payload.category,
           entity: payload.entity,
           viewMode: payload.viewMode,
-          version: payload.version?.trim() || 'ent1',
+          version: payload.version?.trim() || DEFAULT_MAPPING_VERSION,
           mappingConfig: payload.mappingConfig,
         })
         .where(
