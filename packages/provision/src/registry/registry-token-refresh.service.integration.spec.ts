@@ -6,8 +6,14 @@ import { ENCRYPTION_SERVICE } from "@soopa/security";
 import { PropertyType, Piece } from "@soopa/piece-framework";
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 
+class TestRegistryOAuthRefreshClient extends RegistryOAuthRefreshClient {
+  public testGetTokenUrl(appName: string): string {
+    return this.getTokenUrl(appName);
+  }
+}
+
 describe("RegistryOAuthRefreshClient", () => {
-  let service: RegistryOAuthRefreshClient;
+  let service: TestRegistryOAuthRefreshClient;
   let pieceRegistry: PieceRegistryService;
   let testDbManager: TestDatabaseManager;
 
@@ -23,7 +29,10 @@ describe("RegistryOAuthRefreshClient", () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        RegistryOAuthRefreshClient,
+        {
+          provide: TestRegistryOAuthRefreshClient,
+          useClass: TestRegistryOAuthRefreshClient,
+        },
         {
           provide: PieceRegistryService,
           useValue: {
@@ -41,8 +50,8 @@ describe("RegistryOAuthRefreshClient", () => {
       ],
     }).compile();
 
-    service = module.get<RegistryOAuthRefreshClient>(
-      RegistryOAuthRefreshClient,
+    service = module.get<TestRegistryOAuthRefreshClient>(
+      TestRegistryOAuthRefreshClient,
     );
     pieceRegistry = module.get<PieceRegistryService>(PieceRegistryService);
   });
@@ -56,8 +65,7 @@ describe("RegistryOAuthRefreshClient", () => {
       vi.spyOn(pieceRegistry, "getPiece").mockReturnValue(undefined);
 
       expect(() => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        (service as any).getTokenUrl("non_existent_piece");
+        service.testGetTokenUrl("non_existent_piece");
       }).toThrow("Piece not found for refresh: non_existent_piece");
     });
 
@@ -70,8 +78,7 @@ describe("RegistryOAuthRefreshClient", () => {
       } as unknown as Piece);
 
       expect(() => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        (service as any).getTokenUrl("test_piece");
+        service.testGetTokenUrl("test_piece");
       }).toThrow(
         "Piece test_piece does not support OAuth refresh or lacks a token url",
       );
@@ -87,8 +94,7 @@ describe("RegistryOAuthRefreshClient", () => {
       } as unknown as Piece);
 
       expect(() => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        (service as any).getTokenUrl("test_piece");
+        service.testGetTokenUrl("test_piece");
       }).toThrow(
         "Piece test_piece does not support OAuth refresh or lacks a token url",
       );
@@ -103,8 +109,7 @@ describe("RegistryOAuthRefreshClient", () => {
         },
       } as unknown as Piece);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
-      const url = (service as any).getTokenUrl("test_piece");
+      const url = service.testGetTokenUrl("test_piece");
       expect(url).toBe("https://api.test.com/oauth/token");
     });
   });

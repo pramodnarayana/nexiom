@@ -269,7 +269,10 @@ describe("App Installer Subdomain", () => {
       expect(publishSpy).not.toHaveBeenCalled();
     });
 
-    it("should fail gracefully if global piece auto-registration throws", async () => {
+    it("should fail gracefully if global piece auto-registration throws during register()", async () => {
+      // extractPieceMetadata swallows exceptions thrown by register() and returns
+      // null when no valid piece can be found. The use case then reports that it
+      // could not locate an exported piece object.
       registry.requireMocks.set("test-package-error", {
         register: () => {
           throw new Error("Initialization error");
@@ -290,9 +293,57 @@ describe("App Installer Subdomain", () => {
           packageName: "test-package-error",
           version: "1.0.0",
         }),
-      ).rejects.toThrow("Initialization error");
+      ).rejects.toThrow("Could not find exported piece object");
 
       expect(publishSpy).not.toHaveBeenCalled();
+    });
+
+    it("should handle non-Error thrown by installPiece (String branch)", async () => {
+      // Covers the `String(error)` branch at line 42 of install-piece.use-case.ts
+      // eslint-disable-next-line @typescript-eslint/require-await
+      registry.installPiece = async () => {
+        // eslint-disable-next-line @typescript-eslint/only-throw-error
+        throw "raw string error from registry";
+      };
+
+      const pubsub = new FakeRealtimeEventPubSub();
+      const useCase = new InstallPieceUseCase(
+        registry,
+        repository,
+        pubsub,
+        logger,
+      );
+
+      await expect(
+        useCase.execute({ packageName: "test-package", version: "1.0.0" }),
+      ).rejects.toBe("raw string error from registry");
+    });
+
+    it("should handle non-Error thrown by upsertPiece (String branch)", async () => {
+      // Covers the `String(error)` branch at line 73 of install-piece.use-case.ts
+      registry.requireMocks.set("test-package-upsert-fail", {
+        piece: { name: "upsert-fail-piece", displayName: "Fail" },
+      });
+      // eslint-disable-next-line @typescript-eslint/require-await
+      repository.upsertPiece = async () => {
+        // eslint-disable-next-line @typescript-eslint/only-throw-error
+        throw "raw db error";
+      };
+
+      const pubsub = new FakeRealtimeEventPubSub();
+      const useCase = new InstallPieceUseCase(
+        registry,
+        repository,
+        pubsub,
+        logger,
+      );
+
+      await expect(
+        useCase.execute({
+          packageName: "test-package-upsert-fail",
+          version: "1.0.0",
+        }),
+      ).rejects.toBe("raw db error");
     });
   });
 

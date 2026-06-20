@@ -156,11 +156,21 @@ export const upsertRevenovaObject: ReplicaExtractorFn = (payload) => {
 
     // Sanitize keys: strip "sf:" namespace prefix and lowercase for consistency
     for (const [key, value] of Object.entries(rawObj)) {
+        if (key === 'attributes' && typeof value === 'object' && value !== null) {
+            // Handle Salesforce REST API payload where type is in the attributes object
+            const typeValue = (value as Record<string, unknown>)['type'];
+            if (typeof typeValue === 'string') {
+                const typeName = typeValue.startsWith('sf:') ? typeValue.substring(3) : typeValue;
+                doctype = typeName.startsWith('rtms__') ? typeName : `sf_${typeName}`;
+            }
+            continue; // Skip putting 'attributes' into the parsed data blob
+        }
+        
         if (key !== '$') {
             const cleanKey = (key.startsWith('sf:') ? key.substring(3) : key).toLowerCase();
             r_obj[cleanKey] = value;
         } else {
-            // Derive doctype from xsi:type attribute on the sObject
+            // Derive doctype from xsi:type attribute on the sObject (SOAP XML fallback)
             const xsi = (value as Record<string, unknown>)?.['xsi:type'];
             if (typeof xsi === 'string') {
                 const typeName = xsi.startsWith('sf:') ? xsi.substring(3) : xsi;

@@ -51,7 +51,7 @@ function isValidNormalizedRecord(value: unknown): value is NormalizedRecord {
  *
  * Registered as: registerNormalizer('salesforce', 'revenova', normalizeRevenovaToTms)
  */
-export const normalizeRevenovaToTms: NormalizerFn = ({ entityType, data }) => {
+export const normalizeRevenovaToTms: NormalizerFn = async ({ entityType, data }) => {
     // Check if expression was successfully compiled at module load
     if (!expression) {
         console.error(
@@ -63,7 +63,7 @@ export const normalizeRevenovaToTms: NormalizerFn = ({ entityType, data }) => {
     }
 
     try {
-        const result = expression.evaluate({ entityType, data });
+        const result = await expression.evaluate({ entityType, data });
 
         // Handle null/undefined explicitly (Issue 5: fix falsy coalescing)
         if (result === null || result === undefined) {

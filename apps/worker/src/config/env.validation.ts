@@ -49,7 +49,8 @@ const baseSchema = z.object({
 
   // Plugins
   PLUGINS_PATH: z.string().optional(),
-  DISABLE_LOCAL_SYNC: z.string().optional(),
+  REGISTRY_PLUGIN: z.string().optional(),
+  DEBEZIUM_SECRET: z.string().optional(),
   NPM_REGISTRY_URL: z.string().url().optional(),
 });
 

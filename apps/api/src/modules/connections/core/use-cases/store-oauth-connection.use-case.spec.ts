@@ -14,6 +14,11 @@ describe('StoreOAuthConnectionUseCase', () => {
     useCase = new StoreOAuthConnectionUseCase(
       fakeRepo,
       fakeLifecycle,
+      {
+        encrypt: (val: string) => Promise.resolve(`encrypted_${val}`),
+        decrypt: (val: string) =>
+          Promise.resolve(val.replace('encrypted_', '')),
+      } as any, // Mock crypto
       'us-east-1',
     );
   });
@@ -93,6 +98,11 @@ describe('StoreOAuthConnectionUseCase', () => {
       const noDefaultUseCase = new StoreOAuthConnectionUseCase(
         fakeRepo,
         fakeLifecycle,
+        {
+          encrypt: (val: string) => Promise.resolve(`encrypted_${val}`),
+          decrypt: (val: string) =>
+            Promise.resolve(val.replace('encrypted_', '')),
+        } as any, // Mock crypto
         undefined,
       );
 

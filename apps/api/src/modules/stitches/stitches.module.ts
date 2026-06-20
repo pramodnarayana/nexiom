@@ -11,12 +11,10 @@ import { MetadataModule } from '@soopa/piece-registry';
 // Adapters
 import { DrizzleStitchRepositoryAdapter } from './adapters/outbound/drizzle-stitch.adapter.js';
 import { DrizzleFieldMappingRepositoryAdapter } from './adapters/outbound/drizzle-field-mapping.adapter.js';
-import { DbManagerSchemaProvisionerAdapter } from './adapters/outbound/db-manager-schema-provisioner.adapter.js';
 
 // Ports
 import { STITCH_REPOSITORY_PORT } from './core/ports/outbound/stitch-repository.port.js';
 import { FIELD_MAPPING_REPOSITORY_PORT } from './core/ports/outbound/field-mapping-repository.port.js';
-import { SCHEMA_PROVISIONER_PORT } from './core/ports/outbound/schema-provisioner.port.js';
 
 // Use Cases
 import { CreateStitchUseCase } from './core/use-cases/stitches/create-stitch.use-case.js';
@@ -50,10 +48,6 @@ import { DeleteFieldMappingUseCase } from './core/use-cases/field-mappings/delet
     {
       provide: FIELD_MAPPING_REPOSITORY_PORT,
       useClass: DrizzleFieldMappingRepositoryAdapter,
-    },
-    {
-      provide: SCHEMA_PROVISIONER_PORT,
-      useClass: DbManagerSchemaProvisionerAdapter,
     },
     CreateStitchUseCase,
     UpdateStitchUseCase,

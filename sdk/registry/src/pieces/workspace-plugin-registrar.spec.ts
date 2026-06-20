@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { LocalDevPluginSyncService } from './local-dev-plugin-sync.service.js';
+import { WorkspacePluginRegistrar } from './workspace-plugin-registrar.js';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -18,17 +18,17 @@ vi.mock('fs', async () => {
   };
 });
 
-describe('local-dev-plugin-sync.service', () => {
-  let service: LocalDevPluginSyncService;
+describe('workspace-plugin-registrar', () => {
+  let service: WorkspacePluginRegistrar;
   let mockPieceRepo: any;
   const originalEnv = process.env;
 
   beforeEach(() => {
-    process.env = { ...originalEnv, NODE_ENV: 'development', DISABLE_LOCAL_SYNC: 'false' };
+    process.env = { ...originalEnv, NODE_ENV: 'development', REGISTRY_PLUGIN: 'false' };
     mockPieceRepo = {
       upsertPiece: vi.fn().mockResolvedValue(undefined),
     };
-    service = new LocalDevPluginSyncService(mockPieceRepo);
+    service = new WorkspacePluginRegistrar(mockPieceRepo);
     
     vi.spyOn(fs, 'existsSync').mockReturnValue(true);
     vi.spyOn(fs.promises, 'readdir').mockImplementation((async (p: any) => {
@@ -45,17 +45,7 @@ describe('local-dev-plugin-sync.service', () => {
     vi.clearAllMocks();
   });
 
-  it('should skip initialization if not in dev mode', async () => {
-    process.env.NODE_ENV = 'production';
-    await service.initialize();
-    expect(fs.existsSync).not.toHaveBeenCalled();
-  });
 
-  it('should skip initialization if disabled via env', async () => {
-    process.env.DISABLE_LOCAL_SYNC = 'true';
-    await service.initialize();
-    expect(fs.existsSync).not.toHaveBeenCalled();
-  });
 
   it('should handle missing plugins directory', async () => {
     vi.spyOn(fs, 'existsSync').mockReturnValue(false);

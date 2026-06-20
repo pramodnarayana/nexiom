@@ -15,6 +15,11 @@ export class DrizzlePieceRepository implements IPieceRepository {
       logoUrl: dto.logoUrl || '',
       packageName: dto.packageName,
       version: dto.version,
+      description: dto.description,
+      categories: dto.categories,
+      authType: dto.authType,
+      authSchema: dto.authSchema,
+      aliases: dto.aliases,
       enabled: true,
     }).onConflictDoUpdate({
       target: pieces.name,
@@ -23,6 +28,11 @@ export class DrizzlePieceRepository implements IPieceRepository {
         logoUrl: dto.logoUrl || '',
         packageName: dto.packageName,
         version: dto.version,
+        description: dto.description,
+        categories: dto.categories,
+        authType: dto.authType,
+        authSchema: dto.authSchema,
+        aliases: dto.aliases,
         updatedAt: new Date()
       }
     });

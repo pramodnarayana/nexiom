@@ -51,7 +51,9 @@ const baseSchema = z.object({
 
   // Plugins
   PLUGINS_PATH: z.string().optional(),
-  DISABLE_LOCAL_SYNC: z.string().optional(),
+  REGISTRY_PLUGIN: z.string().optional(),
+  CDC_RELAY_DISABLE_AUTH: z.string().optional(),
+  DEBEZIUM_SECRET: z.string().optional(),
 });
 
 const localInfraSchema = baseSchema.extend({

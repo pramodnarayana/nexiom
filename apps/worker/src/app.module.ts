@@ -1,6 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ScheduleModule } from "@nestjs/schedule";
-import { PipelineCoreModule, ApplicationLoaderModule } from "@soopa/pipeline";
+import { PipelineCoreModule } from "@soopa/pipeline";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { PiecesModule } from "@soopa/piece-registry";
 import { QueueModule, createQueueModuleOptions } from "@soopa/queue";
@@ -11,7 +11,7 @@ import { DbManagerModule } from "./bootstrap/dbmanager/dbmanager.module.js";
 import { EventEmitterModule } from "@nestjs/event-emitter";
 import { EncryptionModule } from "@soopa/security";
 import { CredentialsModule } from "@soopa/credentials";
-import { RegistryOAuthRefreshClient } from "@soopa/pipeline";
+import { RegistryOAuthRefreshClient, ProvisionModule } from "@soopa/provision";
 
 // Consumers
 import { CopilotWorker } from "./consumers/copilot.worker.js";
@@ -86,8 +86,9 @@ import { validateEnv } from "./config/env.validation.js";
       useFactory: createQueueModuleOptions,
     }),
     CacheModule,
+    ProvisionModule,
     PipelineCoreModule,
-    ApplicationLoaderModule,
+
     AiEngineModule,
   ],
   controllers: [],

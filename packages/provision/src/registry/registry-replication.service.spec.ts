@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, Mocked } from 'vitest';
 import { RegistryReplicationService } from './registry-replication.service.js';
 import { QueueService, QueueName } from '@soopa/queue';
-import type { RegistryReplicationPort } from "../shared/domain.js";
+import type { RegistryReplicationPort } from '../shared/ports/registry-replication.port.js';
 import { DB_MANAGER, SchemaPlan, getWorkspaceSchemaName } from '@soopa/dbmanager';
 import type { DatabaseManager } from '@soopa/dbmanager';
 
@@ -22,7 +22,8 @@ describe('RegistryReplicationService', () => {
       getStitchDataSources: vi.fn(),
       markGlobalOutboxSuccess: vi.fn(),
       activateConnection: vi.fn(),
-    };
+      registerCdcTables: vi.fn(),
+    } as any;
 
     dbManager = {
       applyPlan: vi.fn(),

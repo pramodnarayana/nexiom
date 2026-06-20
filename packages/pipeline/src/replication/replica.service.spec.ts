@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, Mocked } from 'vitest';
 import { ReplicaService } from './replica.service.js';
 import { QueueService, QueueName } from '@soopa/queue';
 import { StorageResolverService } from '../storage-resolver/storage-resolver.service.js';
-import { PipelineHookBrokerService } from '../sharding/pipeline-hook-broker.service.js';
+import { PipelineHookBrokerService } from '../plugin-hooks/pipeline-hook-broker.service.js';
 import type { ReplicaStatePort } from "../shared/domain.js";
 import { FakeConnectionRepository } from '../shared/fakes/connection-repository.fake.js';
 import { DependenciesMissingError } from '@soopa/piece-framework';

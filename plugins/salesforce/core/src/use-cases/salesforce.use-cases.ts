@@ -19,13 +19,19 @@ export class SalesforceUseCases {
       Accept: 'application/json',
     });
 
+    if (!data || !Array.isArray(data.sobjects)) {
+      throw new Error(`Salesforce API returned unexpected response format: missing sobjects array`);
+    }
+
     const filtered = data.sobjects.filter((o) => o.queryable || o.name.endsWith('__c'));
 
     filtered.sort((a, b) => {
       const aCustom = a.name.endsWith('__c');
       const bCustom = b.name.endsWith('__c');
       if (aCustom !== bCustom) return aCustom ? -1 : 1;
-      return a.label.localeCompare(b.label);
+      const labelA = a.label || a.name || '';
+      const labelB = b.label || b.name || '';
+      return labelA.localeCompare(labelB);
     });
 
     return filtered.map((o) => ({ name: o.name, label: o.label, queryable: o.queryable }));
@@ -135,27 +141,26 @@ export class SalesforceUseCases {
       throw new Error(`Invalid Salesforce object name: ${streamName}`);
     }
 
-    let soql = `SELECT FIELDS(ALL) FROM ${streamName}`;
-
-    if (nextPageCursor && typeof nextPageCursor['lastId'] === 'string') {
-      const lastId = nextPageCursor['lastId'];
-      // Validate Salesforce ID format (15 or 18 alphanumeric characters)
-      if (!/^[a-zA-Z0-9]{15}$|^[a-zA-Z0-9]{18}$/.test(lastId)) {
-        throw new Error(`Invalid Salesforce ID format: ${lastId}`);
-      }
-      // Escape any special characters to prevent injection
-      const sanitizedId = lastId.replace(/['"\n\r\\]/g, '');
-      soql += ` WHERE Id > '${sanitizedId}' ORDER BY Id ASC LIMIT 200`;
-    } else {
-      soql += ` ORDER BY Id ASC LIMIT 200`;
-    }
-    
-    const q = encodeURIComponent(soql);
-    const url = `${credentials.instanceUrl}/services/data/${SF_API_VERSION}/query?q=${q}`;
-
     interface SfQueryResponse {
       done: boolean;
+      nextRecordsUrl?: string;
       records: Record<string, unknown>[];
+    }
+
+    let url: string;
+
+    if (nextPageCursor && typeof nextPageCursor['nextRecordsUrl'] === 'string') {
+      // Use the native server-side pagination cursor
+      const nextUrl = nextPageCursor['nextRecordsUrl'];
+      url = `${credentials.instanceUrl}${nextUrl}`;
+    } else {
+      // First page: dynamically resolve fields to avoid FIELDS(ALL) limitation
+      const fields = await this.describeFields(credentials, streamName);
+      const fieldNames = fields.map(f => f.name).join(', ');
+      
+      const soql = `SELECT ${fieldNames} FROM ${streamName}`;
+      const q = encodeURIComponent(soql);
+      url = `${credentials.instanceUrl}/services/data/${SF_API_VERSION}/query?q=${q}`;
     }
 
     const { data } = await this.http.get<SfQueryResponse>(url, {
@@ -163,12 +168,10 @@ export class SalesforceUseCases {
       Accept: 'application/json',
     });
 
-    // Honor Salesforce's done flag and also check record count
-    const isComplete = Boolean(data.done) || data.records.length < 200;
+
     let nextCursor: Record<string, unknown> | undefined;
-    if (!isComplete && data.records.length > 0) {
-      const lastRecord = data.records[data.records.length - 1];
-      nextCursor = { lastId: lastRecord['Id'] };
+    if (!data.done && data.nextRecordsUrl) {
+      nextCursor = { nextRecordsUrl: data.nextRecordsUrl };
     }
 
     return {

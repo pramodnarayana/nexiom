@@ -2,7 +2,7 @@ import { Injectable, Inject, OnModuleInit, Logger } from '@nestjs/common';
 import { QueueService, QueueName } from '@soopa/queue';
 import { DB_MANAGER } from '@soopa/dbmanager';
 import type { DatabaseManager } from '@soopa/dbmanager';
-import type { RegistryReplicationPort } from '../shared/domain.js';
+import type { RegistryReplicationPort } from '../shared/ports/registry-replication.port.js';
 import { ProvisionSchemaUseCase } from './use-cases/provision-schema.use-case.js';
 
 @Injectable()

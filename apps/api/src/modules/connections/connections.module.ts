@@ -41,6 +41,7 @@ import { StoreOAuthConnectionUseCase } from './core/use-cases/store-oauth-connec
 import { GetAuthorizationUrlUseCase } from './core/use-cases/get-authorization-url.use-case.js';
 import { ExchangeOAuthTokenUseCase } from './core/use-cases/exchange-oauth-token.use-case.js';
 import { DeleteConnectionUseCase } from './core/use-cases/delete-connection.use-case.js';
+import { GetExistingOAuthCredentialsUseCase } from './core/use-cases/get-existing-oauth-credentials.use-case.js';
 
 /**
  * Handles OAuth connectivity, credential storage, and token management.
@@ -96,16 +97,19 @@ import { DeleteConnectionUseCase } from './core/use-cases/delete-connection.use-
       useFactory: (
         appConnectionRepo: AppConnectionRepositoryPort,
         connectionLifecycleAdapter: ConnectionLifecyclePort,
+        crypto: IEncryptionService,
       ) => {
         return new StoreOAuthConnectionUseCase(
           appConnectionRepo,
           connectionLifecycleAdapter,
+          crypto,
           process.env.DEFAULT_REGION_CONTEXT,
         );
       },
       inject: [
         DrizzleAppConnectionRepositoryAdapter,
         DrizzleConnectionLifecycleAdapter,
+        ENCRYPTION_SERVICE,
       ],
     },
     {
@@ -149,6 +153,7 @@ import { DeleteConnectionUseCase } from './core/use-cases/delete-connection.use-
       },
       inject: [DrizzleConnectionLifecycleAdapter],
     },
+    GetExistingOAuthCredentialsUseCase,
   ],
   exports: [
     TokenManagerService,

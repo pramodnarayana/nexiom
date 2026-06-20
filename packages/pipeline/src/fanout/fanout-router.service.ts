@@ -2,7 +2,7 @@ import { StorageResolverService } from "../storage-resolver/storage-resolver.ser
 import { sql } from "drizzle-orm";
 import { Injectable, Inject, OnModuleInit, Logger } from "@nestjs/common";
 import { QueueService, QueueName } from "@soopa/queue";
-import { buildTenantSchema } from "@soopa/database";
+import { buildTenantSchema, assertValidSchemaName } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
 import { DB_MANAGER } from "@soopa/dbmanager";
 import type { DatabaseManager } from "@soopa/dbmanager";
@@ -80,6 +80,7 @@ export class FanoutRouterService implements OnModuleInit {
 
       const tenantId = connectionMeta.tenantId;
       const schemaName = await this.storageResolver.resolveSchemaName(dataSourceId);
+      assertValidSchemaName(schemaName);
 
       let normalizedData: Record<string, unknown> = {};
       let canonicalType = "RAW";
@@ -95,16 +96,21 @@ export class FanoutRouterService implements OnModuleInit {
         srcEntityId = entityId;
 
         await tx.execute(sql`
-          INSERT INTO ${sql.raw('"' + schemaName + '"')}.active_sync_locks (data_source_id, entity_id)
-          VALUES (${dataSourceId}, ${entityId})
+          INSERT INTO ${sql.raw('"' + schemaName + '"')}.active_sync_locks (data_source_id, entity_id, locked_by_trace_id, expires_at)
+          VALUES (${dataSourceId}, ${entityId}, ${traceId}, NOW() + INTERVAL '5 minutes')
           ON CONFLICT (data_source_id, entity_id) DO NOTHING
         `);
 
-        await tx.execute(sql`
+        const lockResult = await tx.execute(sql`
           SELECT 1 FROM ${sql.raw('"' + schemaName + '"')}.active_sync_locks
           WHERE data_source_id = ${dataSourceId} AND entity_id = ${entityId}
+            AND locked_by_trace_id = ${traceId}
           FOR UPDATE
         `);
+
+        if (lockResult.rows.length === 0) {
+          throw new Error(`Sync lock for entity ${entityId} on data source ${dataSourceId} is already held by another trace.`);
+        }
 
         const evaluation = await this.routingDecisionEngine.evaluateSuperseded(
           traceId,

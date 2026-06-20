@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, Mocked } from 'vitest';
 import { TargetBuilderService } from './target-builder.service.js';
-import { PipelineHookBrokerService } from '../sharding/pipeline-hook-broker.service.js';
+import { PipelineHookBrokerService } from '../plugin-hooks/pipeline-hook-broker.service.js';
 
 describe('TargetBuilderService', () => {
   let db: any;

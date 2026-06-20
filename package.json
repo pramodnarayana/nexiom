@@ -22,7 +22,7 @@
 		"check:env": "{ [ -e .env ] || { echo '\n❌ ERROR: .env file is missing at the root! Please create it or fetch it from your secrets manager.\n'; exit 1; }; }",
 		"infra:reset": "pnpm check:env && docker compose down -v && pnpm setup:local",
 		"infra:light:reset": "pnpm check:env && docker compose down -v && pnpm setup:light",
-		"setup:infra": "pnpm check:env && DEBEZIUM_SINK_URL=http://host.docker.internal:3000/internal/cdc/relay docker compose up -d postgres redis localstack mock_gateway pgbouncer mailpit debezium verdaccio --wait && pnpm db:migrate && TENANT_DATABASE_URL=postgresql://user:password@localhost:5432/platform_shard_1 pnpm db:migrate:tenant && echo '✅ Infra ready. Now run: pnpm dev (in another terminal), then: pnpm db:seed'",
+		"setup:infra": "pnpm check:env && DEBEZIUM_SINK_URL=http://host.docker.internal:3000/api/internal/cdc/relay docker compose up -d postgres redis localstack mock_gateway pgbouncer mailpit debezium verdaccio --wait && pnpm db:migrate && TENANT_DATABASE_URL=postgresql://user:password@localhost:5432/platform_shard_1 pnpm db:migrate:tenant && echo '✅ Infra ready. Now run: pnpm dev (in another terminal), then: pnpm db:seed'",
 		"setup:local": "pnpm check:env && docker compose --profile app up -d --wait && pnpm db:migrate && TENANT_DATABASE_URL=postgresql://user:password@localhost:5432/platform_shard_1 pnpm db:migrate:tenant && pnpm db:seed",
 		"setup:light": "pnpm check:env && docker compose up -d postgres redis mock_gateway --wait && pnpm db:migrate && TENANT_DATABASE_URL=postgresql://user:password@localhost:5432/platform_shard_1 pnpm db:migrate:tenant && pnpm db:seed",
 		"publish:local": "./scripts/publish-local.sh",
