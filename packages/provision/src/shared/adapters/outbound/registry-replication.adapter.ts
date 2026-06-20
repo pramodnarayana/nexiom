@@ -216,7 +216,7 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
     const { sql } = await import("drizzle-orm");
 
     // Add each table individually to ensure idempotency
-    const tables = ['inbound_outbox', 'replica_outbox', 'normalized_outbox', 'outbound_outbox'];
+    const tables = ['inbound_outbox', 'replica_outbox', 'normalized_outbox'];
 
     for (const table of tables) {
       await tenantDb.execute(sql`
