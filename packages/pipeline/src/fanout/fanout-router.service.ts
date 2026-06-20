@@ -2,7 +2,7 @@ import { StorageResolverService } from "../storage-resolver/storage-resolver.ser
 import { sql } from "drizzle-orm";
 import { Injectable, Inject, OnModuleInit, Logger } from "@nestjs/common";
 import { QueueService, QueueName } from "@soopa/queue";
-import { buildTenantSchema } from "@soopa/database";
+import { buildTenantSchema, assertValidSchemaName } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
 import { DB_MANAGER } from "@soopa/dbmanager";
 import type { DatabaseManager } from "@soopa/dbmanager";
@@ -80,6 +80,7 @@ export class FanoutRouterService implements OnModuleInit {
 
       const tenantId = connectionMeta.tenantId;
       const schemaName = await this.storageResolver.resolveSchemaName(dataSourceId);
+      assertValidSchemaName(schemaName);
 
       let normalizedData: Record<string, unknown> = {};
       let canonicalType = "RAW";

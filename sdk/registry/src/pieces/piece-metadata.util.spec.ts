@@ -48,6 +48,32 @@ describe('extractPieceMetadata', () => {
       expect(result!.authSchema).toBeUndefined();
       expect(result!.aliases).toBeUndefined();
     });
+
+    it('should handle invalid auth.type (non-string) gracefully', () => {
+      const result = extractPieceMetadata({
+        piece: {
+          name: 'my-app',
+          displayName: 'My App',
+          auth: { type: 123, props: { key: 'value' } }, // type is not a string
+        },
+      });
+      expect(result).not.toBeNull();
+      expect(result!.authType).toBeUndefined();
+      expect(result!.authSchema).toBeUndefined();
+    });
+
+    it('should handle invalid auth.props (non-object) gracefully', () => {
+      const result = extractPieceMetadata({
+        piece: {
+          name: 'my-app',
+          displayName: 'My App',
+          auth: { type: 'OAUTH2', props: 'not-an-object' }, // props is not an object
+        },
+      });
+      expect(result).not.toBeNull();
+      expect(result!.authType).toBe('OAUTH2');
+      expect(result!.authSchema).toBeUndefined();
+    });
   });
 
   describe('Path 2: moduleExports.register()', () => {

@@ -36,7 +36,8 @@ export class PipelineHookBrokerService {
     if (normalizer) {
       return normalizer(replica);
     }
-    throw new Error(`[PipelineHookBroker] normalize hook not registered for piece: ${appName}`);
+    // Return null to indicate normalization is not applicable when no normalizer is registered
+    return null;
   }
 
   async writeNormalized(

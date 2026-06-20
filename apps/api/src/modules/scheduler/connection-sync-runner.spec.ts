@@ -34,6 +34,7 @@ describe('ConnectionSyncRunner', () => {
         ]),
     };
 
+    let traceIdCounter = 0;
     dbManagerMock = {
       applyPlan: vi.fn().mockResolvedValue(undefined),
       getTenantDb: vi.fn().mockResolvedValue({
@@ -57,13 +58,15 @@ describe('ConnectionSyncRunner', () => {
               }),
               onConflictDoNothing: vi.fn().mockReturnThis(),
               onConflictDoUpdate: vi.fn().mockReturnThis(),
-              returning: vi.fn().mockImplementation(() =>
-                Promise.resolve(
+              returning: vi.fn().mockImplementation(() => {
+                const startIndex = traceIdCounter;
+                traceIdCounter += lastInsertedCount;
+                return Promise.resolve(
                   Array.from({ length: lastInsertedCount }, (_, i) => ({
-                    traceId: `trace-${i}`,
+                    traceId: `trace-${startIndex + i}`,
                   })),
-                ),
-              ),
+                );
+              }),
             };
             return await cb(tx);
           }),

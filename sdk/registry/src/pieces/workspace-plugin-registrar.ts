@@ -27,6 +27,7 @@ export class WorkspacePluginRegistrar implements OnModuleInit {
 
     this.initPromise = this._doInitialize();
     await this.initPromise;
+    this.initPromise = null;
   }
 
   private async _doInitialize(): Promise<void> {

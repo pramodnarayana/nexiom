@@ -168,8 +168,6 @@ export class SalesforceUseCases {
       Accept: 'application/json',
     });
 
-    console.log(`[SalesforceUseCases.poll] URL: ${url.substring(0, 200)}...`);
-    console.log(`[SalesforceUseCases.poll] Fetched ${data.records.length} records. done=${data.done}, nextRecordsUrl=${data.nextRecordsUrl}`);
 
     let nextCursor: Record<string, unknown> | undefined;
     if (!data.done && data.nextRecordsUrl) {

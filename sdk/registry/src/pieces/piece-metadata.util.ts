@@ -85,14 +85,27 @@ export function extractPieceMetadata(moduleExports: Record<string, unknown>): Ex
     return null;
   }
 
+  // Validate auth.type is actually a string
+  let authType: string | undefined;
+  if (piece.auth && typeof piece.auth === "object" && "type" in piece.auth) {
+    authType = typeof piece.auth.type === "string" ? piece.auth.type : undefined;
+  }
+
+  // Validate auth.props is actually an object/Record
+  let authSchema: Record<string, unknown> | undefined;
+  if (piece.auth && typeof piece.auth === "object" && "props" in piece.auth) {
+    const props = piece.auth.props;
+    authSchema = (typeof props === "object" && props !== null && !Array.isArray(props)) ? (props as Record<string, unknown>) : undefined;
+  }
+
   return {
     name: piece.name,
     displayName: piece.displayName,
     logoUrl: typeof piece.logoUrl === "string" ? piece.logoUrl : undefined,
     description: typeof piece.description === "string" ? piece.description : undefined,
     categories: Array.isArray(piece.categories) && piece.categories.every((c) => typeof c === "string") ? piece.categories : undefined,
-    authType: piece.auth && typeof piece.auth === "object" && "type" in piece.auth ? (piece.auth.type as string) : undefined,
-    authSchema: piece.auth && typeof piece.auth === "object" && "props" in piece.auth ? (piece.auth.props as Record<string, unknown>) : undefined,
+    authType,
+    authSchema,
     aliases: Array.isArray(piece.aliases) && piece.aliases.every((a) => typeof a === "object" && a !== null && !Array.isArray(a)) ? piece.aliases : undefined,
   };
 }

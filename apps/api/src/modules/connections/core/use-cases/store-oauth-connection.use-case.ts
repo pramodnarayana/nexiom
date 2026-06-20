@@ -1,4 +1,4 @@
-import { Logger, Inject } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import type { AppConnectionRepositoryPort } from '../ports/outbound/app-connection-repository.port.js';
 import type { ConnectionLifecyclePort } from '../ports/outbound/connection-lifecycle.port.js';
 import type { StoreOAuthConnectionOptions } from '../types/connection.types.js';
@@ -8,7 +8,7 @@ export class StoreOAuthConnectionUseCase {
   constructor(
     private readonly appConnectionRepository: AppConnectionRepositoryPort,
     private readonly connectionLifecyclePort: ConnectionLifecyclePort,
-    @Inject(ENCRYPTION_SERVICE) private readonly crypto: IEncryptionService,
+    private readonly crypto: IEncryptionService,
     private readonly defaultRegionContext?: string,
   ) {}
 

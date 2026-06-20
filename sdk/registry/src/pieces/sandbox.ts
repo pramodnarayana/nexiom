@@ -15,14 +15,6 @@ export class PluginSandbox {
     clearImmediate,
     URL,
     URLSearchParams,
-    fetch,
-    AbortController,
-    AbortSignal,
-    Headers,
-    Request,
-    Response,
-    FormData,
-    Blob,
   };
 
   /**

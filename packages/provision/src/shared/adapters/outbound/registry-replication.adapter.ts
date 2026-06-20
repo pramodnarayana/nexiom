@@ -1,6 +1,6 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { eq, inArray, and } from "drizzle-orm";
-import { DATABASE_CONNECTION, globalRegistryOutbox } from "@soopa/database";
+import { DATABASE_CONNECTION, globalRegistryOutbox, assertValidSchemaName } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
 import { DB_MANAGER } from "@soopa/dbmanager";
 import type { DatabaseManager, SchemaPlan } from "@soopa/dbmanager";
@@ -211,21 +211,25 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
   }
 
   async registerCdcTables(tenantId: string, schemaName: string): Promise<void> {
+    assertValidSchemaName(schemaName);
     const tenantDb = await this.dbManager.getTenantDb(tenantId);
     const { sql } = await import("drizzle-orm");
-    await tenantDb.execute(sql`
-      DO $$
-      BEGIN
+
+    // Add each table individually to ensure idempotency
+    const tables = ['inbound_outbox', 'replica_outbox', 'normalized_outbox', 'outbound_outbox'];
+
+    for (const table of tables) {
+      await tenantDb.execute(sql`
+        DO $$
         BEGIN
-          ALTER PUBLICATION platform_cdc
-            ADD TABLE ${sql.raw('"' + schemaName + '"')}.inbound_outbox,
-                      ${sql.raw('"' + schemaName + '"')}.replica_outbox,
-                      ${sql.raw('"' + schemaName + '"')}.normalized_outbox,
-                      ${sql.raw('"' + schemaName + '"')}.outbound_outbox;
-        EXCEPTION WHEN duplicate_object THEN
-          -- Ignore gracefully if already added
-        END;
-      END $$;
-    `);
+          BEGIN
+            ALTER PUBLICATION platform_cdc
+              ADD TABLE ${sql.raw('"' + schemaName + '"')}.${sql.raw(table)};
+          EXCEPTION WHEN duplicate_object THEN
+            -- Ignore gracefully if already added
+          END;
+        END $$;
+      `);
+    }
   }
 }
