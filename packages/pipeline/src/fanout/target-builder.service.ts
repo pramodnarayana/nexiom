@@ -1,4 +1,4 @@
-import { PipelineHookBrokerService } from "../sharding/pipeline-hook-broker.service.js";
+import { PipelineHookBrokerService } from "../plugin-hooks/pipeline-hook-broker.service.js";
 import { Rule, hydratePayload } from "../hydrator.js";
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import { DATABASE_CONNECTION } from "@soopa/database";

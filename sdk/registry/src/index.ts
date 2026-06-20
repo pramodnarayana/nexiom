@@ -6,3 +6,4 @@ export * from './metadata/metadata.module.js';
 export * from './pieces/plugin-manager.service.js';
 export * from './pieces/execution-worker.service.js';
 export * from './pieces/migration-worker.service.js';
+export * from './pieces/piece-metadata.util.js';

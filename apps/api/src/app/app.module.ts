@@ -7,7 +7,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { EncryptionModule } from '@soopa/security';
 import { CredentialsModule } from '@soopa/credentials';
-import { RegistryOAuthRefreshClient } from '@soopa/pipeline';
+import { RegistryOAuthRefreshClient } from '@soopa/provision';
 import { UsersModule } from '../modules/identity/users/users.module.js';
 import { TenantsModule } from '../modules/identity/tenants/tenants.module.js';
 import { AuthModule } from '@soopa/auth';

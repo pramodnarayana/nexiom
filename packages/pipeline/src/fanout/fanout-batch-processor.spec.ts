@@ -20,7 +20,6 @@ describe("FanoutBatchProcessor", () => {
     queueService = { send: vi.fn() };
     storageResolver = { resolveSchemaName: vi.fn().mockResolvedValue("ws_123") };
     targetBuilder = { buildPayload: vi.fn().mockResolvedValue({ id: 1 }) };
-    eventEmitter = { emitAsync: vi.fn() };
     
     connRepo = { getTenantConnectionMeta: vi.fn() };
     stateRepo = { getDestinationEntityState: vi.fn() };
@@ -37,7 +36,6 @@ describe("FanoutBatchProcessor", () => {
       queueService,
       storageResolver,
       targetBuilder,
-      eventEmitter,
       connRepo,
       stateRepo,
       gemRepo,

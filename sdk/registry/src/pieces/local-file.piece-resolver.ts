@@ -2,12 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { pathToFileURL } from 'url';
 import * as path from 'path';
 import type { IPieceResolver } from './piece-resolver.port.js';
-import { LocalDevPluginSyncService } from './local-dev-plugin-sync.service.js';
+import { WorkspacePluginRegistrar } from './workspace-plugin-registrar.js';
 
 /**
  * Development adapter for {@link IPieceResolver}.
  *
- * Uses the {@link LocalDevPluginSyncService} to locate and load piece packages directly
+ * Uses the {@link WorkspacePluginRegistrar} to locate and load piece packages directly
  * from their absolute paths on the local filesystem. This completely bypasses
  * Node.js package resolution and NPM registries, making it perfectly suited for
  * local monorepo development where pnpm symlinking isolates `import(pkgName)`.
@@ -18,10 +18,11 @@ import { LocalDevPluginSyncService } from './local-dev-plugin-sync.service.js';
 export class LocalFilePieceResolver implements IPieceResolver {
   private readonly logger = new Logger(LocalFilePieceResolver.name);
 
-  constructor(private readonly localSync: LocalDevPluginSyncService) {}
+  constructor(private readonly localRegistrar: WorkspacePluginRegistrar) {}
 
   async resolve(packageName: string): Promise<Record<string, unknown>> {
-    const localPath = this.localSync.getWorkspacePiecePath(packageName);
+    await this.localRegistrar.initialize();
+    const localPath = this.localRegistrar.getWorkspacePiecePath(packageName);
 
     if (!localPath) {
       throw new Error(

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ProvisionSchemaUseCase } from './provision-schema.use-case.js';
-import type { RegistryReplicationPort } from '../../shared/domain.js';
+import type { RegistryReplicationPort } from '../../shared/ports/registry-replication.port.js';
 import type { DatabaseManager } from '@soopa/dbmanager';
 import { SchemaPlan } from '@soopa/dbmanager';
 
@@ -16,12 +16,13 @@ describe('ProvisionSchemaUseCase', () => {
       markGlobalOutboxSuccess: vi.fn(),
       getStitchDataSources: vi.fn(),
       activateConnection: vi.fn(),
+      registerCdcTables: vi.fn(),
     };
     
     dbManager = {
       applyPlan: vi.fn(),
       getTenantDb: vi.fn(),
-    };
+    } as any;
 
     useCase = new ProvisionSchemaUseCase(registryPort, dbManager);
   });
@@ -57,6 +58,7 @@ describe('ProvisionSchemaUseCase', () => {
       SchemaPlan.STANDARD_ACTIVE,
       { appName: 'test-app', appProfile: 'test-profile' }
     );
+    expect(registryPort.registerCdcTables).toHaveBeenCalledWith('tenant-1', 'ws_test_schema');
     expect(registryPort.activateConnection).toHaveBeenCalledWith('tenant-1', 'conn-1', SchemaPlan.STANDARD_ACTIVE);
     expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalledWith('123');
   });

@@ -95,8 +95,8 @@ export class FanoutRouterService implements OnModuleInit {
         srcEntityId = entityId;
 
         await tx.execute(sql`
-          INSERT INTO ${sql.raw('"' + schemaName + '"')}.active_sync_locks (data_source_id, entity_id)
-          VALUES (${dataSourceId}, ${entityId})
+          INSERT INTO ${sql.raw('"' + schemaName + '"')}.active_sync_locks (data_source_id, entity_id, locked_by_trace_id, expires_at)
+          VALUES (${dataSourceId}, ${entityId}, ${traceId}, NOW() + INTERVAL '5 minutes')
           ON CONFLICT (data_source_id, entity_id) DO NOTHING
         `);
 

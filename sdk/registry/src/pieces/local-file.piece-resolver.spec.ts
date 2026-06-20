@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LocalFilePieceResolver } from './local-file.piece-resolver.js';
-import type { LocalDevPluginSyncService } from './local-dev-plugin-sync.service.js';
+import type { WorkspacePluginRegistrar } from './workspace-plugin-registrar.js';
 import * as fs from 'fs';
 
 describe('LocalFilePieceResolver', () => {
@@ -10,7 +10,8 @@ describe('LocalFilePieceResolver', () => {
   beforeEach(() => {
     mockLocalSync = {
       getWorkspacePiecePath: vi.fn(),
-    } as unknown as LocalDevPluginSyncService;
+      initialize: vi.fn().mockResolvedValue(undefined),
+    } as unknown as WorkspacePluginRegistrar;
 
     resolver = new LocalFilePieceResolver(mockLocalSync);
   });

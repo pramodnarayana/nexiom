@@ -18,7 +18,6 @@ import { RedisTriggerDlqService } from './infrastructure/redis-trigger-dlq.servi
 // --- Adapters ---
 import { DrizzleTriggerGatewayRepositoryAdapter } from './adapters/outbound/drizzle-trigger-gateway.adapter.js';
 import { DrizzleTriggerAppConnectionAdapter } from './adapters/outbound/drizzle-trigger-app-connection.adapter.js';
-import { PipelineDatabaseProvisionerAdapter } from './adapters/outbound/pipeline-database-provisioner.adapter.js';
 import { PipelineTriggerStorageResolverAdapter } from './adapters/outbound/pipeline-trigger-storage-resolver.adapter.js';
 
 // --- Use Cases ---
@@ -54,10 +53,6 @@ import { DisableTriggerUseCase } from './core/use-cases/disable-trigger.use-case
     {
       provide: 'TRIGGER_APP_CONNECTION_REPOSITORY_PORT',
       useClass: DrizzleTriggerAppConnectionAdapter,
-    },
-    {
-      provide: 'DATABASE_PROVISIONER_PORT',
-      useClass: PipelineDatabaseProvisionerAdapter,
     },
     {
       provide: 'TRIGGER_STORAGE_RESOLVER_PORT',

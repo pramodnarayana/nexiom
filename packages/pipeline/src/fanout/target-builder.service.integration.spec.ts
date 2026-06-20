@@ -1,4 +1,4 @@
-import { PipelineHookBrokerService } from "../sharding/pipeline-hook-broker.service.js";
+import { PipelineHookBrokerService } from "../plugin-hooks/pipeline-hook-broker.service.js";
 import { Test, TestingModule } from "@nestjs/testing";
 import { TargetBuilderService } from "./target-builder.service.js";
 import { DATABASE_CONNECTION } from "@soopa/database";

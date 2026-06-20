@@ -47,13 +47,23 @@ describe('ConnectionSyncRunner', () => {
         transaction: vi
           .fn()
           .mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
+            let lastInsertedCount = 0;
             const tx = {
               execute: vi.fn(),
               insert: vi.fn().mockReturnThis(),
-              values: vi.fn().mockReturnThis(),
+              values: vi.fn().mockImplementation((rows: unknown[]) => {
+                lastInsertedCount = Array.isArray(rows) ? rows.length : 1;
+                return tx;
+              }),
               onConflictDoNothing: vi.fn().mockReturnThis(),
               onConflictDoUpdate: vi.fn().mockReturnThis(),
-              returning: vi.fn().mockResolvedValue([{ traceId: 'trace-1' }]),
+              returning: vi.fn().mockImplementation(() =>
+                Promise.resolve(
+                  Array.from({ length: lastInsertedCount }, (_, i) => ({
+                    traceId: `trace-${i}`,
+                  })),
+                ),
+              ),
             };
             return await cb(tx);
           }),

@@ -3,10 +3,11 @@ import { pathToFileURL } from 'url';
 import * as path from 'path';
 import * as fs from 'fs';
 import { PIECE_REPOSITORY, type IPieceRepository } from './piece-repository.port.js';
+import { extractPieceMetadata } from './piece-metadata.util.js';
 
 @Injectable()
-export class LocalDevPluginSyncService implements OnModuleInit {
-  private readonly logger = new Logger(LocalDevPluginSyncService.name);
+export class WorkspacePluginRegistrar implements OnModuleInit {
+  private readonly logger = new Logger(WorkspacePluginRegistrar.name);
   private workspacePieces = new Map<string, string>();
   private initialized = false;
 
@@ -18,17 +19,17 @@ export class LocalDevPluginSyncService implements OnModuleInit {
     // Only automatically called by NestJS if provided in the module (dev only)
   }
 
+  private initPromise: Promise<void> | null = null;
+
   async initialize(): Promise<void> {
     if (this.initialized) return;
+    if (this.initPromise) return this.initPromise;
 
-    const isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
-    const disableSync = process.env.DISABLE_LOCAL_SYNC === 'true';
-    
-    if (!isDev || disableSync) {
-      this.initialized = true;
-      return;
-    }
+    this.initPromise = this._doInitialize();
+    await this.initPromise;
+  }
 
+  private async _doInitialize(): Promise<void> {
     this.logger.log(`Startup Sync: Scanning workspace plugins directory...`);
     try {
       let pluginsWorkspaceDir = path.resolve(process.cwd(), 'plugins');
@@ -66,42 +67,13 @@ export class LocalDevPluginSyncService implements OnModuleInit {
 
                 this.workspacePieces.set(pkg.name, absolutePath);
 
-                let pieceDef: Record<string, unknown> | null = null;
-
-                for (const [key, val] of Object.entries(exported)) {
-                  let maybePiece = val;
-                  if (typeof val === 'function' && key === 'register') {
-                    try {
-                      maybePiece = val();
-                    } catch (e) {
-                      // ignore
-                    }
-                  }
-
-                  if (key === 'default' && val !== null && typeof val === 'object') {
-                    const defaultObj = val as Record<string, unknown>;
-                    if (typeof defaultObj.register === 'function') {
-                      try {
-                        maybePiece = defaultObj.register();
-                      } catch (e) {
-                        // ignore
-                      }
-                    }
-                  }
-
-                  if (typeof maybePiece === 'object' && maybePiece !== null && 'name' in maybePiece && 'displayName' in maybePiece) {
-                    pieceDef = maybePiece as Record<string, unknown>;
-                    break;
-                  }
-                }
+                const pieceDef = extractPieceMetadata(exported);
 
                 if (pieceDef) {
                   await this.pieceRepo.upsertPiece({
-                    name: String(pieceDef.name),
-                    displayName: String(pieceDef.displayName),
+                    ...pieceDef,
                     packageName: pkg.name,
                     version: pkg.version || 'local',
-                    logoUrl: typeof pieceDef.logoUrl === 'string' ? pieceDef.logoUrl : undefined,
                   });
                   this.logger.log(`Upserted piece metadata for ${pieceDef.name} (${pkg.name})`);
                 }

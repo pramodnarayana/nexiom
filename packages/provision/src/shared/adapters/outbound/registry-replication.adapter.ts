@@ -9,7 +9,7 @@ import type {
   RegistryReplicationPort,
   GlobalOutboxRecord,
   DataSourceMetadata,
-} from '../../domain.js';
+} from '../../ports/registry-replication.port.js';
 
 // ISO 8601 pattern — matches timestamps stored as strings in JSONB
 const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
@@ -208,5 +208,24 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
         payload: updatedDataSource,
       });
     });
+  }
+
+  async registerCdcTables(tenantId: string, schemaName: string): Promise<void> {
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
+    const { sql } = await import("drizzle-orm");
+    await tenantDb.execute(sql`
+      DO $$
+      BEGIN
+        BEGIN
+          ALTER PUBLICATION platform_cdc
+            ADD TABLE ${sql.raw('"' + schemaName + '"')}.inbound_outbox,
+                      ${sql.raw('"' + schemaName + '"')}.replica_outbox,
+                      ${sql.raw('"' + schemaName + '"')}.normalized_outbox,
+                      ${sql.raw('"' + schemaName + '"')}.outbound_outbox;
+        EXCEPTION WHEN duplicate_object THEN
+          -- Ignore gracefully if already added
+        END;
+      END $$;
+    `);
   }
 }

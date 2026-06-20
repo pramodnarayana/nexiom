@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject } from "@nestjs/common";
 import { QueueService, QueueName } from "@soopa/queue";
-import { EventEmitter2 } from "@nestjs/event-emitter";
+
 import { assertValidSchemaName } from "@soopa/database";
 import {
   StorageResolverService,
@@ -43,7 +43,6 @@ export class FanoutBatchProcessor {
     private readonly queueService: QueueService,
     private readonly storageResolver: StorageResolverService,
     private readonly targetBuilder: TargetBuilderService,
-    private readonly eventEmitter: EventEmitter2,
     @Inject(CONNECTION_REPOSITORY_PORT) private readonly connRepo: ConnectionRepositoryPort,
     @Inject(PIPELINE_STATE_REPOSITORY_PORT) private readonly stateRepo: PipelineStateRepositoryPort,
     @Inject(GLOBAL_ENTITY_MAP_REPOSITORY_PORT) private readonly gemRepo: GlobalEntityMapRepositoryPort,
@@ -51,7 +50,7 @@ export class FanoutBatchProcessor {
     @Inject(SYNC_LOG_REPOSITORY_PORT) private readonly syncLogRepo: SyncLogRepositoryPort,
     @Inject(OUTBOUND_GATEWAY_REPOSITORY_PORT) private readonly outboxRepo: OutboundGatewayRepositoryPort,
   ) {
-    this.broker = new PipelineHookBrokerService(this.eventEmitter);
+    this.broker = new PipelineHookBrokerService();
   }
 
   async processSingleStitch(

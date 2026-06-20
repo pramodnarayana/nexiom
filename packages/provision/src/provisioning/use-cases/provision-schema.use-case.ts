@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import type { RegistryReplicationPort } from '../../shared/domain.js';
+import type { RegistryReplicationPort } from '../../shared/ports/registry-replication.port.js';
 import type { DatabaseManager, SchemaPlan } from '@soopa/dbmanager';
 
 export interface ProvisionSchemaCommand {
@@ -38,6 +38,9 @@ export class ProvisionSchemaUseCase {
           appProfile: payload.appProfile,
         },
       );
+
+      // Enterprise Grade: Register CDC publication inside the worker after schema exists
+      await this.registryPort.registerCdcTables(row.tenantId, payload.schemaName);
 
       // Update connection status to ACTIVE now that schema is fully provisioned
       if (row.entityId) {

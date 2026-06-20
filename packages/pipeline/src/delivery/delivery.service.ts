@@ -9,7 +9,7 @@ import {
   forwardRef,
 } from "@nestjs/common";
 import { QueueService, QueueName } from "@soopa/queue";
-import { StorageResolverModule, ApplicationLoaderModule, PipelineHookBrokerService } from "../index.js";
+import { StorageResolverModule, PipelineHookBrokerService } from "../index.js";
 import type { IOutboundDispatcher } from "../shared/interfaces/outbound-dispatcher.interface.js";
 
 import { TokenManagerService } from "@soopa/credentials";
@@ -360,7 +360,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         });
       }
 
-      await this.transactionManager.runInTenantTransaction(tenantId, srcSchemaName, async (tx: any) => {
+      await this.transactionManager.runInTenantTransaction(tenantId, srcSchemaName, async (tx) => {
         await this.syncLogRepository.writeSyncLog(
           tenantId,
           srcSchemaName,

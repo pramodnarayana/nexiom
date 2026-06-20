@@ -319,29 +319,29 @@ export class ConnectionSyncRunner {
         nextCursor,
       );
 
+      this.logger.log(
+        `[ConnectionSyncRunner.runPollLoop] Polled page: ${page.records.length} records. nextPageCursor: ${JSON.stringify(page.nextPageCursor)}`,
+      );
+
       if (page.records.length > 0) {
         hwm = this.cursorManager.trackHighWaterMark(page.records, hwm, keyType);
 
-        // Insert records into inbound_gateway
-        for (const record of page.records) {
-          try {
-            const inserted = await this.insertGatewayRow(
-              tenantDb,
-              connectionId,
-              streamName,
-              record.data,
-              record.replicationKeyValue != null
-                ? String(record.replicationKeyValue)
-                : '',
-            );
-            if (inserted) {
-              recordsIngested++;
-            }
-          } catch (e) {
-            this.logger.error(`Failed to insert record: ${e}`);
-            throw e; // Bubble up the actual insertion error to the UI
-          }
+        // Insert records into inbound_gateway in batches
+        try {
+          const insertedCount = await this.insertGatewayBatch(
+            tenantDb,
+            connectionId,
+            streamName,
+            page.records,
+          );
+          recordsIngested += insertedCount;
+        } catch (e) {
+          this.logger.error(`Failed to insert batch: ${e}`);
+          throw e; // Bubble up the actual insertion error to the UI
         }
+        this.logger.log(
+          `[ConnectionSyncRunner.runPollLoop] After loop, recordsIngested is now: ${recordsIngested}`,
+        );
       }
 
       pageCount++;
@@ -580,73 +580,94 @@ export class ConnectionSyncRunner {
     await this.redis.eval(lua, 1, key, token);
   }
 
-  private async insertGatewayRow(
+  private async insertGatewayBatch(
     tenantDb: DrizzleDb,
     dataSourceId: string,
     objectType: string,
-    payload: unknown,
-    cursorValue: string,
-  ): Promise<boolean> {
+    records: any[],
+  ): Promise<number> {
     const schemaName =
       await this.storageResolver.resolveSchemaName(dataSourceId);
     assertValidSchemaName(schemaName);
 
-    let didInsert = false;
+    if (!records || records.length === 0) return 0;
+
+    let didInsert = 0;
     const { inboundGateway, inboundOutbox } = buildTenantSchema(schemaName);
 
-    // Extract the primary identifier of the record (e.g. Salesforce Id)
-    const recordId =
-      cursorValue ||
-      this.extractRecordCursor(payload) ||
-      `${Date.now()}-${Math.random()}`;
+    const valuesToInsert = records.map(
+      (record: {
+        replicationKeyValue?: string | number | boolean | null;
+        data: unknown;
+      }) => {
+        const cursorValue =
+          record.replicationKeyValue != null
+            ? String(record.replicationKeyValue)
+            : '';
 
-    // Hash the payload. This ensures that:
-    // 1. Identical polls (overlapping pages) have the exact same extReqId and are dropped as duplicates.
-    // 2. Updated records have the same recordId but a different hash, generating a new L1 trace.
-    const payloadHash = createHash('sha256')
-      .update(
-        typeof payload === 'object' && payload !== null
-          ? stringify(payload)
-          : String(payload),
-      )
-      .digest('hex');
+        const payload = record.data as Record<string, unknown>;
 
-    const extReqId = `${recordId}-${payloadHash}`;
+        // Extract the primary identifier of the record (e.g. Salesforce Id)
+        const recordId =
+          cursorValue ||
+          this.extractRecordCursor(payload) ||
+          `${Date.now()}-${Math.random()}`;
+
+        // Hash the payload. This ensures that:
+        // 1. Identical polls (overlapping pages) have the exact same extReqId and are dropped as duplicates.
+        // 2. Updated records have the same recordId but a different hash, generating a new L1 trace.
+        const payloadHash = createHash('sha256')
+          .update(
+            typeof payload === 'object' && payload !== null
+              ? stringify(payload)
+              : String(payload),
+          )
+          .digest('hex');
+
+        const extReqId = `${recordId}-${payloadHash}`;
+
+        return {
+          traceId: randomUUID(),
+          dataSourceId,
+          extReqId,
+          objectType,
+          request: payload,
+        };
+      },
+    );
 
     await tenantDb.transaction(async (tx) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
 
-      // Use onConflictDoNothing to skip duplicates instead of updating traceId,
-      // which prevents creating duplicate trace entries in the outbox
-      const result = await tx
-        .insert(inboundGateway)
-        .values({
-          traceId: randomUUID(),
-          dataSourceId,
-          extReqId,
-          objectType,
-          request: payload,
-        })
-        .onConflictDoNothing({
-          target: [inboundGateway.dataSourceId, inboundGateway.extReqId],
-          where: sql`ext_req_id IS NOT NULL`,
-        })
-        .returning({ traceId: inboundGateway.traceId });
+      // Chunk the inserts to avoid hitting PG limits if the array is very large.
+      const chunkSize = 200;
+      for (let i = 0; i < valuesToInsert.length; i += chunkSize) {
+        const chunk = valuesToInsert.slice(i, i + chunkSize);
 
-      // Only insert into outbox if a new row was actually inserted (not on conflict)
-      if (result.length > 0) {
-        await tx
-          .insert(inboundOutbox)
-          .values({
-            traceId: result[0].traceId,
-            dataSourceId,
-          })
+        const result = await tx
+          .insert(inboundGateway)
+          .values(chunk)
           .onConflictDoNothing({
-            target: [inboundOutbox.traceId, inboundOutbox.dataSourceId],
-          });
-        didInsert = true;
+            target: [inboundGateway.dataSourceId, inboundGateway.extReqId],
+            where: sql`ext_req_id IS NOT NULL`,
+          })
+          .returning({ traceId: inboundGateway.traceId });
+
+        if (result.length > 0) {
+          const outboxChunk = result.map((r) => ({
+            traceId: r.traceId,
+            dataSourceId,
+          }));
+          await tx
+            .insert(inboundOutbox)
+            .values(outboxChunk)
+            .onConflictDoNothing({
+              target: [inboundOutbox.traceId, inboundOutbox.dataSourceId],
+            });
+          didInsert += result.length;
+        }
       }
     });
 

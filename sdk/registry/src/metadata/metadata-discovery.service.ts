@@ -576,12 +576,21 @@ export class MetadataDiscoveryService implements OnModuleInit {
     credentials: Record<string, unknown>,
   ): Promise<ObjectDescriptor[]> {
     const piece = this.pieceRegistry.getPiece(appName);
-    if (piece?.describeObjects) {
-      return piece.describeObjects(credentials);
+    if (!piece?.describeObjects) {
+      throw new NotFoundException(
+        `Connector "${appName}" does not support metadata discovery. Register a Piece with describeObjects.`,
+      );
     }
-    throw new NotFoundException(
-      `Connector "${appName}" does not support metadata discovery. Register a Piece with describeObjects.`,
-    );
+    
+    try {
+      return await piece.describeObjects(credentials);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.error(`[fetchObjects] Connector "${appName}" failed: ${msg}`);
+      throw new ServiceUnavailableException(
+        `Connector "${appName}" failed to fetch objects: ${msg}`,
+      );
+    }
   }
 
   private async fetchFields(
@@ -590,11 +599,20 @@ export class MetadataDiscoveryService implements OnModuleInit {
     credentials: Record<string, unknown>,
   ): Promise<FieldDescriptor[]> {
     const piece = this.pieceRegistry.getPiece(appName);
-    if (piece?.describeFields) {
-      return piece.describeFields(credentials, objectName);
+    if (!piece?.describeFields) {
+      throw new NotFoundException(
+        `Connector "${appName}" does not support metadata discovery. Register a Piece with describeFields.`,
+      );
     }
-    throw new NotFoundException(
-      `Connector "${appName}" does not support metadata discovery. Register a Piece with describeFields.`,
-    );
+
+    try {
+      return await piece.describeFields(credentials, objectName);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.error(`[fetchFields] Connector "${appName}" failed for object ${objectName}: ${msg}`);
+      throw new ServiceUnavailableException(
+        `Connector "${appName}" failed to fetch fields for ${objectName}: ${msg}`,
+      );
+    }
   }
 }

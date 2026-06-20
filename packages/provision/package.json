@@ -1,0 +1,43 @@
+{
+  "name": "@soopa/provision",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@soopa/observability": "workspace:*",
+    "@soopa/database": "workspace:*",
+    "@soopa/queue": "workspace:*",
+    "@soopa/dbmanager": "workspace:*",
+    "@soopa/credentials": "workspace:*",
+    "@soopa/security": "workspace:*",
+    "@soopa/piece-framework": "workspace:*",
+    "@soopa/piece-registry": "workspace:*"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^11.1.11",
+    "@nestjs/config": "^4.0.2",
+    "@vitest/coverage-v8": "^4.0.18",
+    "typescript": "^5.7.3",
+    "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^11.1.11",
+    "@nestjs/config": "^4.0.2"
+  }
+}

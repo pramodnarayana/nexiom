@@ -129,4 +129,45 @@ describe("ProcessOutboxUseCase", () => {
 
     expect(repository.statuses.get("row-1")).toBe("RETRY");
   });
+
+  it("should call onPermanentFailure hook when a row is permanently failed", async () => {
+    const onPermanentFailure = vi.fn().mockResolvedValue(undefined);
+    const customUseCase = new ProcessOutboxUseCase(repository, publisher, {
+      batchSize: 10,
+      maxAttempts: 3,
+      queueName: QueueName.InboundQueue,
+      onPermanentFailure,
+    });
+
+    repository.addRows([{ id: "row-1", attempts: 3, payload: {} }]);
+    publisher.shouldFail = true;
+
+    await customUseCase.execute("tenant-1", "schema-1");
+
+    expect(repository.statuses.get("row-1")).toBe("FAIL");
+    expect(onPermanentFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "row-1" }),
+      expect.any(String),
+    );
+  });
+
+  it("should swallow errors thrown by the onPermanentFailure hook", async () => {
+    const onPermanentFailure = vi
+      .fn()
+      .mockRejectedValue(new Error("hook exploded"));
+    const customUseCase = new ProcessOutboxUseCase(repository, publisher, {
+      batchSize: 10,
+      maxAttempts: 3,
+      queueName: QueueName.InboundQueue,
+      onPermanentFailure,
+    });
+
+    repository.addRows([{ id: "row-1", attempts: 3, payload: {} }]);
+    publisher.shouldFail = true;
+
+    await expect(
+      customUseCase.execute("tenant-1", "schema-1"),
+    ).resolves.not.toThrow();
+    expect(onPermanentFailure).toHaveBeenCalled();
+  });
 });
