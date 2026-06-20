@@ -32,6 +32,8 @@ describe("FanoutBatchProcessor", () => {
       markOutboundGatewayFailed: vi.fn()
     };
 
+    const broker = { prepareUpdate: vi.fn().mockImplementation((a,b,payload) => payload) };
+
     processor = new FanoutBatchProcessor(
       queueService,
       storageResolver,
@@ -41,11 +43,9 @@ describe("FanoutBatchProcessor", () => {
       gemRepo,
       fieldMappingRepo,
       syncLogRepo,
-      outboxRepo
+      outboxRepo,
+      broker as any
     );
-    
-    // Mock internal broker for test isolation
-    (processor as any).broker = { prepareUpdate: vi.fn().mockImplementation((a,b,payload) => payload) };
   });
 
   it("should process stitch successfully and send to DeliveryQueue", async () => {

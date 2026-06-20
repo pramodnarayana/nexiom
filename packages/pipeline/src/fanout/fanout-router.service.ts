@@ -104,6 +104,7 @@ export class FanoutRouterService implements OnModuleInit {
         await tx.execute(sql`
           SELECT 1 FROM ${sql.raw('"' + schemaName + '"')}.active_sync_locks
           WHERE data_source_id = ${dataSourceId} AND entity_id = ${entityId}
+            AND locked_by_trace_id = ${traceId}
           FOR UPDATE
         `);
 

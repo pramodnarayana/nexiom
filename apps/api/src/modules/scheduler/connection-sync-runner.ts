@@ -320,7 +320,7 @@ export class ConnectionSyncRunner {
       );
 
       this.logger.log(
-        `[ConnectionSyncRunner.runPollLoop] Polled page: ${page.records.length} records. nextPageCursor: ${JSON.stringify(page.nextPageCursor)}`,
+        `[ConnectionSyncRunner.runPollLoop] Polled page: ${page.records.length} records. hasNextPage: ${!!page.nextPageCursor}`,
       );
 
       if (page.records.length > 0) {
@@ -608,9 +608,7 @@ export class ConnectionSyncRunner {
         const payload = record.data as Record<string, unknown>;
 
         // Extract the primary identifier of the record (e.g. Salesforce Id)
-        let recordId =
-          cursorValue ||
-          this.extractRecordCursor(payload);
+        let recordId = cursorValue || this.extractRecordCursor(payload);
 
         // If no deterministic ID exists, generate one from payload hash
         if (!recordId) {
@@ -635,7 +633,7 @@ export class ConnectionSyncRunner {
           )
           .digest('hex');
 
-        const extReqId = `${recordId}-${payloadHash}`;
+        const extReqId = `${objectType}-${recordId}-${payloadHash}`;
 
         return {
           traceId: randomUUID(),

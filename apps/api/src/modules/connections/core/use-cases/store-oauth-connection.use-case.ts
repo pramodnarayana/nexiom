@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import type { AppConnectionRepositoryPort } from '../ports/outbound/app-connection-repository.port.js';
 import type { ConnectionLifecyclePort } from '../ports/outbound/connection-lifecycle.port.js';
 import type { StoreOAuthConnectionOptions } from '../types/connection.types.js';
-import { ENCRYPTION_SERVICE, type IEncryptionService } from '@soopa/security';
+import { type IEncryptionService } from '@soopa/security';
 
 export class StoreOAuthConnectionUseCase {
   constructor(

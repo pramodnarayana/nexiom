@@ -69,11 +69,11 @@ describe('PipelineHookBrokerService', () => {
       expect(result).toEqual([{ entityType: 'Contact', data: {} }]);
     });
 
-    it('throws if no normalizer is registered', async () => {
+    it('returns null if no normalizer is registered', async () => {
       vi.mocked(getNormalizer).mockReturnValue(undefined);
 
-      await expect(service.normalize('salesforce', 'standard', { entityType: 'x', data: {} }))
-        .rejects.toThrow('normalize hook not registered for piece: salesforce');
+      const result = await service.normalize('salesforce', 'standard', { entityType: 'Account', data: {} });
+      expect(result).toBeNull();
     });
   });
 
@@ -136,10 +136,10 @@ describe('PipelineHookBrokerService', () => {
   });
 
   describe('prepareUpdate', () => {
-    it('returns the original payload (not yet implemented via hooks)', async () => {
+    it('throws error for fail-closed behavior (not yet implemented via hooks)', async () => {
       const payload = { name: 'Test' };
-      const result = await service.prepareUpdate('salesforce', 'standard', payload, '123', { etag: 'x' });
-      expect(result).toEqual(payload);
+      await expect(service.prepareUpdate('salesforce', 'standard', payload, '123', { etag: 'x' }))
+        .rejects.toThrow('prepareUpdate hook is not implemented for salesforce:standard');
     });
   });
 
@@ -162,10 +162,10 @@ describe('PipelineHookBrokerService', () => {
   });
 
   describe('activeFetch', () => {
-    it('resolves without throwing (not yet implemented via hooks)', async () => {
+    it('throws error for fail-closed behavior (not yet implemented via hooks)', async () => {
       await expect(
         service.activeFetch('salesforce', 'standard', [{ entityType: 'Account', sourceId: '123' }], 'ds-1')
-      ).resolves.toBeUndefined();
+      ).rejects.toThrow('activeFetch hook is not implemented for salesforce:standard');
     });
   });
 

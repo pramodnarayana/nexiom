@@ -37,8 +37,6 @@ function extractSyncTokenFromState(state: Record<string, unknown>): string | und
 @Injectable()
 export class FanoutBatchProcessor {
   private readonly logger = new Logger(FanoutBatchProcessor.name);
-  private readonly broker: PipelineHookBrokerService;
-
   constructor(
     private readonly queueService: QueueService,
     private readonly storageResolver: StorageResolverService,
@@ -49,9 +47,8 @@ export class FanoutBatchProcessor {
     @Inject(FIELD_MAPPING_REPOSITORY_PORT) private readonly fieldMappingRepo: FieldMappingRepositoryPort,
     @Inject(SYNC_LOG_REPOSITORY_PORT) private readonly syncLogRepo: SyncLogRepositoryPort,
     @Inject(OUTBOUND_GATEWAY_REPOSITORY_PORT) private readonly outboxRepo: OutboundGatewayRepositoryPort,
-  ) {
-    this.broker = new PipelineHookBrokerService();
-  }
+    private readonly broker: PipelineHookBrokerService,
+  ) {}
 
   async processSingleStitch(
     schemaName: string,

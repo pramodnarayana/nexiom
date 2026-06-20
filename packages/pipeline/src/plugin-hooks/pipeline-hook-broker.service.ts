@@ -99,8 +99,7 @@ export class PipelineHookBrokerService {
     destId?: string,
     destState?: Record<string, any>,
   ): Promise<Record<string, any>> {
-    this.logger.debug({ event: 'hook.prepareUpdate', appName, appProfile, destId }, 'prepareUpdate hook is not implemented in registry yet. Passing through.');
-    return payload;
+    throw new Error(`prepareUpdate hook is not implemented for ${appName}:${appProfile}. Cannot proceed with update without connector-specific transformation.`);
   }
 
   async getWebhookResponse(
@@ -122,7 +121,7 @@ export class PipelineHookBrokerService {
     missingDependencies: Array<{ entityType: string; sourceId: string }>,
     dataSourceId: string,
   ): Promise<void> {
-    this.logger.log({ event: 'hook.activeFetch', appName, appProfile, count: missingDependencies.length }, 'activeFetch hook is not implemented in registry yet. Skipping.');
+    throw new Error(`activeFetch hook is not implemented for ${appName}:${appProfile}. Cannot resolve ${missingDependencies.length} missing dependencies.`);
   }
 
   async reverseLookup(

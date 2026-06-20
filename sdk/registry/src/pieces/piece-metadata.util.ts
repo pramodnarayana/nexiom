@@ -93,7 +93,7 @@ export function extractPieceMetadata(moduleExports: Record<string, unknown>): Ex
 
   // Validate auth.props is actually an object/Record
   let authSchema: Record<string, unknown> | undefined;
-  if (piece.auth && typeof piece.auth === "object" && "type" in piece.auth && piece.auth.type && "props" in piece.auth) {
+  if (authType && piece.auth && typeof piece.auth === "object" && "props" in piece.auth) {
     const props = piece.auth.props;
     authSchema = (typeof props === "object" && props !== null && !Array.isArray(props)) ? (props as Record<string, unknown>) : undefined;
   }

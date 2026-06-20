@@ -28,6 +28,7 @@ describe('LocalFilePieceResolver', () => {
     mockLocalSync.getWorkspacePiecePath.mockReturnValue(tempFile);
 
     const result = await resolver.resolve('@soopa/existing');
+    expect(mockLocalSync.initialize).toHaveBeenCalled();
     expect(result.module).toBe('test-module');
 
     if (fs.existsSync(tempFile)) {
