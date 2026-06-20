@@ -607,24 +607,6 @@ export class ConnectionSyncRunner {
 
         const payload = record.data as Record<string, unknown>;
 
-        // Extract the primary identifier of the record (e.g. Salesforce Id)
-        let recordId = cursorValue || this.extractRecordCursor(payload);
-
-        // If no deterministic ID exists, generate one from payload hash
-        if (!recordId) {
-          recordId = createHash('sha256')
-            .update(
-              typeof payload === 'object' && payload !== null
-                ? stringify(payload)
-                : String(payload),
-            )
-            .digest('hex')
-            .substring(0, 16);
-        }
-
-        // Hash the payload. This ensures that:
-        // 1. Identical polls (overlapping pages) have the exact same extReqId and are dropped as duplicates.
-        // 2. Updated records have the same recordId but a different hash, generating a new L1 trace.
         const payloadHash = createHash('sha256')
           .update(
             typeof payload === 'object' && payload !== null
@@ -632,6 +614,14 @@ export class ConnectionSyncRunner {
               : String(payload),
           )
           .digest('hex');
+
+        // Extract the primary identifier of the record (e.g. Salesforce Id)
+        let recordId = cursorValue || this.extractRecordCursor(payload);
+
+        // If no deterministic ID exists, generate one from payload hash
+        if (!recordId) {
+          recordId = payloadHash.substring(0, 16);
+        }
 
         const extReqId = `${objectType}-${recordId}-${payloadHash}`;
 

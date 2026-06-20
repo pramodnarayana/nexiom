@@ -99,7 +99,8 @@ export class PipelineHookBrokerService {
     destId?: string,
     destState?: Record<string, any>,
   ): Promise<Record<string, any>> {
-    throw new Error(`prepareUpdate hook is not implemented for ${appName}:${appProfile}. Cannot proceed with update without connector-specific transformation.`);
+    this.logger.debug({ event: 'hook.prepareUpdate', appName, appProfile, destId }, 'prepareUpdate hook is not implemented in registry yet. Passing through.');
+    return payload;
   }
 
   async getWebhookResponse(

@@ -136,10 +136,10 @@ describe('PipelineHookBrokerService', () => {
   });
 
   describe('prepareUpdate', () => {
-    it('throws error for fail-closed behavior (not yet implemented via hooks)', async () => {
+    it('returns the original payload (not yet implemented via hooks)', async () => {
       const payload = { name: 'Test' };
-      await expect(service.prepareUpdate('salesforce', 'standard', payload, '123', { etag: 'x' }))
-        .rejects.toThrow('prepareUpdate hook is not implemented for salesforce:standard');
+      const result = await service.prepareUpdate('salesforce', 'standard', payload, '123', { etag: 'x' });
+      expect(result).toEqual(payload);
     });
   });
 

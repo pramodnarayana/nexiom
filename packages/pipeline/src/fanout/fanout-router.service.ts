@@ -101,12 +101,16 @@ export class FanoutRouterService implements OnModuleInit {
           ON CONFLICT (data_source_id, entity_id) DO NOTHING
         `);
 
-        await tx.execute(sql`
+        const lockResult = await tx.execute(sql`
           SELECT 1 FROM ${sql.raw('"' + schemaName + '"')}.active_sync_locks
           WHERE data_source_id = ${dataSourceId} AND entity_id = ${entityId}
             AND locked_by_trace_id = ${traceId}
           FOR UPDATE
         `);
+
+        if (lockResult.rows.length === 0) {
+          throw new Error(`Sync lock for entity ${entityId} on data source ${dataSourceId} is already held by another trace.`);
+        }
 
         const evaluation = await this.routingDecisionEngine.evaluateSuperseded(
           traceId,
