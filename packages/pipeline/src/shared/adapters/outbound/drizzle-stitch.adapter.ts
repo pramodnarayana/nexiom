@@ -1,13 +1,12 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { sql, eq, and } from "drizzle-orm";
-import { integrationStitches, uiWorkspaceDataSources } from "@soopa/database";
+import { integrationStitches, uiWorkspaceDataSources, DATABASE_CONNECTION, type DrizzleDb } from "@soopa/database";
 import { StitchRepositoryPort, ActiveStitch } from '../../../shared/ports/stitch.repository.port.js';
-import { DB_MANAGER, type DatabaseManager } from "@soopa/dbmanager";
 
 @Injectable()
 export class DrizzleSharedStitchRepositoryAdapter implements StitchRepositoryPort {
   constructor(
-    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
+    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
   ) {}
 
   async findActiveStitches(
@@ -15,9 +14,7 @@ export class DrizzleSharedStitchRepositoryAdapter implements StitchRepositoryPor
     dataSourceId: string,
     canonicalType: string
   ): Promise<ActiveStitch[]> {
-    const tenantDb = await this.dbManager.getTenantDb(tenantId);
-
-    const stitches = await tenantDb
+    const stitches = await this.db
       .select({
         id: integrationStitches.id,
         name: integrationStitches.name,
@@ -44,7 +41,11 @@ export class DrizzleSharedStitchRepositoryAdapter implements StitchRepositoryPor
         ),
       )
       .where(
-        sql`${integrationStitches.canonicalObject} = ${canonicalType} AND ${integrationStitches.status} = 'ACTIVE'`,
+        and(
+          eq(integrationStitches.orgId, tenantId),
+          eq(integrationStitches.canonicalObject, canonicalType),
+          eq(integrationStitches.status, 'ACTIVE'),
+        )
       );
 
     return stitches;
@@ -54,9 +55,7 @@ export class DrizzleSharedStitchRepositoryAdapter implements StitchRepositoryPor
     tenantId: string,
     stitchId: string
   ): Promise<ActiveStitch | null> {
-    const tenantDb = await this.dbManager.getTenantDb(tenantId);
-
-    const stitches = await tenantDb
+    const stitches = await this.db
       .select({
         id: integrationStitches.id,
         name: integrationStitches.name,
@@ -72,7 +71,12 @@ export class DrizzleSharedStitchRepositoryAdapter implements StitchRepositoryPor
         sourceDataSourceId: integrationStitches.sourceDataSourceId,
       })
       .from(integrationStitches)
-      .where(eq(integrationStitches.id, stitchId))
+      .where(
+        and(
+          eq(integrationStitches.id, stitchId),
+          eq(integrationStitches.orgId, tenantId),
+        )
+      )
       .limit(1);
 
     return stitches.length > 0 ? stitches[0] : null;

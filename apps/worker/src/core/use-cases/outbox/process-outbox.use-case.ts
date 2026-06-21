@@ -25,28 +25,30 @@ export class ProcessOutboxUseCase {
   ) {}
 
   async execute(tenantId: string, schemaName: string): Promise<void> {
-    const rows = await this.outboxRepository.claimNextBatch(
-      tenantId,
-      schemaName,
-      this.config.batchSize,
-    );
-
-    if (rows.length === 0) return;
-
-    const queueNameLog =
-      typeof this.config.queueName === "function"
-        ? "dynamic"
-        : this.config.queueName;
-    this.logger.debug(
-      `[${schemaName}] Claimed ${rows.length} outbox rows for queue ${queueNameLog}`,
-    );
-
-    const CONCURRENCY_LIMIT = 10;
-    for (let i = 0; i < rows.length; i += CONCURRENCY_LIMIT) {
-      const chunk = rows.slice(i, i + CONCURRENCY_LIMIT);
-      await Promise.allSettled(
-        chunk.map((row) => this.processRow(tenantId, schemaName, row)),
+    while (true) {
+      const rows = await this.outboxRepository.claimNextBatch(
+        tenantId,
+        schemaName,
+        this.config.batchSize,
       );
+
+      if (rows.length === 0) return;
+
+      const queueNameLog =
+        typeof this.config.queueName === "function"
+          ? "dynamic"
+          : this.config.queueName;
+      this.logger.debug(
+        `[${schemaName}] Claimed ${rows.length} outbox rows for queue ${queueNameLog}`,
+      );
+
+      const CONCURRENCY_LIMIT = 10;
+      for (let i = 0; i < rows.length; i += CONCURRENCY_LIMIT) {
+        const chunk = rows.slice(i, i + CONCURRENCY_LIMIT);
+        await Promise.allSettled(
+          chunk.map((row) => this.processRow(tenantId, schemaName, row)),
+        );
+      }
     }
   }
 

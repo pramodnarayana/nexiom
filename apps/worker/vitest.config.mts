@@ -13,6 +13,10 @@ export default defineConfig({
         setupFiles: ['./vitest.setup.ts'],
         globals: true,
         environment: 'node',
+        // Run test files serially in isolated forks to prevent heap OOM
+        // when V8 coverage instruments all files concurrently.
+        pool: 'forks',
+        fileParallelism: false,
         alias: {
             '@src': path.resolve(__dirname, 'src'),
         },
@@ -54,6 +58,9 @@ export default defineConfig({
                 'scratch_*.cjs',
                 'scratch_*.ts',
                 '*.cjs',
+                // Test helpers — not production code
+                'src/core/fakes/**',
+                'src/**/*.fake.ts',
             ],
             reporter: ['text', 'json', 'html'],
       thresholds: {

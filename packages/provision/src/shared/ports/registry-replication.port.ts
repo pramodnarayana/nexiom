@@ -40,4 +40,9 @@ export interface RegistryReplicationPort {
     connectionId: string,
     schemaPlan: SchemaPlan
   ): Promise<void>;
+
+  registerCdcTables(
+    tenantId: string,
+    schemaName: string
+  ): Promise<void>;
 }

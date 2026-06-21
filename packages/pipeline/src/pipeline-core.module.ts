@@ -1,8 +1,7 @@
 import { Module } from "@nestjs/common";
 import { QueueModule } from "@soopa/queue";
 import { StorageResolverModule } from "./storage-resolver/storage-resolver.module.js";
-import { ApplicationLoaderModule } from "./sharding/application-loader.module.js";
-import { PipelineHookBrokerService } from "./sharding/pipeline-hook-broker.service.js";
+import { PipelineHookBrokerService } from "./plugin-hooks/pipeline-hook-broker.service.js";
 import { PiecesModule } from "@soopa/piece-registry";
 import {
   TokenManagerService,
@@ -10,7 +9,7 @@ import {
   RedisDistributedLock,
 } from "@soopa/credentials";
 import { IEncryptionService, ENCRYPTION_SERVICE } from "@soopa/security";
-import { RegistryOAuthRefreshClient } from "./replication/registry-token-refresh.service.js";
+
 import { DATABASE_CONNECTION } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
 import type { Redis } from "ioredis";
@@ -47,12 +46,11 @@ import { DeliveryService } from "./delivery/delivery.service.js";
 import { PieceOutboundDispatcher } from "./delivery/piece-outbound.dispatcher.js";
 import { DeliveryRetryService } from "./delivery/delivery-retry.service.js";
 import { GemHydrationService } from "./delivery/gem-hydration.service.js";
-import { RegistryReplicationService } from "./replication/registry-replication.service.js";
 import { DependencySweeperService } from "./normalization/dependency-sweeper.service.js";
-import { SchemaProvisionWorker } from "./provisioning/schema-provision.worker.js";
+
 
 import { OutboundGatewayAdapter } from "./shared/adapters/outbound/outbound-gateway.adapter.js";
-import { RegistryReplicationAdapter } from "./shared/adapters/outbound/registry-replication.adapter.js";
+
 import { ReplicaStateAdapter } from "./shared/adapters/outbound/replica-state.adapter.js";
 
 import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-case.js";
@@ -61,7 +59,6 @@ import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-ca
   imports: [
     QueueModule,
     StorageResolverModule,
-    ApplicationLoaderModule,
     PiecesModule,
   ],
   providers: [
@@ -123,10 +120,7 @@ import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-ca
       provide: "OutboundGatewayPort",
       useClass: OutboundGatewayAdapter,
     },
-    {
-      provide: "RegistryReplicationPort",
-      useClass: RegistryReplicationAdapter,
-    },
+
     {
       provide: "ReplicaStatePort",
       useClass: ReplicaStateAdapter,
@@ -136,11 +130,8 @@ import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-ca
     DeliveryRetryService,
     GemHydrationService,
     DependencySweeperService,
-    RegistryReplicationService,
-    SchemaProvisionWorker,
     
     PipelineHookBrokerService,
-    RegistryOAuthRefreshClient,
   ],
   exports: [
     ReplicaService,
@@ -150,16 +141,12 @@ import { ClaimDeliveryUseCase } from "./delivery/use-cases/claim-delivery.use-ca
     FanoutBatchProcessor,
     DeliveryService,
     DependencySweeperService,
-    RegistryReplicationService,
     GemHydrationService,
-    PipelineHookBrokerService,
-    RegistryOAuthRefreshClient
+    PipelineHookBrokerService
   ],
 })
 export class PipelineCoreModule {
   constructor(
     private readonly deliveryService: DeliveryService,
-    private readonly registryReplicationService: RegistryReplicationService,
-    private readonly schemaProvisionWorker: SchemaProvisionWorker,
   ) {}
 }

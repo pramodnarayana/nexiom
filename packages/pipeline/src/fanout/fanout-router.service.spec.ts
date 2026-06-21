@@ -36,7 +36,7 @@ describe("FanoutRouterService", () => {
     stitchRepo = { findActiveStitches: vi.fn() };
     txManager = {
       runInTenantTransaction: vi.fn().mockImplementation(async (tenantId, schemaName, work) => {
-        return await work({ execute: vi.fn() }); // Fake tx
+        return await work({ execute: vi.fn().mockResolvedValue({ rows: [{}] }) }); // Fake tx
       })
     };
 

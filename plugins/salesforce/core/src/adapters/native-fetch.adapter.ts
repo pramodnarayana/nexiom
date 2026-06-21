@@ -11,22 +11,33 @@ export class SalesforceFetchError extends Error {
 }
 
 export class NativeFetchAdapter implements VendorHttpPort {
-  async get<T>(url: string, headers: Record<string, string>, signal?: AbortSignal): Promise<VendorHttpResponse<T>> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    const combinedSignal = signal
-      ? this.combineSignals(signal, controller.signal)
-      : controller.signal;
-
-    try {
-      const res = await fetch(url, {
-        method: 'GET',
-        headers,
-        signal: combinedSignal,
-      });
-      clearTimeout(timeoutId);
+  private getSignal(signal?: AbortSignal): AbortSignal | undefined {
+    // If caller provided a signal, use it directly (skip combining to avoid AbortController dependency if possible)
+    if (signal) return signal;
     
+    // Safely use AbortSignal.timeout if available
+    if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+      return AbortSignal.timeout(10000);
+    }
+
+    // Safely instantiate AbortController if available
+    if (typeof AbortController !== 'undefined') {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 10000);
+      return controller.signal;
+    }
+
+    // Fallback: no timeout signal if globals are stripped
+    return undefined;
+  }
+
+  async get<T>(url: string, headers: Record<string, string>, signal?: AbortSignal): Promise<VendorHttpResponse<T>> {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers,
+      signal: this.getSignal(signal),
+    });
+  
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new SalesforceFetchError(`Salesforce API error ${res.status}: ${body}`, res.status);
@@ -41,34 +52,17 @@ export class NativeFetchAdapter implements VendorHttpPort {
       responseHeaders[key] = value;
     });
 
-      return {
-        status: res.status,
-        data,
-        headers: responseHeaders,
-      };
-    } catch (error) {
-      clearTimeout(timeoutId);
-      throw error;
-    }
+    return { status: res.status, data, headers: responseHeaders };
   }
 
   async post<T>(url: string, headers: Record<string, string>, body: unknown, signal?: AbortSignal): Promise<VendorHttpResponse<T>> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    const combinedSignal = signal
-      ? this.combineSignals(signal, controller.signal)
-      : controller.signal;
-
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        signal: combinedSignal,
-      });
-      clearTimeout(timeoutId);
-    
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: this.getSignal(signal),
+    });
+  
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new SalesforceFetchError(`Salesforce API error ${res.status}: ${text}`, res.status);
@@ -83,34 +77,17 @@ export class NativeFetchAdapter implements VendorHttpPort {
       responseHeaders[key] = value;
     });
 
-      return {
-        status: res.status,
-        data,
-        headers: responseHeaders,
-      };
-    } catch (error) {
-      clearTimeout(timeoutId);
-      throw error;
-    }
+    return { status: res.status, data, headers: responseHeaders };
   }
 
   async patch<T>(url: string, headers: Record<string, string>, body: unknown, signal?: AbortSignal): Promise<VendorHttpResponse<T>> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    const combinedSignal = signal
-      ? this.combineSignals(signal, controller.signal)
-      : controller.signal;
-
-    try {
-      const res = await fetch(url, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify(body),
-        signal: combinedSignal,
-      });
-      clearTimeout(timeoutId);
-    
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(body),
+      signal: this.getSignal(signal),
+    });
+  
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new SalesforceFetchError(`Salesforce API error ${res.status}: ${text}`, res.status);
@@ -125,29 +102,6 @@ export class NativeFetchAdapter implements VendorHttpPort {
       responseHeaders[key] = value;
     });
 
-      return {
-        status: res.status,
-        data,
-        headers: responseHeaders,
-      };
-    } catch (error) {
-      clearTimeout(timeoutId);
-      throw error;
-    }
-  }
-
-  private combineSignals(signal1: AbortSignal, signal2: AbortSignal): AbortSignal {
-    const controller = new AbortController();
-
-    // Check if either signal is already aborted
-    if (signal1.aborted || signal2.aborted) {
-      controller.abort();
-    }
-
-    const abort = () => controller.abort();
-    signal1.addEventListener('abort', abort, { once: true });
-    signal2.addEventListener('abort', abort, { once: true });
-
-    return controller.signal;
+    return { status: res.status, data, headers: responseHeaders };
   }
 }

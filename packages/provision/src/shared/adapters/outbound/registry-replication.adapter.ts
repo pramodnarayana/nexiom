@@ -1,6 +1,6 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { eq, inArray, and } from "drizzle-orm";
-import { DATABASE_CONNECTION, globalRegistryOutbox } from "@soopa/database";
+import { DATABASE_CONNECTION, globalRegistryOutbox, assertValidSchemaName } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
 import { DB_MANAGER } from "@soopa/dbmanager";
 import type { DatabaseManager, SchemaPlan } from "@soopa/dbmanager";
@@ -9,7 +9,7 @@ import type {
   RegistryReplicationPort,
   GlobalOutboxRecord,
   DataSourceMetadata,
-} from '../../domain.js';
+} from '../../ports/registry-replication.port.js';
 
 // ISO 8601 pattern — matches timestamps stored as strings in JSONB
 const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
@@ -208,5 +208,28 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
         payload: updatedDataSource,
       });
     });
+  }
+
+  async registerCdcTables(tenantId: string, schemaName: string): Promise<void> {
+    assertValidSchemaName(schemaName);
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
+    const { sql } = await import("drizzle-orm");
+
+    // Add each table individually to ensure idempotency
+    const tables = ['inbound_outbox', 'replica_outbox', 'normalized_outbox'];
+
+    for (const table of tables) {
+      await tenantDb.execute(sql`
+        DO $$
+        BEGIN
+          BEGIN
+            ALTER PUBLICATION platform_cdc
+              ADD TABLE ${sql.raw('"' + schemaName + '"')}.${sql.raw(table)};
+          EXCEPTION WHEN duplicate_object THEN
+            -- Ignore gracefully if already added
+          END;
+        END $$;
+      `);
+    }
   }
 }

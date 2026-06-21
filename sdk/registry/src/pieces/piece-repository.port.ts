@@ -6,6 +6,11 @@ export interface UpsertPieceDto {
   packageName: string;
   version: string;
   logoUrl?: string;
+  description?: string;
+  categories?: string[];
+  authType?: string;
+  authSchema?: Record<string, unknown>;
+  aliases?: Record<string, unknown>[];
 }
 
 export interface IPieceRepository {

@@ -16,11 +16,13 @@ export class FakeOutboxRepository implements OutboxRepositoryPort {
     _schemaName: string,
     batchSize: number,
   ): Promise<OutboxRow[]> {
-    const pending = this.rows.filter(
-      (r) =>
-        this.statuses.get(r.id) !== "SUCCESS" &&
-        this.statuses.get(r.id) !== "FAIL",
-    );
+    const pending = this.rows.filter((r) => {
+      const status = this.statuses.get(r.id);
+      // Only claim rows that are in a claimable state.
+      // RETRY rows are gated behind retry_at in production; exclude them here
+      // to prevent the while(true) loop from re-claiming the same row forever.
+      return status === "PENDING" || status === undefined;
+    });
     const toClaim = pending.slice(0, batchSize);
     for (const row of toClaim) {
       this.statuses.set(row.id, "PROCESSING");

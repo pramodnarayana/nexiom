@@ -6,7 +6,7 @@ import {
   getWorkspaceSchemaName,
 } from "@soopa/dbmanager";
 import type { DatabaseManager } from "@soopa/dbmanager";
-import type { RegistryReplicationPort } from "../shared/domain.js";
+import type { RegistryReplicationPort } from '../shared/ports/registry-replication.port.js';
 
 @Injectable()
 export class RegistryReplicationService implements OnModuleInit {

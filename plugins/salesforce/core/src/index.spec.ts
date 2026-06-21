@@ -245,6 +245,9 @@ describe('salesforce piece', () => {
         });
 
         it('should poll', async () => {
+            // poll() calls describeFields() first to build the SOQL SELECT field list
+            getSpy.mockResolvedValueOnce({ status: 200, data: { fields: [{ name: 'Id', label: 'ID', type: 'id', filterable: true, sortable: true, nillable: false }] }, headers: {} });
+            // then fetches the records
             getSpy.mockResolvedValueOnce({ status: 200, data: { records: [{ Id: '123' }], done: true }, headers: {} });
             const res = await salesforce.poll!(credentials, 'Account', { from: '0', to: '1' });
             expect(res.records).toHaveLength(1);

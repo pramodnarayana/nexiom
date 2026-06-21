@@ -125,6 +125,9 @@ importers:
       '@soopa/pipeline':
         specifier: workspace:*
         version: link:../../packages/pipeline
+      '@soopa/provision':
+        specifier: workspace:*
+        version: link:../../packages/provision
       '@soopa/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -705,6 +708,9 @@ importers:
       '@soopa/pipeline':
         specifier: workspace:*
         version: link:../../packages/pipeline
+      '@soopa/provision':
+        specifier: workspace:*
+        version: link:../../packages/provision
       '@soopa/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -1348,6 +1354,49 @@ importers:
       '@types/jest':
         specifier: ^29.5.0
         version: 29.5.14
+      '@vitest/coverage-v8':
+        specifier: ^4.0.18
+        version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/provision:
+    dependencies:
+      '@soopa/credentials':
+        specifier: workspace:*
+        version: link:../credentials
+      '@soopa/database':
+        specifier: workspace:*
+        version: link:../database
+      '@soopa/dbmanager':
+        specifier: workspace:*
+        version: link:../dbmanager
+      '@soopa/observability':
+        specifier: workspace:*
+        version: link:../observability
+      '@soopa/piece-framework':
+        specifier: workspace:*
+        version: link:../../sdk/framework
+      '@soopa/piece-registry':
+        specifier: workspace:*
+        version: link:../../sdk/registry
+      '@soopa/queue':
+        specifier: workspace:*
+        version: link:../queue
+      '@soopa/security':
+        specifier: workspace:*
+        version: link:../security
+    devDependencies:
+      '@nestjs/common':
+        specifier: ^11.1.11
+        version: 11.1.11(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/config':
+        specifier: ^4.0.2
+        version: 4.0.2(@nestjs/common@11.1.11(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
       '@vitest/coverage-v8':
         specifier: ^4.0.18
         version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))

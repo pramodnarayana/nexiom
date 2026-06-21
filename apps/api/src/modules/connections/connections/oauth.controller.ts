@@ -13,9 +13,8 @@ import {
   InternalServerErrorException,
   ValidationPipe,
   HttpException,
-  Inject,
 } from '@nestjs/common';
-import { ENCRYPTION_SERVICE, type IEncryptionService } from '@soopa/security';
+
 import type { Response } from 'express';
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@soopa/auth';
 import { PieceRegistryService } from '@soopa/piece-registry';
@@ -26,6 +25,7 @@ import { OauthStateService } from '../oauth-state.service.js';
 import { StoreOAuthConnectionUseCase } from '../core/use-cases/store-oauth-connection.use-case.js';
 import { GetAuthorizationUrlUseCase } from '../core/use-cases/get-authorization-url.use-case.js';
 import { ExchangeOAuthTokenUseCase } from '../core/use-cases/exchange-oauth-token.use-case.js';
+import { GetExistingOAuthCredentialsUseCase } from '../core/use-cases/get-existing-oauth-credentials.use-case.js';
 import { CreateOAuthSession } from '../validation/create-oauth-session.js';
 import { ExchangeOAuthCode } from '../validation/exchange-oauth-code.js';
 import { VALID_PROVIDER_NAME_REGEX } from '../validation/constants.js';
@@ -122,14 +122,8 @@ function validateVendorParams(
   vendorParams: Record<string, string> | undefined,
 ): void {
   const params = vendorParams ?? {};
-  const paramKeys = Object.keys(params);
 
   if (!schema) {
-    if (paramKeys.length > 0) {
-      throw new BadRequestException(
-        'No vendor parameters are allowed for this provider',
-      );
-    }
     return;
   }
 
@@ -148,9 +142,7 @@ function validateVendorParams(
 
   for (const [key, val] of Object.entries(params)) {
     if (!declaredKeys.has(key)) {
-      throw new BadRequestException(
-        `Undeclared vendor parameter: "${key}" is not allowed`,
-      );
+      continue;
     }
     assertPropValue(key, val, schema[key]);
   }
@@ -197,7 +189,7 @@ export class OAuthController {
     private readonly getAuthorizationUrlUseCase: GetAuthorizationUrlUseCase,
     private readonly exchangeOAuthTokenUseCase: ExchangeOAuthTokenUseCase,
     private readonly storeOAuthConnectionUseCase: StoreOAuthConnectionUseCase,
-    @Inject(ENCRYPTION_SERVICE) private readonly crypto: IEncryptionService,
+    private readonly getExistingOAuthCredentialsUseCase: GetExistingOAuthCredentialsUseCase,
   ) {}
 
   private resolveVendorParams(
@@ -284,7 +276,7 @@ export class OAuthController {
       vendorParams,
     );
 
-    const metadata: Record<string, any> = {};
+    const metadata: Record<string, unknown> = {};
     if (aliasInjectedProfile) {
       metadata.appProfile = aliasInjectedProfile;
     }
@@ -293,7 +285,7 @@ export class OAuthController {
       tenantId,
       userId,
       providerName,
-      body.clientId,
+      body.clientId?.trim(),
       validatedVendorParams,
       metadata,
     );
@@ -353,7 +345,7 @@ export class OAuthController {
     const { clientId, vendorParams, metadata } = sessionData as {
       clientId: string;
       vendorParams?: Record<string, string>;
-      metadata?: Record<string, any>;
+      metadata?: Record<string, unknown>;
     };
 
     let authorizeUrl: string;
@@ -430,6 +422,8 @@ export class OAuthController {
     }
     let externalId = toKebabSlug(body.providerName, trimmedDisplayName);
     let preservedOrganizationId: string | undefined = undefined;
+    let existingClientId: string | undefined = undefined;
+    let existingClientSecret: string | undefined = undefined;
     if (body.dataSourceId) {
       try {
         const existing = await this.connectionRepository.findByIdAndTenant(
@@ -447,6 +441,14 @@ export class OAuthController {
         if (existing.organizationId) {
           preservedOrganizationId = existing.organizationId;
         }
+
+        const { clientId, clientSecret } =
+          await this.getExistingOAuthCredentialsUseCase.execute(
+            body.dataSourceId,
+            tenantId,
+          );
+        existingClientId = clientId;
+        existingClientSecret = clientSecret;
         this.logger.log(
           `[OAuth Exchange] Overriding externalId with existing: ${externalId}`,
         );
@@ -494,7 +496,18 @@ export class OAuthController {
     );
 
     let tokens: Record<string, unknown>;
+    let finalClientId: string | undefined;
+    let finalClientSecret: string | undefined;
     try {
+      finalClientId = (body.clientId || existingClientId)?.trim();
+      finalClientSecret = (body.clientSecret || existingClientSecret)?.trim();
+
+      if (!finalClientId || !finalClientSecret) {
+        throw new BadRequestException(
+          `Cannot reconnect: Client ID or Client Secret is missing. The existing credentials could not be decrypted. Please recreate the connection.`,
+        );
+      }
+
       const stringifiedVendorParams = Object.fromEntries(
         Object.entries(vendorParams).map(([k, v]) => [k, String(v)]),
       );
@@ -502,8 +515,8 @@ export class OAuthController {
       tokens = await this.exchangeOAuthTokenUseCase.execute(
         body.providerName,
         body.code,
-        body.clientId ?? '',
-        body.clientSecret ?? '',
+        finalClientId,
+        finalClientSecret,
         stringifiedVendorParams,
       );
     } catch (err: unknown) {
@@ -519,6 +532,11 @@ export class OAuthController {
           status = (err as { status: number }).status;
         }
       }
+
+      this.logger.error(
+        `Failed to exchange code with ${body.providerName}. Status: ${status}. Message: ${message}`,
+        err instanceof Error ? err.stack : undefined,
+      );
 
       if (status === 400)
         throw new BadRequestException(
@@ -539,16 +557,17 @@ export class OAuthController {
     const expiresInSeconds = parseExpiresIn(tokens.expires_in);
     const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
 
-    const valueBlob: Record<string, any> = {
-      clientId: body.clientId,
-      clientSecret: body.clientSecret,
-      access_token: tokens.access_token as string,
+    const valueBlob: Record<string, unknown> = {
+      clientId: finalClientId,
+      clientSecret: finalClientSecret,
+      accessToken: tokens.access_token as string,
+      data: tokens,
       vendorParams,
     };
 
     const refreshToken = extractRefreshToken(tokens);
     if (refreshToken) {
-      valueBlob.refresh_token = refreshToken;
+      valueBlob.refreshToken = refreshToken;
     }
 
     // Keep verified metadata as authoritative, only add appProfile if not already set
@@ -606,7 +625,6 @@ export class OAuthController {
     }
 
     const stringifiedValue = JSON.stringify(valueBlob);
-    const encryptedValue = await this.crypto.encrypt(stringifiedValue);
     await this.storeOAuthConnectionUseCase.execute({
       id: body.dataSourceId,
       tenantId,
@@ -614,7 +632,7 @@ export class OAuthController {
       externalId,
       displayName: trimmedDisplayName,
       authType: 'OAUTH2',
-      value: encryptedValue,
+      value: stringifiedValue,
       expiresAt,
       metadata: mergedMetadata,
       envType,

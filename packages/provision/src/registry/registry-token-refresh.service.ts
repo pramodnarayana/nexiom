@@ -11,7 +11,6 @@ export class RegistryOAuthRefreshClient extends BaseOAuthRefreshClient {
     @Inject(PieceRegistryService) private readonly pieceRegistry: PieceRegistryService,
     @Inject(DATABASE_CONNECTION) db: DrizzleDb,
     @Inject(ENCRYPTION_SERVICE) crypto: IEncryptionService,
-    @Optional() @Inject('DUMMY') dummy?: any,
   ) {
     super(db, crypto);
   }

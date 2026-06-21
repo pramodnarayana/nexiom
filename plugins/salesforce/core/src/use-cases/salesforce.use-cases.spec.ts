@@ -182,16 +182,31 @@ describe('SalesforceUseCases', () => {
   });
 
   describe('poll', () => {
+    // Shared describe stub: poll() calls describeFields() on first-page requests
+    // to build the SOQL SELECT field list dynamically.
+    const describeStub = (url: string) => {
+      if (url.includes('/describe')) {
+        return {
+          status: 200,
+          headers: {},
+          data: { fields: [{ name: 'Id', label: 'ID', type: 'id', filterable: true, sortable: true, nillable: false }] },
+        };
+      }
+      return null;
+    };
+
     it('polls records successfully', async () => {
       fakeHttp.getStub = (url) => {
+        const described = describeStub(url);
+        if (described) return described;
         if (url.includes('/query')) {
           return {
             status: 200,
             headers: {},
             data: {
               records: [{ Id: 'abc', SystemModstamp: '2023-01-01T00:00:00Z' }],
-              done: true
-            }
+              done: true,
+            },
           };
         }
         throw new Error('Unexpected URL');
@@ -199,46 +214,53 @@ describe('SalesforceUseCases', () => {
 
       const result = await useCases.poll(creds, 'Account', {
         from: '2023-01-01T00:00:00.000Z',
-        to: '2023-01-02T00:00:00.000Z'
+        to: '2023-01-02T00:00:00.000Z',
       });
 
       expect(result.records).toHaveLength(1);
       expect(result.nextPageCursor).toBeUndefined();
     });
 
-    it('handles next page cursor', async () => {
+    it('uses native nextRecordsUrl cursor for subsequent pages (no describeFields call)', async () => {
+      // When nextPageCursor is provided, poll skips describeFields entirely.
       fakeHttp.getStub = (url) => {
-        if (url.includes('/query')) {
+        if (url.includes('/query/next-token')) {
           return {
             status: 200,
             headers: {},
             data: {
-              records: Array.from({ length: 200 }).map((_, i) => ({ Id: `id_${i}` })),
-              done: false
-            }
+              records: [{ Id: 'page2-rec' }],
+              done: true,
+            },
           };
         }
         throw new Error('Unexpected URL');
       };
 
-      const result = await useCases.poll(creds, 'Account', {
-        from: '2023-01-01T00:00:00.000Z',
-        to: '2023-01-02T00:00:00.000Z'
-      });
+      const result = await useCases.poll(
+        creds,
+        'Account',
+        { from: '2023-01-01T00:00:00.000Z', to: '2023-01-02T00:00:00.000Z' },
+        { nextRecordsUrl: '/query/next-token' },
+      );
 
-      expect(result.nextPageCursor).toEqual({ lastId: 'id_199' });
+      expect(result.records).toHaveLength(1);
+      expect(result.nextPageCursor).toBeUndefined();
     });
 
-    it('handles full-page terminal case', async () => {
+    it('handles full-page with nextRecordsUrl — sets nextPageCursor', async () => {
       fakeHttp.getStub = (url) => {
+        const described = describeStub(url);
+        if (described) return described;
         if (url.includes('/query')) {
           return {
             status: 200,
             headers: {},
             data: {
               records: Array.from({ length: 200 }).map((_, i) => ({ Id: `id_${i}` })),
-              done: true
-            }
+              done: false,
+              nextRecordsUrl: '/query/NEXT-TOKEN',
+            },
           };
         }
         throw new Error('Unexpected URL');
@@ -246,7 +268,33 @@ describe('SalesforceUseCases', () => {
 
       const result = await useCases.poll(creds, 'Account', {
         from: '2023-01-01T00:00:00.000Z',
-        to: '2023-01-02T00:00:00.000Z'
+        to: '2023-01-02T00:00:00.000Z',
+      });
+
+      expect(result.records).toHaveLength(200);
+      expect(result.nextPageCursor).toEqual({ nextRecordsUrl: '/query/NEXT-TOKEN' });
+    });
+
+    it('handles full-page terminal case — no nextPageCursor', async () => {
+      fakeHttp.getStub = (url) => {
+        const described = describeStub(url);
+        if (described) return described;
+        if (url.includes('/query')) {
+          return {
+            status: 200,
+            headers: {},
+            data: {
+              records: Array.from({ length: 200 }).map((_, i) => ({ Id: `id_${i}` })),
+              done: true,
+            },
+          };
+        }
+        throw new Error('Unexpected URL');
+      };
+
+      const result = await useCases.poll(creds, 'Account', {
+        from: '2023-01-01T00:00:00.000Z',
+        to: '2023-01-02T00:00:00.000Z',
       });
 
       expect(result.records).toHaveLength(200);

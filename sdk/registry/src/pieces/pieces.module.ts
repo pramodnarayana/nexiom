@@ -1,4 +1,4 @@
-import { DynamicModule, Module } from '@nestjs/common';
+import { DynamicModule, Module, Inject } from '@nestjs/common';
 import { MigratorModule } from '@soopa/migrator';
 import {
   PieceRegistryService,
@@ -8,7 +8,10 @@ import { PieceLoaderService } from './piece-loader.service.js';
 import { PIECE_RESOLVER } from './piece-resolver.port.js';
 import { LocalFilePieceResolver } from './local-file.piece-resolver.js';
 import { NpmRegistryPieceResolver } from './npm-registry.piece-resolver.js';
-import { LocalDevPluginSyncService } from './local-dev-plugin-sync.service.js';
+import { WorkspacePluginRegistrar } from './workspace-plugin-registrar.js';
+import { PLUGIN_BOOTSTRAPPER, type IPluginBootstrapper } from './plugin-bootstrapper.port.js';
+import { PluginMetadataBootstrapper } from './plugin-metadata.bootstrapper.js';
+import { PluginRegistryBootstrapper } from './plugin-registry.bootstrapper.js';
 import { PluginManagerService } from './plugin-manager.service.js';
 import { PluginSandbox } from './sandbox.js';
 import { ExecutionWorkerService } from './execution-worker.service.js';
@@ -26,32 +29,42 @@ const PIECES_FACTORY_PROVIDER = {
   useFactory: async (
     db: DrizzleDb,
     loader: PieceLoaderService,
-    pluginManager: PluginManagerService,
-    localSync: LocalDevPluginSyncService,
+    bootstrapper: IPluginBootstrapper,
   ): Promise<Piece[]> => {
-    const isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
-    if (isDev) {
-      await localSync.initialize();
-    } else {
-      await pluginManager.initializePlugins();
-    }
-    
-    // 2. Load pieces from DB
+    // Ensure DB is synchronized with latest pieces before loading them into memory
+    await bootstrapper.bootstrap();
     return loader.loadEnabledPieces(db);
   },
-  inject: [DATABASE_CONNECTION, PieceLoaderService, PluginManagerService, LocalDevPluginSyncService],
+  inject: [DATABASE_CONNECTION, PieceLoaderService, PLUGIN_BOOTSTRAPPER],
+};
+
+const BOOTSTRAPPER_PROVIDER = {
+  provide: PLUGIN_BOOTSTRAPPER,
+  useFactory: (
+    registrar: WorkspacePluginRegistrar,
+    pluginManager: PluginManagerService,
+  ) => {
+    const isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
+    const useRegistryPlugin = process.env.REGISTRY_PLUGIN === 'true';
+    
+    if (isDev && !useRegistryPlugin) {
+      return new PluginMetadataBootstrapper(registrar);
+    }
+    return new PluginRegistryBootstrapper(pluginManager);
+  },
+  inject: [WorkspacePluginRegistrar, PluginManagerService],
 };
 
 const CORE_PROVIDERS = [
   LocalFilePieceResolver,
   NpmRegistryPieceResolver,
-  LocalDevPluginSyncService,
+  WorkspacePluginRegistrar,
   {
     provide: PIECE_RESOLVER,
     useFactory: (devResolver: LocalFilePieceResolver, prodResolver: NpmRegistryPieceResolver) => {
       const isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
-      const disableSync = process.env.DISABLE_LOCAL_SYNC === 'true';
-      return (isDev && !disableSync) ? devResolver : prodResolver;
+      const useRegistryPlugin = process.env.REGISTRY_PLUGIN === 'true';
+      return (isDev && !useRegistryPlugin) ? devResolver : prodResolver;
     },
     inject: [LocalFilePieceResolver, NpmRegistryPieceResolver],
   },
@@ -62,13 +75,15 @@ const CORE_PROVIDERS = [
   PluginManagerService,
   ExecutionWorkerService,
   PluginHotReloaderService,
+  BOOTSTRAPPER_PROVIDER,
 ];
 
 const CORE_EXPORTS = [
   PieceRegistryService,
   PieceLoaderService,
   PluginManagerService,
-  LocalDevPluginSyncService,
+  WorkspacePluginRegistrar,
+  BOOTSTRAPPER_PROVIDER,
   ExecutionWorkerService,
   PluginHotReloaderService,
   PIECES,

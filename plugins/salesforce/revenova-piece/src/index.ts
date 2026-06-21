@@ -18,10 +18,10 @@ import * as domainTmsApi from '@soopa/domain-tms';
 import { createSalesforcePiece } from '@soopa/piece-salesforce';
 
 export function register(): Piece {
-    frameworkApi.registerReplicaExtractor('salesforce', 'revenova', upsertRevenovaObject);
-    frameworkApi.registerNormalizer('salesforce', 'revenova', normalizeRevenovaToTms);
-    frameworkApi.registerNormalizedWriter('salesforce', 'revenova', domainTmsApi.tmsNormalizedWriter);
-    frameworkApi.registerTargetBuilder('salesforce', 'revenova', domainTmsApi.tmsTargetBuilder);
+    frameworkApi.registerReplicaExtractor('salesforce-revenova', 'standard', upsertRevenovaObject);
+    frameworkApi.registerNormalizer('salesforce-revenova', 'standard', normalizeRevenovaToTms);
+    frameworkApi.registerNormalizedWriter('salesforce-revenova', 'standard', domainTmsApi.tmsNormalizedWriter);
+    frameworkApi.registerTargetBuilder('salesforce-revenova', 'standard', domainTmsApi.tmsTargetBuilder);
     frameworkApi.registerDomainProvisioner('salesforce-revenova', (db, schemaName) =>
         domainTmsApi.provisionTmsTables(db as AppsConnectorDb, schemaName)
     );

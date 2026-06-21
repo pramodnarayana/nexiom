@@ -54,6 +54,7 @@
     "@soopa/piece-framework": "workspace:*",
     "@soopa/piece-registry": "workspace:*",
     "@soopa/pipeline": "workspace:*",
+    "@soopa/provision": "workspace:*",
     "@soopa/queue": "workspace:*",
     "@soopa/security": "workspace:*",
     "ai": "^6.0.146",

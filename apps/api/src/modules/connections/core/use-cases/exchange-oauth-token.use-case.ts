@@ -47,6 +47,7 @@ export class ExchangeOAuthTokenUseCase {
       clientSecret,
       code,
       providerName,
+      auth.authorizationMethod,
     );
 
     if (auth.validateConnectResponse) {

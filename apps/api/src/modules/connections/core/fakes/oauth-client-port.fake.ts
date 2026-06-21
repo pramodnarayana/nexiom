@@ -3,6 +3,7 @@ import type { OAuthClientPort } from '../ports/outbound/oauth-client.port.js';
 export class FakeOAuthClientPort implements OAuthClientPort {
   public callCount = { exchangeCodeForTokens: 0 };
   public responses = new Map<string, Record<string, unknown>>();
+  public lastAuthorizationMethod?: 'body' | 'header';
 
   exchangeCodeForTokens(
     _tokenUrl: string,
@@ -11,8 +12,10 @@ export class FakeOAuthClientPort implements OAuthClientPort {
     _clientSecret: string,
     code: string,
     _providerName: string,
+    authorizationMethod?: 'body' | 'header',
   ): Promise<Record<string, unknown>> {
     this.callCount.exchangeCodeForTokens++;
+    this.lastAuthorizationMethod = authorizationMethod;
     const response = this.responses.get(code);
     if (!response) {
       return Promise.reject(

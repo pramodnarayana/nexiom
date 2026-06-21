@@ -20,7 +20,6 @@ describe("FanoutBatchProcessor", () => {
     queueService = { send: vi.fn() };
     storageResolver = { resolveSchemaName: vi.fn().mockResolvedValue("ws_123") };
     targetBuilder = { buildPayload: vi.fn().mockResolvedValue({ id: 1 }) };
-    eventEmitter = { emitAsync: vi.fn() };
     
     connRepo = { getTenantConnectionMeta: vi.fn() };
     stateRepo = { getDestinationEntityState: vi.fn() };
@@ -33,21 +32,20 @@ describe("FanoutBatchProcessor", () => {
       markOutboundGatewayFailed: vi.fn()
     };
 
+    const broker = { prepareUpdate: vi.fn().mockImplementation((a,b,payload) => payload) };
+
     processor = new FanoutBatchProcessor(
       queueService,
       storageResolver,
       targetBuilder,
-      eventEmitter,
       connRepo,
       stateRepo,
       gemRepo,
       fieldMappingRepo,
       syncLogRepo,
-      outboxRepo
+      outboxRepo,
+      broker as any
     );
-    
-    // Mock internal broker for test isolation
-    (processor as any).broker = { prepareUpdate: vi.fn().mockImplementation((a,b,payload) => payload) };
   });
 
   it("should process stitch successfully and send to DeliveryQueue", async () => {

@@ -7,7 +7,6 @@ import { StorageResolverModule } from '@soopa/pipeline';
 import { DatabaseModule } from '@soopa/database';
 import { ObservabilityModule } from '../observability/observability.module.js';
 
-import { PipelineCdcListener } from './pipeline-cdc.listener.js';
 import { DbManagerModule } from '../dbmanager/dbmanager.module.js';
 
 @Module({
@@ -18,7 +17,7 @@ import { DbManagerModule } from '../dbmanager/dbmanager.module.js';
     QueueModule,
     DbManagerModule,
   ],
-  providers: [CdcRelayGuard, PipelineCdcListener],
+  providers: [CdcRelayGuard],
   controllers: [CdcRelayController],
 })
 export class PipelineModule {}
