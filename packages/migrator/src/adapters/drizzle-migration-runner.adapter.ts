@@ -5,11 +5,8 @@ import * as crypto from 'crypto';
 import { MigrationRunnerPort, RunMigrationsOptions } from '../ports/migration-runner.port.js';
 
 @Injectable()
-export class DrizzleCustomMigrationRunnerAdapter implements MigrationRunnerPort {
-  private readonly logger = new Logger(DrizzleCustomMigrationRunnerAdapter.name);
-
-  // Magic number for the advisory lock to prevent concurrent migrations
-  private readonly LOCK_ID = 8274619283;
+export class DrizzleMigrationRunnerAdapter implements MigrationRunnerPort {
+  private readonly logger = new Logger(DrizzleMigrationRunnerAdapter.name);
 
   async runMigrations(db: unknown, options: RunMigrationsOptions): Promise<void> {
     const { migrationsFolder } = options;
@@ -52,10 +49,20 @@ export class DrizzleCustomMigrationRunnerAdapter implements MigrationRunnerPort 
       }
     };
 
+    let schemaLockId: number | undefined;
+
     try {
-      this.logger.log(`Acquiring migration lock...`);
+      // Get current schema to generate a unique lock ID per tenant
+      const schemaRes = await runQuery(`SELECT current_schema();`);
+      const schemaRows = schemaRes.rows || schemaRes;
+      const schemaName = schemaRows[0]?.current_schema || 'public';
+      
+      // Generate a 32-bit integer lock ID from the schema name
+      schemaLockId = crypto.createHash('md5').update(schemaName).digest().readInt32BE(0);
+
+      this.logger.log(`Acquiring migration lock for schema ${schemaName} (ID: ${schemaLockId})...`);
       // Acquire session-level advisory lock
-      await runQuery(`SELECT pg_advisory_lock(${this.LOCK_ID});`);
+      await runQuery(`SELECT pg_advisory_lock(${schemaLockId});`);
 
       // 1. Ensure migrations table exists
       await runQuery(`
@@ -121,8 +128,10 @@ export class DrizzleCustomMigrationRunnerAdapter implements MigrationRunnerPort 
     } finally {
       // Release lock
       try {
-        await runQuery(`SELECT pg_advisory_unlock(${this.LOCK_ID});`);
-        this.logger.log(`Released migration lock.`);
+        if (typeof schemaLockId !== 'undefined') {
+          await runQuery(`SELECT pg_advisory_unlock(${schemaLockId});`);
+          this.logger.log(`Released migration lock for schema (ID: ${schemaLockId}).`);
+        }
       } catch (e) {
         this.logger.error(`Failed to release migration lock: ${e}`);
       }

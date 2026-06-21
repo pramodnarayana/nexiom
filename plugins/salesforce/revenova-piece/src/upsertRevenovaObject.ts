@@ -47,9 +47,8 @@ function parseSalesforceSoapXml(xml: string): {
     const rawType = sObjectMatch[1];
     const sObjectXml = sObjectMatch[2];
 
-    // 3. Derive entity type: xsi:type="sf:Account" → "sf_Account"
-    const typeName = rawType.startsWith('sf:') ? rawType.substring(3) : rawType;
-    const doctype = typeName.startsWith('rtms__') ? typeName : `sf_${typeName}`;
+    // 3. Derive entity type: xsi:type="sf:Account" → "Account"
+    const doctype = rawType.startsWith('sf:') ? rawType.substring(3) : rawType;
 
     // 4. Extract leaf elements scoped to this sObject subtree
     const data: Record<string, string> = {};
@@ -103,7 +102,7 @@ function decodeXmlEntities(str: string): string {
 }
 
 
-export const upsertRevenovaObject: ReplicaExtractorFn = (payload) => {
+export const upsertRevenovaObject: ReplicaExtractorFn = (payload, context) => {
     if (!payload || typeof payload !== 'object') return null;
 
     // Mimic the Python unwrapping behavior
@@ -141,8 +140,13 @@ export const upsertRevenovaObject: ReplicaExtractorFn = (payload) => {
             const data = { ...parsed.data };
             delete data['id'];
 
+            let parsedDoctype = parsed.doctype;
+            if (context?.objectType) {
+                parsedDoctype = context.objectType.startsWith('sf:') ? context.objectType.substring(3) : context.objectType;
+            }
+
             return {
-                entityType: parsed.doctype,
+                entityType: parsedDoctype,
                 entityId: parsed.entityId,
                 data,
             };
@@ -152,16 +156,20 @@ export const upsertRevenovaObject: ReplicaExtractorFn = (payload) => {
     }
 
     const r_obj: Record<string, unknown> = {};
+    
+    // Default to context.objectType if available
     let doctype = 'DEFAULT';
+    if (context?.objectType) {
+        doctype = context.objectType.startsWith('sf:') ? context.objectType.substring(3) : context.objectType;
+    }
 
     // Sanitize keys: strip "sf:" namespace prefix and lowercase for consistency
     for (const [key, value] of Object.entries(rawObj)) {
         if (key === 'attributes' && typeof value === 'object' && value !== null) {
             // Handle Salesforce REST API payload where type is in the attributes object
             const typeValue = (value as Record<string, unknown>)['type'];
-            if (typeof typeValue === 'string') {
-                const typeName = typeValue.startsWith('sf:') ? typeValue.substring(3) : typeValue;
-                doctype = typeName.startsWith('rtms__') ? typeName : `sf_${typeName}`;
+            if (typeof typeValue === 'string' && !context?.objectType) {
+                doctype = typeValue.startsWith('sf:') ? typeValue.substring(3) : typeValue;
             }
             continue; // Skip putting 'attributes' into the parsed data blob
         }
@@ -172,9 +180,8 @@ export const upsertRevenovaObject: ReplicaExtractorFn = (payload) => {
         } else {
             // Derive doctype from xsi:type attribute on the sObject (SOAP XML fallback)
             const xsi = (value as Record<string, unknown>)?.['xsi:type'];
-            if (typeof xsi === 'string') {
-                const typeName = xsi.startsWith('sf:') ? xsi.substring(3) : xsi;
-                doctype = typeName.startsWith('rtms__') ? typeName : `sf_${typeName}`;
+            if (typeof xsi === 'string' && !context?.objectType) {
+                doctype = xsi.startsWith('sf:') ? xsi.substring(3) : xsi;
             }
         }
     }

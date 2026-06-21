@@ -10,7 +10,7 @@ export * from './storage-resolver/storage-resolver.service.js';
 export * from './evaluator.js';
 export * from './hydrator.js';
 
-export * from './plugin-hooks/application-shard.types.js';
+
 export * from './plugin-hooks/pipeline-hook-broker.service.js';
 export * from "./pipeline-core.module.js";
 export * from './delivery/delivery.service.js';

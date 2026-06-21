@@ -15,7 +15,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import {
-  listConnectionInbound, listConnectionReplica, listConnectionNormalized, listConnectionOutbound,
+  listConnectionInbound, listConnectionReplica, listConnectionNormalized, listConnectionOutbound, listConnectionNormalizedTypes,
   updateRecord, deleteRecord, syncConnectionObject,
   type ExplorerPage,
 } from '../api/data-explorer.api';
@@ -48,7 +48,7 @@ type TabId = typeof TABS[number]['id'];
 function StatusBadge({ status }: { readonly status: string }) {
   if (!status) return null;
   const s = status.toUpperCase();
-  const isSuccess = s === 'SUCCESS' || s === 'COMPLETED' || s === 'REPLICATED' || s === 'ACTIVE';
+  const isSuccess = s === 'SUCCESS' || s === 'COMPLETED' || s === 'REPLICATED' || s === 'NORMALIZED' || s === 'NORMALISED' || s === 'ACTIVE';
   const isFail = s === 'FAIL' || s === 'FAILED' || s === 'ARCHIVED';
   
   const variant = isSuccess ? 'success' : isFail ? 'destructive' : 'secondary';
@@ -452,7 +452,7 @@ function Pagination({ page, total, limit, onPage }: {
 
 // ─── Tab panel ───────────────────────────────────────────────────────────────
 
-type FetchFn = (connectionId: string, params: { page: number; limit: number; workspaceId?: string; filters?: FilterGroup; objectType?: string }) => Promise<ExplorerPage<Record<string, unknown>>>;
+type FetchFn = (connectionId: string, params: { page: number; limit: number; workspaceId?: string; filters?: FilterGroup; objectType?: string; canonicalType?: string }) => Promise<ExplorerPage<Record<string, unknown>>>;
 
 // Cast via unknown to satisfy TypeScript's strict overlap check
 const FETCHERS: Record<TabId, FetchFn> = {
@@ -483,18 +483,21 @@ function TabPanel({
   // Trace Viewer State
   const [traceToView, setTraceToView] = useState<string | null>(null);
 
+  // Canonical Types for Normalized Tab
+  const [canonicalTypes, setCanonicalTypes] = useState<string[]>([]);
+  const [selectedCanonicalType, setSelectedCanonicalType] = useState<string>('');
+
   const { toast } = useToast();
 
   const getDataSourceId = useCallback(() => stitch.id, [stitch.id]);
 
-
-  const load = useCallback(async (p: number, currentFilters?: FilterGroup, currentObjType?: string) => {
+  const load = useCallback(async (p: number, currentFilters?: FilterGroup, currentObjType?: string, currentCanonicalType?: string) => {
     setLoading(true);
     setError(null);
     try {
       const fetchFn = FETCHERS[tabId];
       const activeFilters = currentFilters?.rules.length ? currentFilters : undefined;
-      const data = await fetchFn(stitch.id, { page: p, limit: LIMIT, workspaceId, filters: activeFilters, objectType: currentObjType });
+      const data = await fetchFn(stitch.id, { page: p, limit: LIMIT, workspaceId, filters: activeFilters, objectType: currentObjType, canonicalType: currentCanonicalType });
       setResult(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load data.');
@@ -503,12 +506,42 @@ function TabPanel({
     }
   }, [tabId, stitch.id, workspaceId]);
 
-  useEffect(() => { 
-    setPage(1); 
-    void load(1, appliedFilters, objectType); 
-  }, [load, objectType, appliedFilters]); 
+  useEffect(() => {
+    let active = true;
+    if (tabId === 'normalized' && objectType) {
+      listConnectionNormalizedTypes(stitch.id, objectType).then(types => {
+        if (!active) return;
+        setCanonicalTypes(types);
+        const newSelected = types.length > 0 ? types[0] : '';
+        setSelectedCanonicalType(newSelected);
+        
+        setPage(1);
+        void load(1, appliedFilters, objectType, newSelected);
+      }).catch(err => {
+        console.error('Failed to load canonical types', err);
+        if (active) {
+          setCanonicalTypes([]);
+          setSelectedCanonicalType('');
+          setPage(1);
+          void load(1, appliedFilters, objectType, '');
+        }
+      });
+    } else {
+      setPage(1); 
+      void load(1, appliedFilters, objectType); 
+    }
+    return () => { active = false; };
+  }, [load, objectType, appliedFilters, tabId, stitch.id]); 
 
-  const handlePage = (p: number) => { setPage(p); void load(p, appliedFilters, objectType); };
+  // Watch selectedCanonicalType changes for normalized tab (after the initial load)
+  useEffect(() => {
+    if (tabId === 'normalized' && selectedCanonicalType !== '' && canonicalTypes.includes(selectedCanonicalType)) {
+      setPage(1);
+      void load(1, appliedFilters, objectType, selectedCanonicalType);
+    }
+  }, [selectedCanonicalType, tabId, load, appliedFilters, objectType, canonicalTypes]);
+
+  const handlePage = (p: number) => { setPage(p); void load(p, appliedFilters, objectType, selectedCanonicalType); };
   
   const handleApplyFilters = () => {
     setAppliedFilters(filters);
@@ -604,7 +637,20 @@ function TabPanel({
         </div>
       )}
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-muted-foreground">{result?.total.toLocaleString() ?? 0} total records</span>
+        <div className="flex items-center gap-4">
+          <span className="text-xs text-muted-foreground">{result?.total.toLocaleString() ?? 0} total records</span>
+          {tabId === 'normalized' && canonicalTypes.length > 1 && (
+            <select
+              className="h-7 text-xs rounded-md border border-border bg-background px-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              value={selectedCanonicalType}
+              onChange={(e) => setSelectedCanonicalType(e.target.value)}
+            >
+              {canonicalTypes.map(ct => (
+                <option key={ct} value={ct}>{ct}</option>
+              ))}
+            </select>
+          )}
+        </div>
         <div className="flex gap-2 items-center">
           <Button 
             variant={showFilters ? "secondary" : "ghost"} 

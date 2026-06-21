@@ -48,27 +48,35 @@ describe('plugin-hot-reloader.service', () => {
     let mockPluginManager: any;
     let mockPieceRegistry: any;
 
-    beforeEach(() => {
-      mockPubSub = {
-        subscribe: vi.fn(),
-        onMessage: vi.fn(),
-        quit: vi.fn(),
-      };
+      let mockQueueService: any;
 
-      mockPluginManager = {
-        ensurePiece: vi.fn(),
-      };
+      beforeEach(() => {
+        mockQueueService = {
+          send: vi.fn(),
+        };
 
-      mockPieceRegistry = {
-        getAllPieces: vi.fn(() => []),
-        registerPiece: vi.fn(),
-      };
+        mockPubSub = {
+          subscribe: vi.fn(),
+          onMessage: vi.fn(),
+          quit: vi.fn(),
+        };
 
-      service = new PluginHotReloaderService(
-        mockPubSub as any,
-        mockPluginManager as any,
-        mockPieceRegistry as any
-      );
+        mockPluginManager = {
+          ensurePiece: vi.fn(),
+          getPieceInfo: vi.fn(),
+        };
+
+        mockPieceRegistry = {
+          getAllPieces: vi.fn(() => []),
+          registerPiece: vi.fn(),
+        };
+
+        service = new PluginHotReloaderService(
+          mockPubSub as any,
+          mockQueueService as any,
+          mockPluginManager as any,
+          mockPieceRegistry as any
+        );
     });
 
     it('should initialize and subscribe to redis', async () => {

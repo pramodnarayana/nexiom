@@ -2,7 +2,7 @@ import type { NormalizedRecord } from './canonical/index.js';
 import type { AppsConnectorDb } from './db.types.js';
 
 // ---------------------------------------------------------------------------
-// ApplicationShardModule — the contract every application shard must satisfy.
+//  PluginPipelineHooks — the contract every application shard must satisfy.
 //
 // This is the ONLY shared type between the platform and application code.
 // It has no implementation — pure TypeScript interface, no platform imports.
@@ -17,13 +17,14 @@ export type WebhookResponseShape = {
   body: string;
 };
 
-export interface ApplicationShardModule {
+export interface PluginPipelineHooks {
   /**
    * L2 — Extract a stable entity identity from the raw inbound webhook payload.
    * Returns null if the payload is not applicable (e.g. wrong event type).
    */
   extractReplica(
     payload: unknown,
+    context?: { objectType?: string | null }
   ): { entityType: string; entityId: string; data: Record<string, unknown> } | null;
 
   /**
@@ -49,6 +50,7 @@ export interface ApplicationShardModule {
     replicaId: string,
     entityId: string,
     traceId: string,
+    dataSourceId: string,
     normalizedEntityType: string,
     data: Record<string, unknown>,
   ): Promise<void>;

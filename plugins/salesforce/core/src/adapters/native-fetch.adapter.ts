@@ -1,4 +1,5 @@
 import { VendorHttpPort, VendorHttpResponse } from '../ports/vendor-http.port.js';
+import fetch from 'node-fetch';
 
 export class SalesforceFetchError extends Error {
   constructor(

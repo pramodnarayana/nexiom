@@ -37,6 +37,7 @@ import { ListConnectionDataUseCase } from './core/use-cases/explorer/list-connec
 import { GetConnectionTraceUseCase } from './core/use-cases/explorer/get-connection-trace.use-case.js';
 import { ListTraceRoutesUseCase } from './core/use-cases/explorer/list-trace-routes.use-case.js';
 import { ListObjectsUseCase } from './core/use-cases/explorer/list-objects.use-case.js';
+import { ListNormalizedTypesUseCase } from './core/use-cases/explorer/list-normalized-types.use-case.js';
 
 const ALLOWED_TABS = ['inbound', 'replica', 'normalized', 'outbound'] as const;
 type TabName = (typeof ALLOWED_TABS)[number];
@@ -49,6 +50,7 @@ export class ConnectionExplorerController {
     private readonly getTraceUseCase: GetConnectionTraceUseCase,
     private readonly listRoutesUseCase: ListTraceRoutesUseCase,
     private readonly listObjectsUseCase: ListObjectsUseCase,
+    private readonly listNormalizedTypesUseCase: ListNormalizedTypesUseCase,
   ) {}
 
   private requireOrg(ctx: RequestAuthContext): string {
@@ -70,6 +72,7 @@ export class ConnectionExplorerController {
     workspaceId?: string,
     @Query('filters') filtersRaw?: string,
     @Query('objectType') objectType?: string,
+    @Query('canonicalType') canonicalType?: string,
   ) {
     if (!ALLOWED_TABS.includes(tab as TabName)) {
       throw new BadRequestException(`Invalid tab: ${tab}`);
@@ -100,6 +103,25 @@ export class ConnectionExplorerController {
       workspaceId,
       objectType,
       parsedFilters,
+      canonicalType,
+    );
+  }
+
+  @Get('normalized/types')
+  async listNormalizedTypes(
+    @AuthContext() ctx: RequestAuthContext,
+    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+    @Query('objectType') objectType: string,
+  ) {
+    if (!objectType) {
+      throw new BadRequestException('objectType is required');
+    }
+
+    const orgId = this.requireOrg(ctx);
+    return this.listNormalizedTypesUseCase.execute(
+      orgId,
+      connectionId,
+      objectType,
     );
   }
 

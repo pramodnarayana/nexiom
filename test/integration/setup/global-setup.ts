@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
-import { DrizzleCustomMigrationRunnerAdapter } from '@soopa/migrator';
+import { DrizzleMigrationRunnerAdapter } from '@soopa/migrator';
 import pg from 'pg';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -48,7 +48,7 @@ export async function setup() {
   const migrationsFolderGlobal = join(__dirname, "..", "..", "..", "packages", "database", "drizzle", "global");
   const migrationsFolderTenant = join(__dirname, "..", "..", "..", "packages", "database", "drizzle", "tenant");
 
-  const migrator = new DrizzleCustomMigrationRunnerAdapter();
+  const migrator = new DrizzleMigrationRunnerAdapter();
   await migrator.runMigrations(pool, { migrationsFolder: migrationsFolderGlobal });
   
   // ── START ENTERPRISE GRADE FIX ──

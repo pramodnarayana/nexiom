@@ -27,6 +27,7 @@ export interface SalesforcePieceConfig {
     logoUrl: string;
     categories: PieceCategory[];
     appProfile?: string;
+    appHooks?: import('@soopa/piece-framework').PluginPipelineHooks;
 }
 
 export function createSalesforcePiece(config: SalesforcePieceConfig): import('@soopa/piece-framework').Piece {
@@ -111,6 +112,7 @@ export function createSalesforcePiece(config: SalesforcePieceConfig): import('@s
         triggers: [
             salesforceUniversalTrigger
         ],
+        appHooks: config.appHooks,
         describeObjects,
         describeFields,
         describeRelatedObjects,

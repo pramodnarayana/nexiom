@@ -15,12 +15,13 @@
     "dev": "tsc -p tsconfig.lib.json --watch --preserveWatchOutput",
     "build": "tsc -p tsconfig.lib.json",
     "clean": "rm -rf dist",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "lint": "eslint .",
     "test:cov": "vitest run --coverage"
   },
   "devDependencies": {
     "@soopa/piece-framework": "workspace:*",
+    "@soopa/migrator": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.0.18"
   },

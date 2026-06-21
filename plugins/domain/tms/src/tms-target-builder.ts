@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { AppTargetBuilderFn, AppsConnectorDb } from '@soopa/piece-framework';
+import type { PluginPipelineHooks, AppsConnectorDb } from '@soopa/piece-framework';
 import { buildTmsSchema } from './schema/tms-schema.js';
 
 // ---------------------------------------------------------------------------
@@ -14,7 +14,7 @@ import { buildTmsSchema } from './schema/tms-schema.js';
 
 const CARRIER_TYPES = new Set(['TMS_CARRIER', 'TMS_VENDOR']);
 
-export const tmsTargetBuilder: AppTargetBuilderFn = async (
+export const tmsTargetBuilder: NonNullable<PluginPipelineHooks['buildTarget']> = async (
     db,
     schemaName,
     normalizedEntityType,

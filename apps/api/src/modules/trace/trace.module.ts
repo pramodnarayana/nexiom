@@ -16,6 +16,8 @@ import { GetConnectionTraceUseCase } from './core/use-cases/explorer/get-connect
 import { ListTraceRoutesUseCase } from './core/use-cases/explorer/list-trace-routes.use-case.js';
 import { ListObjectsUseCase } from './core/use-cases/explorer/list-objects.use-case.js';
 
+import { ListNormalizedTypesUseCase } from './core/use-cases/explorer/list-normalized-types.use-case.js';
+
 @Module({
   imports: [DatabaseModule, StorageResolverModule],
   controllers: [TraceController, ConnectionExplorerController],
@@ -43,6 +45,7 @@ import { ListObjectsUseCase } from './core/use-cases/explorer/list-objects.use-c
     GetConnectionTraceUseCase,
     ListTraceRoutesUseCase,
     ListObjectsUseCase,
+    ListNormalizedTypesUseCase,
   ],
 })
 export class TraceModule {}

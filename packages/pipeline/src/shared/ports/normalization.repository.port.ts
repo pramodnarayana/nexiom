@@ -39,7 +39,7 @@ export interface NormalizationRepositoryPort {
     schemaName: string,
     traceId: string,
     tx: TxContext
-  ): Promise<Record<string, unknown> | null>;
+  ): Promise<{ request: Record<string, unknown>; objectType?: string | null } | null>;
 
   /**
    * Idempotent upsert of the normalized entity.

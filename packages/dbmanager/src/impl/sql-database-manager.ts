@@ -440,6 +440,7 @@ export class SqlDatabaseManager {
             canonical_type VARCHAR(100) NOT NULL,
             data           JSONB       NOT NULL,
             created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             published_at   TIMESTAMPTZ,
             CONSTRAINT uq_l3_replica UNIQUE (replica_id)
         );

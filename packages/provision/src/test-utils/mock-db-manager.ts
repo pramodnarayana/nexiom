@@ -3,8 +3,8 @@ import { DatabaseManager, SchemaPlan, SqlDatabaseManager } from "@soopa/dbmanage
 export class MockDatabaseManager implements DatabaseManager {
     private sqlManager: SqlDatabaseManager;
 
-    constructor(private readonly db: any) {
-        this.sqlManager = new SqlDatabaseManager(db);
+    constructor(private readonly db: unknown) {
+        this.sqlManager = new SqlDatabaseManager(db as any);
     }
 
     async getTenantDb(tenantId: string): Promise<any> {

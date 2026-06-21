@@ -28,6 +28,7 @@ export async function provisionTmsTables(db: AppsConnectorDb, schemaName: string
         id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
         trace_id    UUID         NOT NULL,
         replica_id  UUID         NOT NULL,
+        data_source_id VARCHAR(255) NOT NULL,
         source_id   VARCHAR(255) NOT NULL,
         created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
         updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()

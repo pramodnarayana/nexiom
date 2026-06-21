@@ -75,6 +75,7 @@ export function buildTmsSchema(schemaName: string) {
         id:        uuid('id').defaultRandom().primaryKey(),
         traceId:   uuid('trace_id').notNull(),
         replicaId: uuid('replica_id').notNull(),
+        dataSourceId: varchar('data_source_id', { length: 255 }).notNull(),
         sourceId:  varchar('source_id', { length: 255 }).notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

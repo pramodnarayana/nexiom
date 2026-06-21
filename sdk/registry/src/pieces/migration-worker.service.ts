@@ -102,7 +102,9 @@ export class MigrationWorkerService implements OnModuleInit {
     this.logger.log(
       `[Worker] Executing migration for tenant ${event.tenantId} (Piece: ${event.pieceName})`,
     );
-    const migrationsFolder = `${event.pluginLocation}/drizzle/migrations`;
+    const path = await import('path');
+    const baseFolder = event.migrationsFolder ?? 'drizzle/migrations';
+    const migrationsFolder = path.resolve(event.pluginLocation, baseFolder);
 
     try {
       const tenantDb = await this.getTenantDbConnection(event.tenantId);

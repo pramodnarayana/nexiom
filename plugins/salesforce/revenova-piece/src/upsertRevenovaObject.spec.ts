@@ -22,7 +22,7 @@ describe('upsertRevenovaObject', () => {
         const result = upsertRevenovaObject(payload);
 
         expect(result).toEqual({
-            entityType: 'sf_Account',
+            entityType: 'Account',
             entityId: '001xx000003DGsWAAW',
             data: {
                 name: 'Test Account',
@@ -78,7 +78,7 @@ describe('upsertRevenovaObject', () => {
         const result = upsertRevenovaObject(payload);
         
         expect(result).toEqual({
-            entityType: 'sf_Account',
+            entityType: 'Account',
             entityId: 'xml_id_123',
             data: {
                 name: 'XML Account'
@@ -169,5 +169,28 @@ describe('upsertRevenovaObject', () => {
         expect(result?.data['validdec']).toBe(' ');
         expect(result?.data['invalidhex']).toBe('\uFFFD');
         expect(result?.data['invaliddec']).toBe('\uFFFD');
+    });
+
+    it('should prefer context.objectType over derived type', () => {
+        const xml = `
+            <Notification>
+                <sObject xsi:type="sf:Account">
+                    <sf:Id>xml_id_123</sf:Id>
+                    <sf:Name>XML Account</sf:Name>
+                </sObject>
+            </Notification>
+        `;
+        const payload = { raw: xml, contentType: 'text/xml' };
+        
+        // Even though XML says "sf:Account", the context overrides it
+        const result = upsertRevenovaObject(payload, { objectType: 'rtms__TransportationProfile__c' });
+        
+        expect(result).toEqual({
+            entityType: 'rtms__TransportationProfile__c',
+            entityId: 'xml_id_123',
+            data: {
+                name: 'XML Account'
+            }
+        });
     });
 });

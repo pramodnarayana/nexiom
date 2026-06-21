@@ -300,11 +300,9 @@ describe("App Installer Subdomain", () => {
 
     it("should handle non-Error thrown by installPiece (String branch)", async () => {
       // Covers the `String(error)` branch at line 42 of install-piece.use-case.ts
-      // eslint-disable-next-line @typescript-eslint/require-await
-      registry.installPiece = async () => {
-        // eslint-disable-next-line @typescript-eslint/only-throw-error
-        throw "raw string error from registry";
-      };
+      registry.installPiece = vi
+        .fn()
+        .mockRejectedValue("raw string error from registry");
 
       const pubsub = new FakeRealtimeEventPubSub();
       const useCase = new InstallPieceUseCase(
@@ -324,11 +322,7 @@ describe("App Installer Subdomain", () => {
       registry.requireMocks.set("test-package-upsert-fail", {
         piece: { name: "upsert-fail-piece", displayName: "Fail" },
       });
-      // eslint-disable-next-line @typescript-eslint/require-await
-      repository.upsertPiece = async () => {
-        // eslint-disable-next-line @typescript-eslint/only-throw-error
-        throw "raw db error";
-      };
+      repository.upsertPiece = vi.fn().mockRejectedValue("raw db error");
 
       const pubsub = new FakeRealtimeEventPubSub();
       const useCase = new InstallPieceUseCase(

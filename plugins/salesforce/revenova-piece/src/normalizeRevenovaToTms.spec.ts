@@ -23,13 +23,13 @@ describe('normalizeRevenovaToTms', () => {
         vi.clearAllMocks();
     });
 
-    it('should normalize valid object correctly', () => {
+    it('should normalize valid object correctly', async () => {
         mockEvaluate.mockReturnValueOnce({
             canonicalType: 'TMS_CARRIER',
             data: { displayName: 'Carrier A' },
         });
 
-        const result = normalizeRevenovaToTms({
+        const result = await normalizeRevenovaToTms({
             entityType: 'rtms__Carrier__c',
             data: { Name: 'Carrier A' }
         });
@@ -40,34 +40,34 @@ describe('normalizeRevenovaToTms', () => {
         });
     });
 
-    it('should return null if result is falsy', () => {
+    it('should return null if result is falsy', async () => {
         mockEvaluate.mockReturnValueOnce(null);
-        const result = normalizeRevenovaToTms({ entityType: 'rtms__Carrier__c', data: {} });
+        const result = await normalizeRevenovaToTms({ entityType: 'rtms__Carrier__c', data: {} });
         expect(result).toBeNull();
     });
 
-    it('should return null if canonicalType is missing', () => {
+    it('should return null if canonicalType is missing', async () => {
         mockEvaluate.mockReturnValueOnce({
             data: { displayName: 'Carrier A' },
         });
-        const result = normalizeRevenovaToTms({ entityType: 'rtms__Carrier__c', data: {} });
+        const result = await normalizeRevenovaToTms({ entityType: 'rtms__Carrier__c', data: {} });
         expect(result).toBeNull();
     });
 
-    it('should return null if data is missing or array', () => {
+    it('should return null if data is missing or array', async () => {
         mockEvaluate.mockReturnValueOnce({
             canonicalType: 'TMS_CARRIER',
             data: [],
         });
-        const result = normalizeRevenovaToTms({ entityType: 'rtms__Carrier__c', data: {} });
+        const result = await normalizeRevenovaToTms({ entityType: 'rtms__Carrier__c', data: {} });
         expect(result).toBeNull();
     });
 
-    it('should return null if JSONata evaluation throws', () => {
+    it('should return null if JSONata evaluation throws', async () => {
         mockEvaluate.mockImplementationOnce(() => {
             throw new Error('JSONata error');
         });
-        const result = normalizeRevenovaToTms({ entityType: 'rtms__Carrier__c', data: {} });
+        const result = await normalizeRevenovaToTms({ entityType: 'rtms__Carrier__c', data: {} });
         expect(result).toBeNull();
     });
 });

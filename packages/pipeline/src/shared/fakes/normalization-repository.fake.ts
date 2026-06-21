@@ -17,9 +17,9 @@ export class FakeNormalizationRepository implements NormalizationRepositoryPort 
     return check ? check.isSuperseded : false;
   }
 
-  async fetchInboundRequest(schemaName: string, traceId: string, tx: TxContext): Promise<Record<string, unknown> | null> {
+  async fetchInboundRequest(schemaName: string, traceId: string, tx: TxContext): Promise<{ request: Record<string, unknown>; objectType?: string | null } | null> {
     const req = this.inboundRequests.find(r => r.schemaName === schemaName && r.traceId === traceId);
-    return req ? req.payload : null;
+    return req ? { request: req.payload, objectType: 'DEFAULT' } : null;
   }
 
   async upsertNormalizedEntity(schemaName: string, traceId: string, replicaId: string, canonicalType: string, safeData: Record<string, unknown>, tx: TxContext): Promise<string> {

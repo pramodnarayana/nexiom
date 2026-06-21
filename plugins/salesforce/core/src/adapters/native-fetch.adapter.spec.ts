@@ -1,20 +1,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NativeFetchAdapter, SalesforceFetchError } from './native-fetch.adapter.js';
+import fetch from 'node-fetch';
+
+vi.mock('node-fetch', () => {
+    return {
+        default: vi.fn()
+    };
+});
 
 describe('NativeFetchAdapter (Salesforce)', () => {
     let adapter: NativeFetchAdapter;
     let mockFetch: ReturnType<typeof vi.fn>;
-    let originalFetch: typeof global.fetch;
 
     beforeEach(() => {
         adapter = new NativeFetchAdapter();
-        mockFetch = vi.fn();
-        originalFetch = global.fetch;
-        global.fetch = mockFetch as any;
+        mockFetch = vi.mocked(fetch);
+        mockFetch.mockClear();
     });
 
     afterEach(() => {
-        global.fetch = originalFetch;
+        vi.clearAllMocks();
     });
 
     it('should successfully get json data', async () => {
@@ -24,7 +29,7 @@ describe('NativeFetchAdapter (Salesforce)', () => {
             headers: new Headers({ 'content-type': 'application/json' }),
             json: async () => ({ result: 'ok' })
         });
-        const res = await adapter.get('url', {});
+        const res = await adapter.get('http://localhost/url', {});
         expect(res.status).toBe(200);
         expect(res.data).toEqual({ result: 'ok' });
     });
@@ -36,7 +41,7 @@ describe('NativeFetchAdapter (Salesforce)', () => {
             headers: new Headers({ 'content-type': 'text/plain' }),
             text: async () => 'hello'
         });
-        const res = await adapter.get('url', {});
+        const res = await adapter.get('http://localhost/url', {});
         expect(res.data).toBe('hello');
     });
 
@@ -46,7 +51,7 @@ describe('NativeFetchAdapter (Salesforce)', () => {
             status: 400,
             text: async () => 'Bad Request'
         });
-        await expect(adapter.get('url', {})).rejects.toThrow(SalesforceFetchError);
+        await expect(adapter.get('http://localhost/url', {})).rejects.toThrow(SalesforceFetchError);
     });
 
     it('should successfully post json data', async () => {
@@ -56,7 +61,7 @@ describe('NativeFetchAdapter (Salesforce)', () => {
             headers: new Headers({ 'content-type': 'application/json' }),
             json: async () => ({ created: true })
         });
-        const res = await adapter.post('url', {}, { req: 'body' });
+        const res = await adapter.post('http://localhost/url', {}, { req: 'body' });
         expect(res.status).toBe(201);
         expect(res.data).toEqual({ created: true });
     });
@@ -68,7 +73,7 @@ describe('NativeFetchAdapter (Salesforce)', () => {
             headers: new Headers({ 'content-type': 'text/html' }),
             text: async () => '<html></html>'
         });
-        const res = await adapter.post('url', {}, {});
+        const res = await adapter.post('http://localhost/url', {}, {});
         expect(res.data).toBe('<html></html>');
     });
 
@@ -78,6 +83,6 @@ describe('NativeFetchAdapter (Salesforce)', () => {
             status: 500,
             text: async () => 'Server Error'
         });
-        await expect(adapter.post('url', {}, {})).rejects.toThrow(SalesforceFetchError);
+        await expect(adapter.post('http://localhost/url', {}, {})).rejects.toThrow(SalesforceFetchError);
     });
 });
