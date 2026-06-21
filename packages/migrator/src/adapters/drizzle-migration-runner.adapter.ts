@@ -11,18 +11,26 @@ export class DrizzleMigrationRunnerAdapter implements MigrationRunnerPort {
   async runMigrations(db: unknown, options: RunMigrationsOptions): Promise<void> {
     const { migrationsFolder } = options;
 
-    // We assume `db` exposes an `execute(sql)` or `query(sql)` method. 
-    // Drizzle's DB object has `execute()` which accepts `sql.raw()`.
-    // Wait, let's detect the interface.
-    const runQuery = async (query: string, runner: unknown = db): Promise<any> => {
-      // If it's a Drizzle instance, it might need sql.raw
-      // We will try raw query if it's pg.Pool, else fallback
+    // Obtain a single client for the entire migration to preserve session state
+    let client: unknown;
+    let shouldReleaseClient = false;
+    const d = db as Record<string, unknown>;
+
+    if (typeof d.connect === 'function') {
+      // It's a pg.Pool - get a dedicated client
+      client = await (d.connect as () => Promise<unknown>)();
+      shouldReleaseClient = true;
+    } else {
+      // It's already a Drizzle db or pg.Client - use it directly
+      client = db;
+    }
+
+    const runQuery = async (query: string, runner: unknown = client): Promise<any> => {
       const r = runner as Record<string, unknown>;
       if (typeof r.query === 'function') {
         return (r.query as (q: string) => Promise<any>)(query); // pg Pool/Client
       } else if (typeof r.execute === 'function') {
         // Drizzle db instance
-        // Hack to get raw sql in case it's drizzle
         const { sql } = await import('drizzle-orm');
         return (r.execute as (q: unknown) => Promise<any>)(sql.raw(query));
       } else {
@@ -31,19 +39,19 @@ export class DrizzleMigrationRunnerAdapter implements MigrationRunnerPort {
     };
 
     const runTransaction = async (query: string) => {
-      const d = db as Record<string, unknown>;
-      if (typeof d.transaction === 'function') {
-        return (d.transaction as (cb: (tx: unknown) => Promise<void>) => Promise<void>)(async (tx: unknown) => {
+      const r = client as Record<string, unknown>;
+      if (typeof r.transaction === 'function') {
+        return (r.transaction as (cb: (tx: unknown) => Promise<void>) => Promise<void>)(async (tx: unknown) => {
           await runQuery(query, tx);
         });
       } else {
-        // Fallback for pg Pool
-        await runQuery('BEGIN;');
+        // Fallback for pg Pool/Client
+        await runQuery('BEGIN;', client);
         try {
-          await runQuery(query);
-          await runQuery('COMMIT;');
+          await runQuery(query, client);
+          await runQuery('COMMIT;', client);
         } catch (e) {
-          await runQuery('ROLLBACK;');
+          await runQuery('ROLLBACK;', client);
           throw e;
         }
       }
@@ -53,16 +61,16 @@ export class DrizzleMigrationRunnerAdapter implements MigrationRunnerPort {
 
     try {
       // Get current schema to generate a unique lock ID per tenant
-      const schemaRes = await runQuery(`SELECT current_schema();`);
+      const schemaRes = await runQuery(`SELECT current_schema();`, client);
       const schemaRows = schemaRes.rows || schemaRes;
       const schemaName = schemaRows[0]?.current_schema || 'public';
-      
+
       // Generate a 32-bit integer lock ID from the schema name
       schemaLockId = crypto.createHash('md5').update(schemaName).digest().readInt32BE(0);
 
       this.logger.log(`Acquiring migration lock for schema ${schemaName} (ID: ${schemaLockId})...`);
       // Acquire session-level advisory lock
-      await runQuery(`SELECT pg_advisory_lock(${schemaLockId});`);
+      await runQuery(`SELECT pg_advisory_lock(${schemaLockId});`, client);
 
       // 1. Ensure migrations table exists
       await runQuery(`
@@ -71,7 +79,7 @@ export class DrizzleMigrationRunnerAdapter implements MigrationRunnerPort {
           hash text NOT NULL,
           created_at bigint
         );
-      `);
+      `, client);
 
       // 2. Read journal.json
       const journalPath = path.join(migrationsFolder, 'meta', '_journal.json');
@@ -79,8 +87,11 @@ export class DrizzleMigrationRunnerAdapter implements MigrationRunnerPort {
       try {
         journalStr = await fs.readFile(journalPath, 'utf8');
       } catch (e) {
-        this.logger.warn(`No _journal.json found at ${journalPath}, skipping migrations.`);
-        return;
+        if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+          this.logger.warn(`No _journal.json found at ${journalPath}, skipping migrations.`);
+          return;
+        }
+        throw e;
       }
 
       const journal = JSON.parse(journalStr);
@@ -89,16 +100,16 @@ export class DrizzleMigrationRunnerAdapter implements MigrationRunnerPort {
       }
 
       // 3. Fetch applied migrations
-      const appliedRes = await runQuery(`SELECT id, hash, created_at FROM "__drizzle_migrations" ORDER BY created_at ASC;`);
+      const appliedRes = await runQuery(`SELECT id, hash, created_at FROM "__drizzle_migrations" ORDER BY created_at ASC;`, client);
       // handle difference between pg and drizzle return structures
-      const appliedRows = appliedRes.rows || appliedRes; 
+      const appliedRows = appliedRes.rows || appliedRes;
       const appliedHashes = new Set(appliedRows.map((r: Record<string, unknown>) => r.hash as string));
 
       for (const entry of journal.entries) {
         const migrationFileName = `${entry.tag}.sql`;
         const migrationPath = path.join(migrationsFolder, migrationFileName);
         const content = await fs.readFile(migrationPath, 'utf8');
-        
+
         // Drizzle kit uses SHA-256 of the file content for hash
         const hash = crypto.createHash('sha256').update(content).digest('hex');
 
@@ -110,18 +121,36 @@ export class DrizzleMigrationRunnerAdapter implements MigrationRunnerPort {
         this.logger.log(`Applying migration: ${migrationFileName}`);
 
         const disableTransaction = content.includes('--disable-ddl-transaction');
+        const ts = Date.now();
 
         if (disableTransaction) {
           this.logger.log(`Executing ${migrationFileName} OUTSIDE transaction (disable-ddl-transaction detected)`);
-          await runQuery(content);
+          await runQuery(content, client);
+          // Record it outside transaction
+          await runQuery(`INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES ('${hash}', ${ts});`, client);
         } else {
           this.logger.log(`Executing ${migrationFileName} inside transaction`);
-          await runTransaction(content);
+          // Execute migration and record hash atomically
+          const r = client as Record<string, unknown>;
+          if (typeof r.transaction === 'function') {
+            await (r.transaction as (cb: (tx: unknown) => Promise<void>) => Promise<void>)(async (tx: unknown) => {
+              await runQuery(content, tx);
+              await runQuery(`INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES ('${hash}', ${ts});`, tx);
+            });
+          } else {
+            // Fallback for pg Pool/Client
+            await runQuery('BEGIN;', client);
+            try {
+              await runQuery(content, client);
+              await runQuery(`INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES ('${hash}', ${ts});`, client);
+              await runQuery('COMMIT;', client);
+            } catch (e) {
+              await runQuery('ROLLBACK;', client);
+              throw e;
+            }
+          }
         }
 
-        // Record it
-        const ts = Date.now();
-        await runQuery(`INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES ('${hash}', ${ts});`);
         this.logger.log(`Successfully applied ${migrationFileName}`);
       }
 
@@ -129,11 +158,19 @@ export class DrizzleMigrationRunnerAdapter implements MigrationRunnerPort {
       // Release lock
       try {
         if (typeof schemaLockId !== 'undefined') {
-          await runQuery(`SELECT pg_advisory_unlock(${schemaLockId});`);
+          await runQuery(`SELECT pg_advisory_unlock(${schemaLockId});`, client);
           this.logger.log(`Released migration lock for schema (ID: ${schemaLockId}).`);
         }
       } catch (e) {
         this.logger.error(`Failed to release migration lock: ${e}`);
+      }
+
+      // Release client if we acquired it
+      if (shouldReleaseClient) {
+        const c = client as Record<string, unknown>;
+        if (typeof c.release === 'function') {
+          (c.release as () => void)();
+        }
       }
     }
   }

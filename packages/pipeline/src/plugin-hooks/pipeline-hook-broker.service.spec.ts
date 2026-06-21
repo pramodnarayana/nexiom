@@ -119,6 +119,13 @@ describe('PipelineHookBrokerService', () => {
       await expect(service.provisionDomain('salesforce', 'standard', {} as any, 'public'))
         .resolves.toBeUndefined();
     });
+
+    it('silently skips without errors when appHooks is absent', async () => {
+      mockPieceRegistry.getPiece = vi.fn().mockReturnValue({});
+
+      await expect(service.provisionDomain('salesforce', 'standard', {} as any, 'public'))
+        .resolves.toBeUndefined();
+    });
   });
 
   describe('prepareUpdate', () => {
@@ -141,6 +148,13 @@ describe('PipelineHookBrokerService', () => {
 
     it('returns null if no webhook response is found', async () => {
       mockHooks.getWebhookResponse = undefined;
+
+      const result = await service.getWebhookResponse('salesforce', 'standard', {}, {});
+      expect(result).toBeNull();
+    });
+
+    it('returns null when appHooks is absent', async () => {
+      mockPieceRegistry.getPiece = vi.fn().mockReturnValue({});
 
       const result = await service.getWebhookResponse('salesforce', 'standard', {}, {});
       expect(result).toBeNull();

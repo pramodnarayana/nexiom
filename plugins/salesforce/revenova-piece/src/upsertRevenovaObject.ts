@@ -142,7 +142,10 @@ export const upsertRevenovaObject: ReplicaExtractorFn = (payload, context) => {
 
             let parsedDoctype = parsed.doctype;
             if (context?.objectType) {
-                parsedDoctype = context.objectType.startsWith('sf:') ? context.objectType.substring(3) : context.objectType;
+                const normalized = context.objectType.startsWith('sf:') ? context.objectType.substring(3) : context.objectType;
+                if (normalized.length > 0) {
+                    parsedDoctype = normalized;
+                }
             }
 
             return {
@@ -160,7 +163,10 @@ export const upsertRevenovaObject: ReplicaExtractorFn = (payload, context) => {
     // Default to context.objectType if available
     let doctype = 'DEFAULT';
     if (context?.objectType) {
-        doctype = context.objectType.startsWith('sf:') ? context.objectType.substring(3) : context.objectType;
+        const normalized = context.objectType.startsWith('sf:') ? context.objectType.substring(3) : context.objectType;
+        if (normalized.length > 0) {
+            doctype = normalized;
+        }
     }
 
     // Sanitize keys: strip "sf:" namespace prefix and lowercase for consistency
@@ -169,7 +175,10 @@ export const upsertRevenovaObject: ReplicaExtractorFn = (payload, context) => {
             // Handle Salesforce REST API payload where type is in the attributes object
             const typeValue = (value as Record<string, unknown>)['type'];
             if (typeof typeValue === 'string' && !context?.objectType) {
-                doctype = typeValue.startsWith('sf:') ? typeValue.substring(3) : typeValue;
+                const normalized = typeValue.startsWith('sf:') ? typeValue.substring(3) : typeValue;
+                if (normalized.length > 0) {
+                    doctype = normalized;
+                }
             }
             continue; // Skip putting 'attributes' into the parsed data blob
         }
@@ -181,7 +190,10 @@ export const upsertRevenovaObject: ReplicaExtractorFn = (payload, context) => {
             // Derive doctype from xsi:type attribute on the sObject (SOAP XML fallback)
             const xsi = (value as Record<string, unknown>)?.['xsi:type'];
             if (typeof xsi === 'string' && !context?.objectType) {
-                doctype = xsi.startsWith('sf:') ? xsi.substring(3) : xsi;
+                const normalized = xsi.startsWith('sf:') ? xsi.substring(3) : xsi;
+                if (normalized.length > 0) {
+                    doctype = normalized;
+                }
             }
         }
     }

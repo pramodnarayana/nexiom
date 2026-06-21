@@ -514,21 +514,18 @@ function TabPanel({
         setCanonicalTypes(types);
         const newSelected = types.length > 0 ? types[0] : '';
         setSelectedCanonicalType(newSelected);
-        
         setPage(1);
-        void load(1, appliedFilters, objectType, newSelected);
       }).catch(err => {
         console.error('Failed to load canonical types', err);
         if (active) {
           setCanonicalTypes([]);
           setSelectedCanonicalType('');
           setPage(1);
-          void load(1, appliedFilters, objectType, '');
         }
       });
     } else {
-      setPage(1); 
-      void load(1, appliedFilters, objectType); 
+      setPage(1);
+      void load(1, appliedFilters, objectType);
     }
     return () => { active = false; };
   }, [load, objectType, appliedFilters, tabId, stitch.id]); 
@@ -597,7 +594,7 @@ function TabPanel({
     if (!confirm('Are you sure you want to delete this record?')) return;
     try {
       await deleteRecord(workspaceId, getDataSourceId(), tabId, String(row.id));
-      void load(page, appliedFilters, objectType);
+      void load(page, appliedFilters, objectType, selectedCanonicalType);
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to delete');
     }
@@ -665,7 +662,7 @@ function TabPanel({
           >
             <Filter className="h-3 w-3" /> Filters {filters.rules.length > 0 && `(${filters.rules.length})`}
           </Button>
-          <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => void load(page, appliedFilters, objectType)}>
+          <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => void load(page, appliedFilters, objectType, selectedCanonicalType)}>
             <RefreshCw className="h-3 w-3" /> Refresh
           </Button>
         </div>

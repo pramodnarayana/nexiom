@@ -378,6 +378,8 @@ export interface CreatePieceParams {
     ): Promise<PollPage>;
     /** Per-piece webhook signature configuration for HMAC verification. */
     webhook?: PieceWebhookConfig;
+    /** The path to the folder containing the generated `.sql` migration files for this piece. */
+    migrationsFolder?: string;
     /**
      * Validates the connection context immediately after an OAuth exchange.
      * If the requested appProfile is not supported (e.g., managed package missing),
@@ -504,6 +506,7 @@ export function createPiece(params: CreatePieceParams): Piece {
         ...(params.poll && { poll: params.poll }),
         ...(params.validateConnection && { validateConnection: params.validateConnection }),
         ...(params.webhook && { webhook: params.webhook }),
+        ...(params.migrationsFolder && { migrationsFolder: params.migrationsFolder }),
         ...(params.defaultAppProfile && { defaultAppProfile: params.defaultAppProfile }),
         ...(params.aliases && { aliases: params.aliases }),
         ...(params.appHooks && { appHooks: params.appHooks }),

@@ -5,7 +5,7 @@ echo "🔍 Running pre-commit checks..."
 # Automatically generate and stage Drizzle migrations for plugins
 echo "🛠️ Generating database migrations for plugins..."
 pnpm turbo run db:generate --filter="./plugins/**" || exit 1
-git add "plugins/**/drizzle/migrations/*" 2>/dev/null || true
+git add "plugins/**/drizzle/migrations/**/*" 2>/dev/null || true
 
 # Run lint on staged files first (fast feedback)
 echo "📝 Linting staged files..."

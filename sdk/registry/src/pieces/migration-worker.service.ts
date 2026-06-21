@@ -104,7 +104,29 @@ export class MigrationWorkerService implements OnModuleInit {
     );
     const path = await import('path');
     const baseFolder = event.migrationsFolder ?? 'drizzle/migrations';
+
+    // Validate against path traversal attacks
+    if (baseFolder.includes('..') || path.isAbsolute(baseFolder)) {
+      this.logger.error(
+        `[Worker] Security violation: migrationsFolder contains path traversal or absolute path: ${baseFolder}`,
+      );
+      throw new Error(
+        `Invalid migrationsFolder: path must be relative and cannot contain ".." segments`,
+      );
+    }
+
     const migrationsFolder = path.resolve(event.pluginLocation, baseFolder);
+
+    // Ensure the resolved path stays within the plugin root
+    const relativePath = path.relative(event.pluginLocation, migrationsFolder);
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+      this.logger.error(
+        `[Worker] Security violation: resolved migrationsFolder escapes plugin root: ${migrationsFolder}`,
+      );
+      throw new Error(
+        `Invalid migrationsFolder: resolved path escapes plugin location`,
+      );
+    }
 
     try {
       const tenantDb = await this.getTenantDbConnection(event.tenantId);

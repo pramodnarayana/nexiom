@@ -46,13 +46,13 @@ export async function upsert(
     const colNames = sql.raw(snakeCols.map(c => `"${c}"`).join(', '));
     const placeholders = sql.join(columns.map(c => sql`${values[c]}`), sql`, `);
     
-    // ON CONFLICT (source_id) DO UPDATE SET ...
+    // ON CONFLICT (data_source_id, source_id) DO UPDATE SET ...
     const updates = snakeCols.map(c => `"${c}" = COALESCE(EXCLUDED."${c}", "${tableName}"."${c}")`).join(', ');
-    
+
     const query = sql`
         INSERT INTO ${sql.identifier(schemaName)}.${sql.identifier(tableName)} (${colNames})
         VALUES (${placeholders})
-        ON CONFLICT ("source_id")
+        ON CONFLICT ("data_source_id", "source_id")
         DO UPDATE SET ${sql.raw(updates)};
     `;
     

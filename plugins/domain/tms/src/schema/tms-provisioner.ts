@@ -51,7 +51,7 @@ export async function provisionTmsTables(db: AppsConnectorDb, schemaName: string
             ${COMMON}, display_name VARCHAR(255), tms_type VARCHAR(100),
             ${ADDR}, ${CONTACT}, tp_source_id VARCHAR(255), remit_to_source_id VARCHAR(255),
             is_carrier TEXT, is_broker TEXT,
-            CONSTRAINT uq_tms_carrier_source_id UNIQUE (source_id));`));
+            CONSTRAINT uq_tms_carrier_composite UNIQUE (data_source_id, source_id));`));
         await tx.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_tms_carrier_tp    ON "${schemaName}".tms_carrier (tp_source_id) WHERE tp_source_id IS NOT NULL;`));
         await tx.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_tms_carrier_trace ON "${schemaName}".tms_carrier (trace_id);`));
         await tx.execute(sql.raw(`DROP TRIGGER IF EXISTS trg_refresh_updated_at ON "${schemaName}".tms_carrier;`));
@@ -60,7 +60,7 @@ export async function provisionTmsTables(db: AppsConnectorDb, schemaName: string
         await tx.execute(sql.raw(`CREATE TABLE IF NOT EXISTS "${schemaName}".tms_vendor (
             ${COMMON}, display_name VARCHAR(255), tms_type VARCHAR(100),
             ${ADDR}, ${CONTACT}, tp_source_id VARCHAR(255), is_vendor TEXT,
-            CONSTRAINT uq_tms_vendor_source_id UNIQUE (source_id));`));
+            CONSTRAINT uq_tms_vendor_composite UNIQUE (data_source_id, source_id));`));
         await tx.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_tms_vendor_tp    ON "${schemaName}".tms_vendor (tp_source_id) WHERE tp_source_id IS NOT NULL;`));
         await tx.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_tms_vendor_trace ON "${schemaName}".tms_vendor (trace_id);`));
         await tx.execute(sql.raw(`DROP TRIGGER IF EXISTS trg_refresh_updated_at ON "${schemaName}".tms_vendor;`));
@@ -69,7 +69,7 @@ export async function provisionTmsTables(db: AppsConnectorDb, schemaName: string
         await tx.execute(sql.raw(`CREATE TABLE IF NOT EXISTS "${schemaName}".tms_customer (
             ${COMMON}, display_name VARCHAR(255), tms_type VARCHAR(100),
             ${ADDR}, ${CONTACT}, credit_limit VARCHAR(50), payment_terms VARCHAR(100),
-            CONSTRAINT uq_tms_customer_source_id UNIQUE (source_id));`));
+            CONSTRAINT uq_tms_customer_composite UNIQUE (data_source_id, source_id));`));
         await tx.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_tms_customer_trace ON "${schemaName}".tms_customer (trace_id);`));
         await tx.execute(sql.raw(`DROP TRIGGER IF EXISTS trg_refresh_updated_at ON "${schemaName}".tms_customer;`));
         await tx.execute(sql.raw(`CREATE TRIGGER trg_refresh_updated_at BEFORE UPDATE ON "${schemaName}".tms_customer FOR EACH ROW EXECUTE FUNCTION "${schemaName}".refresh_updated_at();`));
@@ -77,7 +77,7 @@ export async function provisionTmsTables(db: AppsConnectorDb, schemaName: string
         await tx.execute(sql.raw(`CREATE TABLE IF NOT EXISTS "${schemaName}".tms_factoring (
             ${COMMON}, display_name VARCHAR(255), tms_type VARCHAR(100),
             ${ADDR}, ${CONTACT},
-            CONSTRAINT uq_tms_factoring_source_id UNIQUE (source_id));`));
+            CONSTRAINT uq_tms_factoring_composite UNIQUE (data_source_id, source_id));`));
         await tx.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_tms_factoring_trace ON "${schemaName}".tms_factoring (trace_id);`));
         await tx.execute(sql.raw(`DROP TRIGGER IF EXISTS trg_refresh_updated_at ON "${schemaName}".tms_factoring;`));
         await tx.execute(sql.raw(`CREATE TRIGGER trg_refresh_updated_at BEFORE UPDATE ON "${schemaName}".tms_factoring FOR EACH ROW EXECUTE FUNCTION "${schemaName}".refresh_updated_at();`));
@@ -85,7 +85,7 @@ export async function provisionTmsTables(db: AppsConnectorDb, schemaName: string
         await tx.execute(sql.raw(`CREATE TABLE IF NOT EXISTS "${schemaName}".tms_address (
             ${COMMON}, display_name VARCHAR(255), tms_type VARCHAR(100),
             ${ADDR}, ${CONTACT}, is_pickup TEXT, is_delivery TEXT,
-            CONSTRAINT uq_tms_address_source_id UNIQUE (source_id));`));
+            CONSTRAINT uq_tms_address_composite UNIQUE (data_source_id, source_id));`));
         await tx.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_tms_address_trace ON "${schemaName}".tms_address (trace_id);`));
         await tx.execute(sql.raw(`DROP TRIGGER IF EXISTS trg_refresh_updated_at ON "${schemaName}".tms_address;`));
         await tx.execute(sql.raw(`CREATE TRIGGER trg_refresh_updated_at BEFORE UPDATE ON "${schemaName}".tms_address FOR EACH ROW EXECUTE FUNCTION "${schemaName}".refresh_updated_at();`));
@@ -95,7 +95,7 @@ export async function provisionTmsTables(db: AppsConnectorDb, schemaName: string
             carrier_payment_terms VARCHAR(100), carrier_remit_to VARCHAR(255),
             company_type VARCHAR(100), credit_limit VARCHAR(50), remit_to_option VARCHAR(100),
             mc_number VARCHAR(50), state_dot_number VARCHAR(50), us_dot_number VARCHAR(50),
-            CONSTRAINT uq_tms_tp_source_id UNIQUE (source_id));`));
+            CONSTRAINT uq_tms_tp_composite UNIQUE (data_source_id, source_id));`));
         await tx.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_tms_tp_remit_to ON "${schemaName}".tms_tp (carrier_remit_to) WHERE carrier_remit_to IS NOT NULL;`));
         await tx.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_tms_tp_trace    ON "${schemaName}".tms_tp (trace_id);`));
         await tx.execute(sql.raw(`DROP TRIGGER IF EXISTS trg_refresh_updated_at ON "${schemaName}".tms_tp;`));
