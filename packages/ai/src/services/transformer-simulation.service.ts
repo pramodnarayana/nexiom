@@ -7,7 +7,7 @@ import { TokenManagerService } from '@soopa/credentials';
 import { PieceRegistryService } from '@soopa/piece-registry';
 import { MetadataDiscoveryService } from '@soopa/piece-registry';
 import { MappingService } from '../categories/mapping.service.js';
-import { TransformationEngine } from '@soopa/transformer';
+import { Transformer } from '@soopa/transformer';
 import { optimizePayloadTokens } from '../transformers/token-optimizer.util.js';
 
 @Injectable()
@@ -20,7 +20,6 @@ export class TransformerSimulationService {
     private readonly pieceRegistry: PieceRegistryService,
     private readonly metadataService: MetadataDiscoveryService,
     private readonly mappingService: MappingService,
-    private readonly transformationEngine: TransformationEngine,
   ) {}
 
   /**
@@ -121,8 +120,17 @@ export class TransformerSimulationService {
           tenantId
       );
 
-      transformedData = mappingConfig 
-          ? this.transformationEngine.transform(rawData, mappingConfig)
+      transformedData = mappingConfig
+          ? new Transformer(mappingConfig as Record<string, unknown>).transform(rawData, {
+              traceId: `simulation-${tenantId}-${Date.now()}`,
+              tenantId,
+              logger: {
+                info: (msg: string, ...args: unknown[]) => this.logger.log(msg, ...args),
+                warn: (msg: string, ...args: unknown[]) => this.logger.warn(msg, ...args),
+                error: (msg: string, ...args: unknown[]) => this.logger.error(msg, ...args),
+                debug: (msg: string, ...args: unknown[]) => this.logger.debug(msg, ...args),
+              }
+            })
           : rawData;
     }
 

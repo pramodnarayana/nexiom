@@ -1609,9 +1609,9 @@ importers:
       '@soopa/piece-salesforce':
         specifier: workspace:*
         version: link:../core
-      jsonata:
-        specifier: ^2.2.1
-        version: 2.2.1
+      '@soopa/transformer':
+        specifier: workspace:*
+        version: link:../../../packages/transformer
     devDependencies:
       '@soopa/piece-framework':
         specifier: workspace:*

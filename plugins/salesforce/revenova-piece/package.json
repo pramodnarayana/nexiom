@@ -25,7 +25,7 @@
   "dependencies": {
     "@soopa/domain-tms": "workspace:*",
     "@soopa/piece-salesforce": "workspace:*",
-    "jsonata": "^2.2.1"
+    "@soopa/transformer": "workspace:*"
   },
   "files": [
     "dist",

@@ -1,87 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-const { mockEvaluate } = vi.hoisted(() => {
-    return { mockEvaluate: vi.fn() };
-});
-
-vi.mock('node:fs', () => ({
-    default: {
-        readFileSync: vi.fn().mockReturnValue('dummy'),
-    }
-}));
-
-vi.mock('jsonata', () => ({
-    default: () => ({
-        evaluate: mockEvaluate,
-    }),
-}));
-
+import { describe, it, expect } from 'vitest';
 import { normalizeRevenovaToTms } from './normalizeRevenovaToTms.js';
 
-describe('normalizeRevenovaToTms', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-    });
+describe('normalizeRevenovaToTms (Native Transformer Integration)', () => {
 
-    it('should normalize valid object correctly', async () => {
-        mockEvaluate.mockReturnValueOnce({
-            canonicalType: 'TMS_CARRIER',
-            data: { displayName: 'Carrier A' },
-        });
-
+    it('should correctly map Account to TMS_CARRIER', async () => {
         const result = await normalizeRevenovaToTms({
-            entityType: 'rtms__Carrier__c',
-            data: { Name: 'Carrier A' }
-        });
-
-        expect(result).toEqual({
-            canonicalType: 'TMS_CARRIER',
-            data: { displayName: 'Carrier A' },
-        });
-    });
-
-    it('should return null if result is falsy', async () => {
-        mockEvaluate.mockReturnValueOnce(null);
-        const result = await normalizeRevenovaToTms({ entityType: 'rtms__Carrier__c', data: {} });
-        expect(result).toBeNull();
-    });
-
-    it('should return null if canonicalType is missing', async () => {
-        mockEvaluate.mockReturnValueOnce({
-            data: { displayName: 'Carrier A' },
-        });
-        const result = await normalizeRevenovaToTms({ entityType: 'rtms__Carrier__c', data: {} });
-        expect(result).toBeNull();
-    });
-
-    it('should return null if data is missing or array', async () => {
-        mockEvaluate.mockReturnValueOnce({
-            canonicalType: 'TMS_CARRIER',
-            data: [],
-        });
-        const result = await normalizeRevenovaToTms({ entityType: 'rtms__Carrier__c', data: {} });
-        expect(result).toBeNull();
-    });
-
-    it('should return null if JSONata evaluation throws', async () => {
-        mockEvaluate.mockImplementationOnce(() => {
-            throw new Error('JSONata error');
-        });
-        const result = await normalizeRevenovaToTms({ entityType: 'rtms__Carrier__c', data: {} });
-        expect(result).toBeNull();
-    });
-});
-
-describe('normalizeRevenovaToTms - Real JSONata Integration Tests', () => {
-    beforeEach(() => {
-        vi.restoreAllMocks();
-    });
-
-    it('should correctly map Account to TMS_CARRIER with real JSONata', async () => {
-        vi.unmock('jsonata');
-        const { normalizeRevenovaToTms: realNormalizer } = await import('./normalizeRevenovaToTms.js');
-
-        const result = await realNormalizer({
             entityType: 'Account',
             data: {
                 name: 'Test Carrier Inc',
@@ -111,11 +34,8 @@ describe('normalizeRevenovaToTms - Real JSONata Integration Tests', () => {
         expect(result?.data.isCarrier).toBe('true');
     });
 
-    it('should correctly map rtms__TransportationProfile__c to TMS_TP with real JSONata', async () => {
-        vi.unmock('jsonata');
-        const { normalizeRevenovaToTms: realNormalizer } = await import('./normalizeRevenovaToTms.js');
-
-        const result = await realNormalizer({
+    it('should correctly map rtms__TransportationProfile__c to TMS_TP', async () => {
+        const result = await normalizeRevenovaToTms({
             entityType: 'rtms__TransportationProfile__c',
             data: {
                 rtms__invoice_terms__c: 'Net 30',
@@ -143,4 +63,38 @@ describe('normalizeRevenovaToTms - Real JSONata Integration Tests', () => {
         expect(result?.data.stateDotNumber).toBe('SD789');
         expect(result?.data.usDotNumber).toBe('USDOT987654');
     });
+
+    it('should return null if Account is missing name and is not an address', async () => {
+        const result = await normalizeRevenovaToTms({
+            entityType: 'Account',
+            data: {
+                rtms__tms_type__c: 'carrier',
+                // missing name
+            }
+        });
+        expect(result).toBeNull();
+    });
+
+    it('should map address properly even if name is missing', async () => {
+        const result = await normalizeRevenovaToTms({
+            entityType: 'Account',
+            data: {
+                rtms__tms_type__c: 'shipper',
+                billingstreet: '123 Main St'
+            }
+        });
+        expect(result).not.toBeNull();
+        expect(result?.canonicalType).toBe('TMS_ADDRESS');
+        expect(result?.data.isPickup).toBe(true);
+        expect(result?.data.isDelivery).toBe(false);
+    });
+
+    it('should return null for unknown entity types', async () => {
+        const result = await normalizeRevenovaToTms({
+            entityType: 'rtms__Load__c',
+            data: { name: 'Load 123' }
+        });
+        expect(result).toBeNull();
+    });
+
 });
