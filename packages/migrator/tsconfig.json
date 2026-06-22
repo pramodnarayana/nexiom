@@ -4,7 +4,7 @@
     "outDir": "dist",
     "rootDir": "src",
     "baseUrl": ".",
-    "ignoreDeprecations": "6.0",
+    "ignoreDeprecations": "5.0",
     "skipLibCheck": true,
     "paths": {
       "@soopa/*": ["../../packages/*/src", "../../plugins/*/src"]

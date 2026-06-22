@@ -515,12 +515,16 @@ function TabPanel({
         const newSelected = types.length > 0 ? types[0] : '';
         setSelectedCanonicalType(newSelected);
         setPage(1);
+        if (types.length === 0) {
+          void load(1, appliedFilters, objectType);
+        }
       }).catch(err => {
         console.error('Failed to load canonical types', err);
         if (active) {
           setCanonicalTypes([]);
           setSelectedCanonicalType('');
           setPage(1);
+          void load(1, appliedFilters, objectType);
         }
       });
     } else {

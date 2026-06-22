@@ -588,7 +588,7 @@ export class DrizzleExplorerRepositoryAdapter implements ExplorerRepositoryPort 
     },
     normalized: async (tenantDb, schema, connectionId) => {
       const rows = await tenantDb
-        .selectDistinct({ type: schema.normalizedEntity.canonicalType })
+        .selectDistinct({ type: schema.replicaEntity.entityType })
         .from(schema.normalizedEntity)
         .innerJoin(
           schema.replicaEntity,

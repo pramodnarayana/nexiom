@@ -3,7 +3,7 @@ import { TxContext } from "../ports/transaction-manager.port.js";
 
 export class FakeNormalizationRepository implements NormalizationRepositoryPort {
   public replicas: ReplicaRecord[] = [];
-  public inboundRequests: { schemaName: string; traceId: string; payload: any }[] = [];
+  public inboundRequests: { schemaName: string; traceId: string; payload: any; objectType?: string | null }[] = [];
   public normalizedEntities: { schemaName: string; traceId: string; replicaId: string; canonicalType: string; safeData: any }[] = [];
   public normalizedOutbox: { schemaName: string; traceId: string; dataSourceId: string; status: string }[] = [];
   public supersededChecks: { traceId: string; isSuperseded: boolean }[] = [];
@@ -19,7 +19,7 @@ export class FakeNormalizationRepository implements NormalizationRepositoryPort 
 
   async fetchInboundRequest(schemaName: string, traceId: string, tx: TxContext): Promise<{ request: Record<string, unknown>; objectType?: string | null } | null> {
     const req = this.inboundRequests.find(r => r.schemaName === schemaName && r.traceId === traceId);
-    return req ? { request: req.payload, objectType: 'DEFAULT' } : null;
+    return req ? { request: req.payload, objectType: req.objectType ?? null } : null;
   }
 
   async upsertNormalizedEntity(schemaName: string, traceId: string, replicaId: string, canonicalType: string, safeData: Record<string, unknown>, tx: TxContext): Promise<string> {
