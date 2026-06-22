@@ -5,7 +5,7 @@ export * from './piece.js';
 export * from './trigger.js';
 export * from './normalizer.js';
 export * from './jsonata-normalizer.js';
-export * from './app-hooks.js';
+
 export * from './canonical/index.js';
 export * from './retryable-exception.js';
 export * from './dependencies-missing-error.js';
@@ -19,4 +19,4 @@ export {
 } from './http-client.js';
 export * from './app-response.js';
 export * from './db.types.js';
-export * from './app-shard.types.js';
+export * from './pipeline-plugin.types.js';

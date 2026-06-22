@@ -10,7 +10,7 @@ import { useState, useEffect } from 'react';
 function StatusBadge({ status }: { status?: string }) {
   if (!status) return null;
   const s = status.toUpperCase();
-  const isSuccess = s === 'SUCCESS' || s === 'COMPLETED' || s === 'REPLICATED' || s === 'ACTIVE';
+  const isSuccess = s === 'SUCCESS' || s === 'COMPLETED' || s === 'REPLICATED' || s === 'NORMALIZED' || s === 'NORMALISED' || s === 'ACTIVE';
   const isFail = s === 'FAIL' || s === 'FAILED' || s === 'ARCHIVED';
   
   const variant = isSuccess ? 'success' : isFail ? 'destructive' : 'secondary';

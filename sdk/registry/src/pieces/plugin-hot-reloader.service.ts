@@ -1,5 +1,7 @@
 import { Injectable, Logger, Inject, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PUB_SUB_CLIENT, type IPubSub } from '@soopa/cache';
+import { QUEUE_SERVICE, QueueName } from '@soopa/queue';
+import type { IQueueService } from '@soopa/queue';
 import { PluginManagerService } from './plugin-manager.service.js';
 import { PieceRegistryService } from './piece-registry.service.js';
 import type { Piece } from '@soopa/piece-framework';
@@ -87,6 +89,7 @@ export class PluginHotReloaderService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     @Inject(PUB_SUB_CLIENT) private readonly pubsub: IPubSub,
+    @Inject(QUEUE_SERVICE) private readonly queueService: IQueueService,
     private readonly pluginManager: PluginManagerService,
     private readonly pieceRegistry: PieceRegistryService,
   ) {}
@@ -164,6 +167,18 @@ export class PluginHotReloaderService implements OnModuleInit, OnModuleDestroy {
 
       this.pieceRegistry.registerPiece(piece);
       this.logger.log(`Hot-reloaded piece: ${piece.name} (${packageName}@${resolvedVersion})`);
+
+      if (piece.migrationsFolder) {
+        const info = this.pluginManager.getPieceInfo(packageName);
+        if (info) {
+          this.logger.log(`Enqueuing migrations for ${piece.name}`);
+          await this.queueService.send(QueueName.TenantProvisionQueue, {
+            pluginLocation: info.location,
+            pieceName: piece.name,
+            migrationsFolder: piece.migrationsFolder,
+          });
+        }
+      }
     } catch (error: unknown) {
       this.logger.error(
         `Failed to hot-load ${packageName}@${version}`,

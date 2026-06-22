@@ -58,17 +58,21 @@ export class DrizzleNormalizationRepositoryAdapter implements NormalizationRepos
     schemaName: string,
     traceId: string,
     tx: TxContext
-  ): Promise<Record<string, unknown> | null> {
+  ): Promise<{ request: Record<string, unknown>; objectType?: string | null } | null> {
     assertValidSchemaName(schemaName);
     const { inboundGateway } = buildTenantSchema(schemaName);
 
     const rows = await tx
-      .select({ request: inboundGateway.request })
+      .select({ request: inboundGateway.request, objectType: inboundGateway.objectType })
       .from(inboundGateway)
       .where(sql`${inboundGateway.traceId} = ${traceId}`)
       .limit(1);
 
-    return rows[0] ? (rows[0].request as Record<string, unknown>) : null;
+    if (!rows[0]) return null;
+    return {
+      request: rows[0].request as Record<string, unknown>,
+      objectType: rows[0].objectType,
+    };
   }
 
   async upsertNormalizedEntity(
@@ -96,6 +100,7 @@ export class DrizzleNormalizationRepositoryAdapter implements NormalizationRepos
           traceId,
           canonicalType,
           data: safeData,
+          updatedAt: sql`NOW()`,
         },
       })
       .returning({ id: normalizedEntity.id });

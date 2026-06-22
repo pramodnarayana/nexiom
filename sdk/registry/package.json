@@ -26,6 +26,7 @@
 		"@soopa/credentials": "workspace:*",
 		"@soopa/database": "workspace:*",
 		"@soopa/dbmanager": "workspace:*",
+		"@soopa/migrator": "workspace:*",
 		"@soopa/domain-tms": "workspace:*",
 		"@soopa/piece-framework": "workspace:*",
 		"@soopa/queue": "workspace:*",

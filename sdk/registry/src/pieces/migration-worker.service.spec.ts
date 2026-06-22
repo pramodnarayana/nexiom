@@ -4,7 +4,7 @@ import { MigrationWorkerService } from './migration-worker.service.js';
 import type { DrizzleDb } from '@soopa/database';
 import { QueueName } from '@soopa/queue';
 import type { IQueueService, PluginMigrationEvent } from '@soopa/queue';
-import * as migrator from 'drizzle-orm/node-postgres/migrator';
+
 import type { DatabaseManager } from '@soopa/dbmanager';
 
 /**
@@ -19,15 +19,14 @@ type MigrationWorkerPrivate = {
   isPluginMigrationEvent(event: unknown): event is PluginMigrationEvent;
 };
 
-vi.mock('drizzle-orm/node-postgres/migrator', () => ({
-  migrate: vi.fn().mockResolvedValue(undefined),
-}));
+import { MigrationRunnerPort } from '@soopa/migrator';
 
 describe('MigrationWorkerService', () => {
   let service: MigrationWorkerService;
   let globalDb: Mocked<DrizzleDb>;
   let dbManager: Mocked<DatabaseManager>;
   let queueService: Mocked<IQueueService>;
+  let migratorMock: Mocked<MigrationRunnerPort>;
 
   beforeEach(() => {
     globalDb = {} as unknown as Mocked<DrizzleDb>;
@@ -37,7 +36,11 @@ describe('MigrationWorkerService', () => {
       consume: vi.fn(),
     } as unknown as Mocked<IQueueService>;
 
-    service = new MigrationWorkerService(globalDb, dbManager, queueService);
+    migratorMock = {
+      runMigrations: vi.fn().mockResolvedValue(undefined),
+    } as unknown as Mocked<MigrationRunnerPort>;
+
+    service = new MigrationWorkerService(globalDb, dbManager, queueService, migratorMock);
   });
 
   afterEach(() => {
@@ -150,7 +153,7 @@ describe('MigrationWorkerService', () => {
         },
       );
       // Fan-out mode must NOT run the migrator itself
-      expect(migrator.migrate).not.toHaveBeenCalled();
+      expect(migratorMock.runMigrations).not.toHaveBeenCalled();
     });
   });
 
@@ -178,7 +181,7 @@ describe('MigrationWorkerService', () => {
       expect(queueService.send).not.toHaveBeenCalled();
 
       expect(getTenantDbSpy).toHaveBeenCalledWith('tenant-555');
-      expect(migrator.migrate).toHaveBeenCalledWith(expect.any(Object), {
+      expect(migratorMock.runMigrations).toHaveBeenCalledWith(expect.any(Object), {
         migrationsFolder: '/tmp/plugin/drizzle/migrations',
       });
     });
@@ -186,9 +189,7 @@ describe('MigrationWorkerService', () => {
     it('should re-throw migration errors so SQS routes to DLQ', async () => {
       vi.spyOn(service as unknown as MigrationWorkerPrivate, 'getActiveTenants').mockResolvedValue([]);
       vi.spyOn(service as unknown as MigrationWorkerPrivate, 'getTenantDbConnection').mockResolvedValue({} as DrizzleDb);
-      (
-        migrator.migrate as unknown as ReturnType<typeof vi.fn>
-      ).mockRejectedValueOnce(new Error('DB Timeout'));
+      migratorMock.runMigrations.mockRejectedValueOnce(new Error('DB Timeout'));
 
       await expect(
         service.runBackgroundMigrations({

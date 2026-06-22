@@ -75,6 +75,7 @@ export function buildTmsSchema(schemaName: string) {
         id:        uuid('id').defaultRandom().primaryKey(),
         traceId:   uuid('trace_id').notNull(),
         replicaId: uuid('replica_id').notNull(),
+        dataSourceId: varchar('data_source_id', { length: 255 }).notNull(),
         sourceId:  varchar('source_id', { length: 255 }).notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -106,7 +107,7 @@ export function buildTmsSchema(schemaName: string) {
         isCarrier: text('is_carrier'),
         isBroker:  text('is_broker'),
     }, (t) => [
-        uniqueIndex('uq_tms_carrier_source_id').on(t.sourceId),
+        uniqueIndex('uq_tms_carrier_composite').on(t.dataSourceId, t.sourceId),
         index('idx_tms_carrier_tp').on(t.tpSourceId).where(sql`${t.tpSourceId} IS NOT NULL`),
         index('idx_tms_carrier_trace').on(t.traceId),
     ]);
@@ -121,7 +122,7 @@ export function buildTmsSchema(schemaName: string) {
         tpSourceId:   varchar('tp_source_id', { length: 255 }),
         isVendor: text('is_vendor'),
     }, (t) => [
-        uniqueIndex('uq_tms_vendor_source_id').on(t.sourceId),
+        uniqueIndex('uq_tms_vendor_composite').on(t.dataSourceId, t.sourceId),
         index('idx_tms_vendor_tp').on(t.tpSourceId).where(sql`${t.tpSourceId} IS NOT NULL`),
         index('idx_tms_vendor_trace').on(t.traceId),
     ]);
@@ -136,7 +137,7 @@ export function buildTmsSchema(schemaName: string) {
         creditLimit:  varchar('credit_limit', { length: 50 }),
         paymentTerms: varchar('payment_terms', { length: 100 }),
     }, (t) => [
-        uniqueIndex('uq_tms_customer_source_id').on(t.sourceId),
+        uniqueIndex('uq_tms_customer_composite').on(t.dataSourceId, t.sourceId),
         index('idx_tms_customer_trace').on(t.traceId),
     ]);
 
@@ -148,7 +149,7 @@ export function buildTmsSchema(schemaName: string) {
         ...address,
         ...contact,
     }, (t) => [
-        uniqueIndex('uq_tms_factoring_source_id').on(t.sourceId),
+        uniqueIndex('uq_tms_factoring_composite').on(t.dataSourceId, t.sourceId),
         index('idx_tms_factoring_trace').on(t.traceId),
     ]);
 
@@ -162,7 +163,7 @@ export function buildTmsSchema(schemaName: string) {
         isPickup:   text('is_pickup'),
         isDelivery: text('is_delivery'),
     }, (t) => [
-        uniqueIndex('uq_tms_address_source_id').on(t.sourceId),
+        uniqueIndex('uq_tms_address_composite').on(t.dataSourceId, t.sourceId),
         index('idx_tms_address_trace').on(t.traceId),
     ]);
 
@@ -180,7 +181,7 @@ export function buildTmsSchema(schemaName: string) {
         stateDotNumber:      varchar('state_dot_number', { length: 50 }),
         usDotNumber:         varchar('us_dot_number', { length: 50 }),
     }, (t) => [
-        uniqueIndex('uq_tms_tp_source_id').on(t.sourceId),
+        uniqueIndex('uq_tms_tp_composite').on(t.dataSourceId, t.sourceId),
         index('idx_tms_tp_remit_to').on(t.carrierRemitTo).where(sql`${t.carrierRemitTo} IS NOT NULL`),
         index('idx_tms_tp_trace').on(t.traceId),
     ]);

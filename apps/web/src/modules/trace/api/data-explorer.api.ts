@@ -65,7 +65,7 @@ export interface OutboundRow {
   updatedAt: string;
 }
 
-interface Params { page?: number; limit?: number; workspaceId?: string; filters?: unknown; objectType?: string; }
+interface Params { page?: number; limit?: number; workspaceId?: string; filters?: unknown; objectType?: string; canonicalType?: string; }
 
 async function listExplorer<T>(stitchId: string, params: Params, segment: string): Promise<ExplorerPage<T>> {
   const q = new URLSearchParams();
@@ -74,6 +74,7 @@ async function listExplorer<T>(stitchId: string, params: Params, segment: string
   if (params.limit !== undefined) q.set('limit', String(params.limit));
   if (params.filters) q.set('filters', JSON.stringify(params.filters));
   if (params.objectType) q.set('objectType', params.objectType);
+  if (params.canonicalType) q.set('canonicalType', params.canonicalType);
   const url = `/stitches/${encodeURIComponent(stitchId)}/explorer/${segment}?${q}`;
   const res = await apiClient.get<ExplorerPage<T>>(url);
   return res.data;
@@ -126,6 +127,7 @@ async function listConnectionExplorer<T>(connectionId: string, params: Params, s
   if (params.limit !== undefined) q.set('limit', String(params.limit));
   if (params.filters) q.set('filters', JSON.stringify(params.filters));
   if (params.objectType) q.set('objectType', params.objectType);
+  if (params.canonicalType) q.set('canonicalType', params.canonicalType);
   const url = `/connections/${encodeURIComponent(connectionId)}/explorer/${segment}?${q}`;
   const res = await apiClient.get<ExplorerPage<T>>(url);
   return res.data;
@@ -151,6 +153,13 @@ export async function listObjectsByConnection(connectionId: string, tab: string,
   const q = new URLSearchParams();
   if (workspaceId) q.set('workspaceId', workspaceId);
   const url = `/connections/${encodeURIComponent(connectionId)}/explorer/objects/${tab}?${q}`;
+  const res = await apiClient.get<string[]>(url);
+  return res.data;
+}
+
+export async function listConnectionNormalizedTypes(connectionId: string, objectType: string): Promise<string[]> {
+  const q = new URLSearchParams({ objectType });
+  const url = `/connections/${encodeURIComponent(connectionId)}/explorer/normalized/types?${q}`;
   const res = await apiClient.get<string[]>(url);
   return res.data;
 }

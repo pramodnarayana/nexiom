@@ -34,7 +34,15 @@ export interface ExplorerRepositoryPort {
     limit: number,
     objectType?: string,
     filters?: import('../../../filter-parser.js').FilterGroup,
+    canonicalType?: string,
   ): Promise<ExplorerPage<unknown>>;
+
+  listNormalizedTypes(
+    tenantId: string,
+    schemaName: string,
+    connectionId: string,
+    objectType: string,
+  ): Promise<string[]>;
 
   listConnectionOutbound(
     tenantId: string,

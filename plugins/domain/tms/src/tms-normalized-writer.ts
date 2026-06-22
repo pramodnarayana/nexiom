@@ -1,78 +1,36 @@
-import type { AppNormalizedWriterFn } from '@soopa/piece-framework';
-import { sql } from 'drizzle-orm';
+import type { PluginPipelineHooks } from '@soopa/piece-framework';
 import { validateTmsIdentifier } from './schema/tms-identifier-validator.js';
+import { carrierWriter } from './writers/tms-carrier.writer.js';
+import { vendorWriter } from './writers/tms-vendor.writer.js';
+import { customerWriter } from './writers/tms-customer.writer.js';
+import { factoringWriter } from './writers/tms-factoring.writer.js';
+import { addressWriter } from './writers/tms-address.writer.js';
+import { tpWriter } from './writers/tms-tp.writer.js';
+import type { TmsWriterStrategy } from './writers/tms-writer-utils.js';
 
-// ---------------------------------------------------------------------------
-// TMS Normalized Writer Hook — @soopa/domain-tms
-//
-// Shared by ALL TMS source connectors (Revenova, McLeod, TMW…).
-// Registered by each connector's index.ts:
-//   registerNormalizedWriter('salesforce', 'revenova', tmsNormalizedWriter)
-//
-// Called by NormalizationService (step 3.5) inside the existing db transaction
-// after writing to the generic normalized_entity table. Writes to the
-// appropriate typed tms_* table based on normalizedEntityType.
-// ---------------------------------------------------------------------------
-
-// Helper to convert unknown values to nullable strings
-const str = (v: unknown) => {
-    if (typeof v === 'string') return v;
-    if (typeof v === 'boolean' || typeof v === 'number') return String(v);
-    return null;
+const writerStrategies: Record<string, TmsWriterStrategy> = {
+    TMS_CARRIER: carrierWriter,
+    TMS_VENDOR: vendorWriter,
+    TMS_CUSTOMER: customerWriter,
+    TMS_FACTORING: factoringWriter,
+    TMS_ADDRESS: addressWriter,
+    TMS_TP: tpWriter,
+    TMS_LOAD: async (_tx, _schemaName, base, _data) => {
+        throw new Error(`TMS normalized writer: type TMS_LOAD is recognized but not yet implemented (traceId=${base.traceId})`);
+    },
+    TMS_INVOICE: async (_tx, _schemaName, base, _data) => {
+        throw new Error(`TMS normalized writer: type TMS_INVOICE is recognized but not yet implemented (traceId=${base.traceId})`);
+    }
 };
 
-// Common fields present in all TMS entities
-function commonFields(data: Record<string, unknown>) {
-    return {
-        displayName: str(data['displayName']),
-        tmsType: str(data['tmsType']),
-        billingStreet: str(data['billingStreet']),
-        billingCity: str(data['billingCity']),
-        billingState: str(data['billingState']),
-        billingPostalCode: str(data['billingPostalCode']),
-        billingCountry: str(data['billingCountry']),
-        phone: str(data['phone']),
-        fax: str(data['fax']),
-        email: str(data['email']),
-    };
-}
-
-// Generic upsert helper for TMS entities using native drizzle-orm sql
-async function upsert(
-    tx: { execute: (query: unknown) => Promise<unknown> },
-    schemaName: string,
-    tableName: string,
-    base: { traceId: string; replicaId: string; sourceId: string },
-    extras: Record<string, unknown>
-) {
-    const values: Record<string, unknown> = { ...base, ...extras };
-    const columns = Object.keys(values).filter(k => values[k] !== undefined && values[k] !== null);
-    
-    // Convert camelCase to snake_case for DB columns
-    const snakeCols = columns.map(c => c.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`));
-    const colNames = sql.raw(snakeCols.map(c => `"${c}"`).join(', '));
-    const placeholders = sql.join(columns.map(c => sql`${values[c]}`), sql`, `);
-    
-    // ON CONFLICT (source_id) DO UPDATE SET ...
-    const updates = snakeCols.map(c => `"${c}" = COALESCE(EXCLUDED."${c}", "${tableName}"."${c}")`).join(', ');
-    
-    const query = sql`
-        INSERT INTO ${sql.identifier(schemaName)}.${sql.identifier(tableName)} (${colNames})
-        VALUES (${placeholders})
-        ON CONFLICT ("source_id")
-        DO UPDATE SET ${sql.raw(updates)};
-    `;
-    
-    await tx.execute(query);
-}
-
-export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
+export const tmsNormalizedWriter: NonNullable<PluginPipelineHooks['writeNormalized']> = async (
     tx,
     _db,
     schemaName,
     replicaId,
     entityId,
     traceId,
+    dataSourceId,
     normalizedEntityType,
     data,
 ) => {
@@ -80,76 +38,11 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
     validateTmsIdentifier(schemaName);
 
     const txTyped = tx as { execute: (query: unknown) => Promise<unknown> };
+    const base = { traceId, replicaId, sourceId: entityId, dataSourceId };
 
-    const base = { traceId, replicaId, sourceId: entityId };
-
-    if (normalizedEntityType === 'TMS_CARRIER') {
-        await upsert(txTyped, schemaName, 'tms_carrier', base, {
-            ...commonFields(data),
-            tpSourceId: str(data['tpSourceId']),
-            remitToSourceId: str(data['remitToSourceId']),
-            isCarrier: str(data['isCarrier']),
-            isBroker: str(data['isBroker']),
-        });
-        return;
+    const strategy = writerStrategies[normalizedEntityType];
+    if (strategy) {
+        await strategy(txTyped, schemaName, base, data);
     }
-
-    if (normalizedEntityType === 'TMS_VENDOR') {
-        await upsert(txTyped, schemaName, 'tms_vendor', base, {
-            ...commonFields(data),
-            tpSourceId: str(data['tpSourceId']),
-            isVendor: str(data['isVendor']),
-        });
-        return;
-    }
-
-    if (normalizedEntityType === 'TMS_CUSTOMER') {
-        await upsert(txTyped, schemaName, 'tms_customer', base, {
-            ...commonFields(data),
-            creditLimit: str(data['creditLimit']),
-            paymentTerms: str(data['paymentTerms']),
-        });
-        return;
-    }
-
-    if (normalizedEntityType === 'TMS_FACTORING') {
-        await upsert(txTyped, schemaName, 'tms_factoring', base, {
-            ...commonFields(data),
-        });
-        return;
-    }
-
-    if (normalizedEntityType === 'TMS_ADDRESS') {
-        await upsert(txTyped, schemaName, 'tms_address', base, {
-            ...commonFields(data),
-            isPickup: str(data['isPickup']),
-            isDelivery: str(data['isDelivery']),
-        });
-        return;
-    }
-
-    if (normalizedEntityType === 'TMS_TP') {
-        await upsert(txTyped, schemaName, 'tms_tp', base, {
-            mcNumber: str(data['mcNumber']),
-            usDotNumber: str(data['usdot']),
-            remitToOption: str(data['remitToOption']),
-            invoiceTerms: str(data['invoiceTerms']),
-            paymentTerms: str(data['paymentTerms']),
-            carrierPaymentTerms: str(data['carrierPaymentTerms']),
-            carrierRemitTo: str(data['carrierRemitTo']),
-            companyType: str(data['companyType']),
-            creditLimit: str(data['creditLimit']),
-            stateDotNumber: str(data['stateDotNumber']),
-        });
-        return;
-    }
-
-    // Known canonical types that are not yet implemented
-    if (normalizedEntityType === 'TMS_LOAD' || normalizedEntityType === 'TMS_INVOICE') {
-        const warnMsg = `TMS normalized writer: type ${normalizedEntityType} is recognized but not yet implemented (traceId=${traceId})`;
-        // Always throw here — let normalization.service.ts's try/catch convert to warnings
-        throw new Error(warnMsg);
-    }
-
     // Unknown type — normalized_entity already has it, skip typed write
 };

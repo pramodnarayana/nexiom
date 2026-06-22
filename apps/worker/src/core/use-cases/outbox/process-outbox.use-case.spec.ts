@@ -77,11 +77,7 @@ describe("ProcessOutboxUseCase", () => {
     repository.addRows([{ id: "row-1", attempts: 0, payload: {} }]);
     // Throw a non-Error to cover the String(dbErr) branch
     repository.shouldFailMarkSuccess = true;
-    repository.markSuccess = async () => {
-      await Promise.resolve();
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw "DB Error String";
-    };
+    repository.markSuccess = vi.fn().mockRejectedValue("DB Error String");
 
     await expect(
       useCase.execute("tenant-1", "schema-1"),
@@ -96,11 +92,7 @@ describe("ProcessOutboxUseCase", () => {
     publisher.shouldFail = true;
 
     repository.shouldFailMarkFailure = true;
-    repository.markRetry = async () => {
-      await Promise.resolve();
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw "DB Error String";
-    };
+    repository.markRetry = vi.fn().mockRejectedValue("DB Error String");
 
     await expect(
       useCase.execute("tenant-1", "schema-1"),
@@ -117,11 +109,7 @@ describe("ProcessOutboxUseCase", () => {
 
   it("should handle non-Error throws from publisher", async () => {
     repository.addRows([{ id: "row-1", attempts: 1, payload: {} }]);
-    publisher.send = async () => {
-      await Promise.resolve();
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw "Queue is completely broken";
-    };
+    publisher.send = vi.fn().mockRejectedValue("Queue is completely broken");
 
     await expect(
       useCase.execute("tenant-1", "schema-1"),

@@ -161,6 +161,7 @@ export function buildTenantSchema(schemaName: string) {
         canonicalType: varchar('canonical_type', { length: 100 }).notNull(),
         data: jsonb('data').notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
     }, (table) => [
         index('idx_l3_trace').on(table.traceId),
         uniqueIndex('idx_l3_replica').on(table.replicaId),

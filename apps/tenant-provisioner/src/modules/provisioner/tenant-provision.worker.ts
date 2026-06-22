@@ -1,12 +1,13 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { MIGRATION_RUNNER } from "@soopa/migrator";
+import type { MigrationRunnerPort } from "@soopa/migrator";
 import {
   QueueService,
   QueueName,
   type ProvisionDatabaseEvent,
 } from "@soopa/queue";
 import { Client as PgClient, Pool } from "pg";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
+
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -35,7 +36,10 @@ export class TenantProvisionWorker implements OnModuleInit {
    */
   private readonly adminConnectionString: string;
 
-  constructor(private readonly queueService: QueueService) {
+  constructor(
+    private readonly queueService: QueueService,
+    @Inject(MIGRATION_RUNNER) private readonly migrator: MigrationRunnerPort,
+  ) {
     const url = process.env.DATABASE_URL;
     if (!url) {
       throw new Error(
@@ -138,8 +142,7 @@ export class TenantProvisionWorker implements OnModuleInit {
 
     const pool = new Pool({ connectionString: tenantUrl, max: 2 });
     try {
-      const db = drizzle(pool);
-      await migrate(db, { migrationsFolder });
+      await this.migrator.runMigrations(pool, { migrationsFolder });
       this.logger.log(`  ✓ Migrations applied to: ${dbName}`);
     } finally {
       await pool.end();

@@ -37,6 +37,7 @@ export class ListConnectionDataUseCase {
     _workspaceId?: string,
     objectType?: string,
     filters?: import('../../../filter-parser.js').FilterGroup,
+    canonicalType?: string,
   ): Promise<ExplorerPage<any>> {
     const { safePage, safeLimit } = this.safePagination(page, limit);
     const storageProfile =
@@ -72,6 +73,7 @@ export class ListConnectionDataUseCase {
           safeLimit,
           objectType,
           filters,
+          canonicalType,
         );
       case 'outbound':
         return this.explorerRepo.listConnectionOutbound(

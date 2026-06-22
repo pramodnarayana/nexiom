@@ -131,16 +131,17 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           return { kind: "found" as const, replica };
 
         // ── Superseded check ─────────────────────────────────────────────────
-        const inboundRequest = await this.normalizationRepository.fetchInboundRequest(schemaName, traceId, tx);
+        const inboundRequestRow = await this.normalizationRepository.fetchInboundRequest(schemaName, traceId, tx);
 
-        if (!inboundRequest) {
-          throw new Error(`InboundGateway row missing for traceId ${traceId}`);
+        if (!inboundRequestRow || !inboundRequestRow.request) {
+          throw new Error(`InboundGateway row missing or has no request for traceId ${traceId}`);
         }
 
         const extracted = await this.hookBroker.extractReplica(
           connectionAppName,
           appProfile,
-          inboundRequest,
+          inboundRequestRow.request,
+          { objectType: inboundRequestRow.objectType }
         );
 
         if (!extracted) {
@@ -243,6 +244,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
                 replica.id,
                 replica.entityId,
                 traceId,
+                dataSourceId,
                 canonicalType,
                 safeData,
               );

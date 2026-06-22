@@ -1,4 +1,5 @@
 import { DynamicModule, Module, Inject } from '@nestjs/common';
+import { MigratorModule } from '@soopa/migrator';
 import {
   PieceRegistryService,
   PIECES,
@@ -139,6 +140,7 @@ export class PiecesModule {
   static withMigrations(): DynamicModule {
     return {
       module: PiecesModule,
+      imports: [MigratorModule],
       providers: [MigrationWorkerService],
       exports: [MigrationWorkerService],
     };

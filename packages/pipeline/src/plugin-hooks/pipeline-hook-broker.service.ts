@@ -1,43 +1,46 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  getReplicaExtractor,
-  getNormalizer,
-  getNormalizedWriter,
-  getTargetBuilder,
-  getDomainProvisioner,
-  executeAppWebhookResponses,
-} from '@soopa/piece-framework';
-import type { ApplicationShardModule, AppsConnectorDb } from '@soopa/piece-framework';
+import type { PluginPipelineHooks, AppsConnectorDb } from '@soopa/piece-framework';
+import { PieceRegistryService } from '@soopa/piece-registry';
 
 @Injectable()
 export class PipelineHookBrokerService {
   private readonly logger = new Logger(PipelineHookBrokerService.name);
 
+  constructor(private readonly pieceRegistry: PieceRegistryService) {}
+
+  private getHooks(appName: string, hookName: string): PluginPipelineHooks | undefined {
+    const piece = this.pieceRegistry.getPiece(appName) as unknown as { appHooks?: PluginPipelineHooks };
+    if (!piece) {
+      throw new Error(`[PipelineHookBroker] Piece not found in registry: ${appName}`);
+    }
+    return piece.appHooks;
+  }
+
   async extractReplica(
     appName: string,
     appProfile: string,
     payload: unknown,
-  ): Promise<ReturnType<ApplicationShardModule['extractReplica']>> {
+    context?: { objectType?: string | null },
+  ): Promise<ReturnType<PluginPipelineHooks['extractReplica']>> {
     this.logger.debug({ event: 'hook.extractReplica', appName, appProfile }, 'Executing extractReplica hook');
-    const extractor = getReplicaExtractor(appName, appProfile);
-    if (extractor) {
-      return extractor(payload);
+    const hooks = this.getHooks(appName, 'extractReplica');
+    if (!hooks?.extractReplica) {
+      throw new Error(`[PipelineHookBroker] extractReplica hook not implemented by piece: ${appName}`);
     }
-    throw new Error(`[PipelineHookBroker] extractReplica hook not registered for piece: ${appName}`);
+    return hooks.extractReplica(payload, context);
   }
 
   async normalize(
     appName: string,
     appProfile: string,
     replica: { entityType: string; data: Record<string, unknown> },
-  ): Promise<ReturnType<ApplicationShardModule['normalize']>> {
+  ): Promise<ReturnType<PluginPipelineHooks['normalize']>> {
     this.logger.debug({ event: 'hook.normalize', appName, appProfile }, 'Executing normalize hook');
-    const normalizer = getNormalizer(appName, appProfile);
-    if (normalizer) {
-      return normalizer(replica);
+    const hooks = this.getHooks(appName, 'normalize');
+    if (!hooks?.normalize) {
+      return null;
     }
-    // Return null to indicate normalization is not applicable when no normalizer is registered
-    return null;
+    return hooks.normalize(replica);
   }
 
   async writeNormalized(
@@ -49,16 +52,16 @@ export class PipelineHookBrokerService {
     replicaId: string,
     entityId: string,
     traceId: string,
+    dataSourceId: string,
     normalizedEntityType: string,
     data: Record<string, unknown>,
   ): Promise<void> {
     this.logger.debug({ event: 'hook.writeNormalized', appName, appProfile, normalizedEntityType }, 'Executing writeNormalized hook');
-    const writer = getNormalizedWriter(appName, appProfile);
-    if (writer) {
-      await writer(tx, db, schemaName, replicaId, entityId, traceId, normalizedEntityType, data);
-      return;
+    const hooks = this.getHooks(appName, 'writeNormalized');
+    if (!hooks?.writeNormalized) {
+      throw new Error(`[PipelineHookBroker] writeNormalized hook not implemented by piece: ${appName}`);
     }
-    throw new Error(`[PipelineHookBroker] writeNormalized hook not registered for piece: ${appName}`);
+    await hooks.writeNormalized(tx, db, schemaName, replicaId, entityId, traceId, dataSourceId, normalizedEntityType, data);
   }
 
   async buildTarget(
@@ -70,11 +73,11 @@ export class PipelineHookBrokerService {
     srcEntityId: string,
   ): Promise<Record<string, unknown>> {
     this.logger.debug({ event: 'hook.buildTarget', appName, appProfile, normalizedEntityType }, 'Executing buildTarget hook');
-    const builder = getTargetBuilder(appName, appProfile);
-    if (builder) {
-      return builder(db, schemaName, normalizedEntityType, srcEntityId);
+    const hooks = this.getHooks(appName, 'buildTarget');
+    if (!hooks?.buildTarget) {
+      throw new Error(`[PipelineHookBroker] buildTarget hook not implemented by piece: ${appName}`);
     }
-    throw new Error(`[PipelineHookBroker] buildTarget hook not registered for piece: ${appName}`);
+    return hooks.buildTarget(db, schemaName, normalizedEntityType, srcEntityId);
   }
 
   async provisionDomain(
@@ -84,9 +87,9 @@ export class PipelineHookBrokerService {
     schemaName: string,
   ): Promise<void> {
     this.logger.log({ event: 'hook.provisionDomain', appName, appProfile, schemaName }, 'Executing provisionDomain hook');
-    const provisioner = getDomainProvisioner(appName);
-    if (provisioner) {
-      await provisioner(db, schemaName);
+    const hooks = this.getHooks(appName, 'provisionDomain');
+    if (hooks?.provisionDomain) {
+      await hooks.provisionDomain(db, schemaName);
       return;
     }
     this.logger.debug({ event: 'hook.provisionDomain', appName, appProfile }, 'No domain provisioner registered. Skipping.');
@@ -108,10 +111,10 @@ export class PipelineHookBrokerService {
     appProfile: string,
     body: unknown,
     headers: Record<string, string>,
-  ): Promise<ReturnType<NonNullable<ApplicationShardModule['getWebhookResponse']>> | null> {
-    const response = executeAppWebhookResponses(body, headers);
-    if (response) {
-      return response;
+  ): Promise<ReturnType<NonNullable<PluginPipelineHooks['getWebhookResponse']>> | null> {
+    const hooks = this.getHooks(appName, 'getWebhookResponse');
+    if (hooks?.getWebhookResponse) {
+      return hooks.getWebhookResponse(body, headers);
     }
     return null;
   }
@@ -122,7 +125,11 @@ export class PipelineHookBrokerService {
     missingDependencies: Array<{ entityType: string; sourceId: string }>,
     dataSourceId: string,
   ): Promise<void> {
-    throw new Error(`activeFetch hook is not implemented for ${appName}:${appProfile}. Cannot resolve ${missingDependencies.length} missing dependencies.`);
+    const hooks = this.getHooks(appName, 'activeFetch');
+    if (!hooks?.activeFetch) {
+      throw new Error(`[PipelineHookBroker] activeFetch hook is not implemented by piece: ${appName}`);
+    }
+    return hooks.activeFetch(missingDependencies, dataSourceId);
   }
 
   async reverseLookup(
