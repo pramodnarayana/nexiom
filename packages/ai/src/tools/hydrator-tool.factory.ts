@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { toAISchema } from './tool-zod.wrapper.js';
 import { MetadataDiscoveryService } from '@soopa/piece-registry';
 import { MappingService } from '../categories/mapping.service.js';
-import { TransformationEngine } from '@soopa/transformer';
+import { Transformer } from '@soopa/transformer';
 import type { Piece } from '@soopa/piece-framework';
 
 const MAX_PARALLEL_RELATED_CALLS = 5;
@@ -16,7 +16,6 @@ export class HydratorToolFactory {
   constructor(
     private readonly metadataService: MetadataDiscoveryService,
     private readonly mappingService: MappingService,
-    private readonly transformationEngine: TransformationEngine,
   ) {}
 
   buildHydratorTool(
@@ -179,7 +178,7 @@ export class HydratorToolFactory {
 
           if (mappingConfig) {
             this.logger.log(`[${traceId}] Applying strict Canonical JSON Transformation...`);
-            finalPayload = this.transformationEngine.transform(rawPayload, mappingConfig) as Record<string, unknown>;
+            finalPayload = new Transformer(mappingConfig as Record<string, unknown>).transform(rawPayload) as Record<string, unknown>;
           }
 
           const payloadLength = JSON.stringify(finalPayload).length;
