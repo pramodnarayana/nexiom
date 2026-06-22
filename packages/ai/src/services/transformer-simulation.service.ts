@@ -124,7 +124,12 @@ export class TransformerSimulationService {
           ? new Transformer(mappingConfig as Record<string, unknown>).transform(rawData, {
               traceId: `simulation-${tenantId}-${Date.now()}`,
               tenantId,
-              logger: this.logger
+              logger: {
+                info: (msg: string, ...args: unknown[]) => this.logger.log(msg, ...args),
+                warn: (msg: string, ...args: unknown[]) => this.logger.warn(msg, ...args),
+                error: (msg: string, ...args: unknown[]) => this.logger.error(msg, ...args),
+                debug: (msg: string, ...args: unknown[]) => this.logger.debug(msg, ...args),
+              }
             })
           : rawData;
     }
