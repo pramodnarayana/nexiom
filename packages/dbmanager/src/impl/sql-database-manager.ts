@@ -81,9 +81,10 @@ export class SqlDatabaseManager {
 
     /**
      * Re-runs provisionReplicaTables on an existing schema.
-     * All DDL inside is idempotent (CREATE IF NOT EXISTS + DO $$ BEGIN guards)
-     * so this is safe to call on a live tenant schema to apply column renames,
-     * additions, or dropped columns without losing data.
+     * The method only provisions new tables using CREATE TABLE IF NOT EXISTS and
+     * will NOT modify existing table schemas to add missing columns. If idempotent
+     * schema migration of existing tenants is required, you will need to restore
+     * the ALTER TABLE logic that was previously removed.
      */
     async migrateReplicaTables(schemaName: string): Promise<void> {
         this.validateSchemaName(schemaName);
@@ -92,12 +93,11 @@ export class SqlDatabaseManager {
 
     /**
      * Migrates an existing tenant schema to STANDARD_ACTIVE state.
-     * Reapplies all generic provisioner layers (Gateway, Replica, Normalize, Outbound)
-     * to ensure existing tenants receive newly provisioned objects:
-     * - active_sync_locks table (from provisionGatewayTables)
-     * - schema_name columns on outbox tables (from provision*Tables)
-     * - sync_log partial indexes (from provisionOutboundTables)
-     * All DDL is idempotent so this is safe to run on live schemas.
+     * Reapplies all generic provisioner layers (Gateway, Replica, Normalize, Outbound).
+     * Note: This only provisions new tables using CREATE TABLE IF NOT EXISTS and will
+     * not alter existing tables to add missing columns (like schema_name) or indexes.
+     * To implement actual migration logic for existing tables, you will need to
+     * restore DO-block migrations with ALTER TABLE commands.
      */
     async migrateToStandardActive(schemaName: string): Promise<void> {
         this.validateSchemaName(schemaName);

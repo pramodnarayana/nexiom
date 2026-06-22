@@ -76,7 +76,7 @@ export class DrizzleExplorerRepositoryAdapter implements ExplorerRepositoryPort 
   ): Promise<ExplorerPage<Record<string, unknown>>> {
     const tenantDb = await this.dbManager.getTenantDb(tenantId);
     assertValidSchemaName(schemaName);
-    const { replicaEntity } = buildTenantSchema(schemaName);
+    const { replicaEntity, normalizedEntity } = buildTenantSchema(schemaName);
 
     const filterWhere = buildDrizzleFilter(filters, replicaEntity);
     const finalWhere = and(
@@ -95,15 +95,12 @@ export class DrizzleExplorerRepositoryAdapter implements ExplorerRepositoryPort 
       tenantDb
         .select({
           replica: replicaEntity,
-          normalizedId: buildTenantSchema(schemaName).normalizedEntity.id,
+          normalizedId: normalizedEntity.id,
         })
         .from(replicaEntity)
         .leftJoin(
-          buildTenantSchema(schemaName).normalizedEntity,
-          eq(
-            replicaEntity.id,
-            buildTenantSchema(schemaName).normalizedEntity.replicaId,
-          ),
+          normalizedEntity,
+          eq(replicaEntity.id, normalizedEntity.replicaId),
         )
         .where(finalWhere)
         .orderBy(desc(replicaEntity.createdAt))
@@ -122,6 +119,19 @@ export class DrizzleExplorerRepositoryAdapter implements ExplorerRepositoryPort 
       page,
       limit,
     };
+  }
+
+  private extractRows(res: unknown): Record<string, unknown>[] {
+    if (Array.isArray(res)) return res as Record<string, unknown>[];
+    if (
+      res &&
+      typeof res === 'object' &&
+      'rows' in res &&
+      Array.isArray((res as { rows: unknown[] }).rows)
+    ) {
+      return (res as { rows: Record<string, unknown>[] }).rows;
+    }
+    return [];
   }
 
   private readonly polymorphicStrategies: Record<
@@ -323,21 +333,8 @@ export class DrizzleExplorerRepositoryAdapter implements ExplorerRepositoryPort 
       tenantDb.execute(dataQuery),
     ]);
 
-    const extractRows = (res: unknown): Record<string, unknown>[] => {
-      if (Array.isArray(res)) return res as Record<string, unknown>[];
-      if (
-        res &&
-        typeof res === 'object' &&
-        'rows' in res &&
-        Array.isArray((res as { rows: unknown[] }).rows)
-      ) {
-        return (res as { rows: Record<string, unknown>[] }).rows;
-      }
-      return [];
-    };
-
-    const countRows = extractRows(countRes);
-    const dataRows = extractRows(dataRes);
+    const countRows = this.extractRows(countRes);
+    const dataRows = this.extractRows(dataRes);
 
     return {
       data: dataRows,
@@ -379,21 +376,8 @@ export class DrizzleExplorerRepositoryAdapter implements ExplorerRepositoryPort 
       tenantDb.execute(dataQuery),
     ]);
 
-    const extractRows = (res: unknown): Record<string, unknown>[] => {
-      if (Array.isArray(res)) return res as Record<string, unknown>[];
-      if (
-        res &&
-        typeof res === 'object' &&
-        'rows' in res &&
-        Array.isArray((res as { rows: unknown[] }).rows)
-      ) {
-        return (res as { rows: Record<string, unknown>[] }).rows;
-      }
-      return [];
-    };
-
-    const countRows = extractRows(countRes);
-    const dataRows = extractRows(dataRes);
+    const countRows = this.extractRows(countRes);
+    const dataRows = this.extractRows(dataRes);
 
     return {
       data: dataRows,
