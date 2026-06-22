@@ -120,8 +120,12 @@ export class TransformerSimulationService {
           tenantId
       );
 
-      transformedData = mappingConfig 
-          ? new Transformer(mappingConfig as Record<string, unknown>).transform(rawData)
+      transformedData = mappingConfig
+          ? new Transformer(mappingConfig as Record<string, unknown>).transform(rawData, {
+              traceId: `simulation-${tenantId}-${Date.now()}`,
+              tenantId,
+              logger: this.logger
+            })
           : rawData;
     }
 

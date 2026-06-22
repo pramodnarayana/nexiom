@@ -19,7 +19,7 @@ const ACCOUNT_TYPE_RULES: TypeRule[] = [
 ];
 
 function resolveAccountType(rawTmsType?: string) {
-  if (!rawTmsType) return null;
+  if (!rawTmsType || typeof rawTmsType !== 'string') return null;
   const t = rawTmsType.toLowerCase();
   return ACCOUNT_TYPE_RULES.find((rule) => t.includes(rule.match)) || null;
 }
@@ -46,7 +46,8 @@ export class AccountTransformer implements TransformerPort<RevenovaInput, Normal
 
   public transform(input: RevenovaInput, context?: TransformationContext): NormalizedRecord | null {
     const data = input.data;
-    const resolution = resolveAccountType(data.rtms__tms_type__c as string | undefined);
+    const rawTmsType = data.rtms__tms_type__c;
+    const resolution = resolveAccountType(typeof rawTmsType === 'string' ? rawTmsType : undefined);
     if (!resolution) return null;
 
     // Declarative validation: drop record if any required field is missing or empty

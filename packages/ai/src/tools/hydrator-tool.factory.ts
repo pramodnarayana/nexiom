@@ -178,7 +178,11 @@ export class HydratorToolFactory {
 
           if (mappingConfig) {
             this.logger.log(`[${traceId}] Applying strict Canonical JSON Transformation...`);
-            finalPayload = new Transformer(mappingConfig as Record<string, unknown>).transform(rawPayload) as Record<string, unknown>;
+            finalPayload = new Transformer(mappingConfig as Record<string, unknown>).transform(rawPayload, {
+              traceId,
+              tenantId,
+              logger: this.logger
+            }) as Record<string, unknown>;
           }
 
           const payloadLength = JSON.stringify(finalPayload).length;
