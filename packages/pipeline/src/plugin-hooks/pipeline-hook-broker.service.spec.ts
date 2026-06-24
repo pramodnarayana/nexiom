@@ -103,31 +103,6 @@ describe('PipelineHookBrokerService', () => {
     });
   });
 
-  describe('provisionDomain', () => {
-    it('calls the registered provisioner', async () => {
-      const provisioner = vi.fn().mockResolvedValue(undefined);
-      mockHooks.provisionDomain = provisioner;
-
-      await service.provisionDomain('salesforce', 'standard', {} as any, 'public');
-
-      expect(provisioner).toHaveBeenCalledWith({}, 'public');
-    });
-
-    it('skips silently if no provisioner is registered', async () => {
-      mockHooks.provisionDomain = undefined;
-
-      await expect(service.provisionDomain('salesforce', 'standard', {} as any, 'public'))
-        .resolves.toBeUndefined();
-    });
-
-    it('silently skips without errors when appHooks is absent', async () => {
-      mockPieceRegistry.getPiece = vi.fn().mockReturnValue({});
-
-      await expect(service.provisionDomain('salesforce', 'standard', {} as any, 'public'))
-        .resolves.toBeUndefined();
-    });
-  });
-
   describe('prepareUpdate', () => {
     it('returns the original payload (not yet implemented via hooks)', async () => {
       const payload = { name: 'Test' };

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { v4 as uuidv4 } from "uuid";
-import { TestDatabaseManager, buildTenantSchema, dataSources, globalEntityMap, fieldMappings, integrationStitches, uiWorkspaceDataSources, uiWorkspaces } from "@soopa/database";
+import { TestDatabaseManager, buildTenantSchema, dataSources, globalEntityMap, fieldMappings, integrationStitches, uiWorkspaces } from "@soopa/database";
 import { SqlDatabaseManager, SchemaPlan } from "@soopa/dbmanager";
 
 import { DrizzleConnectionRepositoryAdapter } from './drizzle-connection.adapter.js';
@@ -82,8 +82,9 @@ describe("Fanout Drizzle Adapters", () => {
   beforeEach(async () => {
     currentSchemaName = "ws_" + uuidv4().replace(/-/g, "");
     currentTenantId = "tenant_" + uuidv4();
-    const sqlManager = new SqlDatabaseManager(testDbManager.db!);
-    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.STANDARD_ACTIVE, { appName: "test_app", appProfile: "standard" });
+    const migratorMock = { runMigrationsForSchema: async () => {} } as any;
+    const sqlManager = new SqlDatabaseManager(testDbManager.db!, migratorMock);
+    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.SCHEMA_ACTIVE);
   }, 30000);
 
   describe("DrizzleConnectionRepositoryAdapter", () => {
@@ -295,12 +296,7 @@ describe("Fanout Drizzle Adapters", () => {
         syncCondition: [],
       });
 
-      // uiWorkspaceDataSources is required by findActiveStitches query mapping!
-      // wait, `findActiveStitches` joins `uiWorkspaceDataSources` to filter by workspace
-      await testDbManager.db!.insert(uiWorkspaceDataSources).values({
-        workspaceId,
-        dataSourceId,
-      });
+
 
       const stitches = await stitchAdapter.findActiveStitches(currentTenantId, dataSourceId, "Contact");
       expect(stitches).toHaveLength(1);

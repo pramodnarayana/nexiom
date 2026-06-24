@@ -17,7 +17,8 @@
     "build": "tsup src/index.ts --format cjs,esm && tsc -p tsconfig.lib.json --emitDeclarationOnly",
     "dev": "tsup src/index.ts --format cjs,esm --watch",
     "clean": "rm -rf dist",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "db:generate": "drizzle-kit generate"
   },
   "peerDependencies": {
     "drizzle-orm": "^0.45.1"

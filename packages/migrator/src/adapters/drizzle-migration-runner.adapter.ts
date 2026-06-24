@@ -11,165 +11,183 @@ export class DrizzleMigrationRunnerAdapter implements MigrationRunnerPort {
   async runMigrations(db: unknown, options: RunMigrationsOptions): Promise<void> {
     const { migrationsFolder } = options;
 
-    // Obtain a single client for the entire migration to preserve session state
-    let client: unknown;
+    // ── Client acquisition ────────────────────────────────────────────────────
+    // We always acquire a *dedicated* pg.Client from the pool (never the shared
+    // pool connection itself) so that session-level state changes (advisory lock,
+    // search_path) are fully isolated to this migration run.
+    let client: Record<string, unknown>;
     let shouldReleaseClient = false;
     const d = db as Record<string, unknown>;
 
-    if (typeof d.connect === 'function') {
-      // It's a pg.Pool - get a dedicated client
-      client = await (d.connect as () => Promise<unknown>)();
+    const pool = typeof d.connect === 'function'
+      ? d
+      : d.$client as Record<string, unknown> | undefined;
+
+    if (pool && typeof pool.connect === 'function') {
+      client = await (pool.connect as () => Promise<Record<string, unknown>>)();
       shouldReleaseClient = true;
     } else {
-      // It's already a Drizzle db or pg.Client - use it directly
-      client = db;
+      // Already a raw pg.Client — use directly.
+      client = d;
     }
 
-    const runQuery = async (query: string, runner: unknown = client): Promise<any> => {
-      const r = runner as Record<string, unknown>;
-      if (typeof r.query === 'function') {
-        return (r.query as (q: string) => Promise<any>)(query); // pg Pool/Client
-      } else if (typeof r.execute === 'function') {
-        // Drizzle db instance
-        const { sql } = await import('drizzle-orm');
-        return (r.execute as (q: unknown) => Promise<any>)(sql.raw(query));
-      } else {
-        throw new Error('Unsupported database client provided to migrator.');
+    // ── Query helper ─────────────────────────────────────────────────────────
+    const runQuery = async (query: string): Promise<any> => {
+      if (typeof client.query === 'function') {
+        return (client.query as (q: string) => Promise<any>)(query);
       }
+      throw new Error('Migration runner: pg client does not expose a query() method.');
     };
 
-    const runTransaction = async (query: string) => {
-      const r = client as Record<string, unknown>;
-      if (typeof r.transaction === 'function') {
-        return (r.transaction as (cb: (tx: unknown) => Promise<void>) => Promise<void>)(async (tx: unknown) => {
-          await runQuery(query, tx);
-        });
-      } else {
-        // Fallback for pg Pool/Client
-        await runQuery('BEGIN;', client);
-        try {
-          await runQuery(query, client);
-          await runQuery('COMMIT;', client);
-        } catch (e) {
-          await runQuery('ROLLBACK;', client);
-          throw e;
-        }
-      }
-    };
-
-    let schemaLockId: number | undefined;
+    // ── Advisory lock ─────────────────────────────────────────────────────────
+    // A session-level advisory lock serialises concurrent migrations for the same
+    // schema across multiple worker processes / pods.  Different schemas get
+    // different lock IDs so they never block each other.
+    // The lock is automatically released when the client is returned to the pool
+    // (or on disconnect), providing a safe fallback even if the unlock call below
+    // is never reached.
+    const schemaLockKey = options.searchPath ?? 'public';
+    const schemaLockId = crypto
+      .createHash('md5')
+      .update(schemaLockKey)
+      .digest()
+      .readInt32BE(0);
 
     try {
-      // Get current schema to generate a unique lock ID per tenant
-      const schemaRes = await runQuery(`SELECT current_schema();`, client);
-      const schemaRows = schemaRes.rows || schemaRes;
-      const schemaName = schemaRows[0]?.current_schema || 'public';
+      this.logger.log(
+        `Acquiring migration lock for schema "${schemaLockKey}" (ID: ${schemaLockId})...`,
+      );
+      await runQuery(`SELECT pg_advisory_lock(${schemaLockId});`);
 
-      // Generate a 32-bit integer lock ID from the schema name
-      schemaLockId = crypto.createHash('md5').update(schemaName).digest().readInt32BE(0);
+      // ── search_path ─────────────────────────────────────────────────────────
+      // Set at session level on this *dedicated* client — correct because:
+      //   1. The client is not shared with any other query during this method.
+      //   2. All subsequent queries (CREATE TABLE, SELECT hash, migration SQL,
+      //      INSERT hash) automatically resolve against the target schema without
+      //      requiring per-statement schema qualification.
+      // Before releasing the client we issue RESET search_path so the connection
+      // returns to the pool in a clean state (see finally block below).
+      if (options.searchPath) {
+        this.logger.log(`Setting search_path to "${options.searchPath}"`);
+        await runQuery(`SET search_path TO "${options.searchPath}";`);
+      }
 
-      this.logger.log(`Acquiring migration lock for schema ${schemaName} (ID: ${schemaLockId})...`);
-      // Acquire session-level advisory lock
-      await runQuery(`SELECT pg_advisory_lock(${schemaLockId});`, client);
-
-      // 1. Ensure migrations table exists
+      // ── Migrations table ────────────────────────────────────────────────────
+      // Created outside of any per-migration transaction so it survives a
+      // rollback of a failed individual migration.
       await runQuery(`
         CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
-          id SERIAL PRIMARY KEY,
-          hash text NOT NULL,
+          id         SERIAL PRIMARY KEY,
+          hash       text   NOT NULL,
           created_at bigint
         );
-      `, client);
+      `);
 
-      // 2. Read journal.json
+      // ── Journal ──────────────────────────────────────────────────────────────
       const journalPath = path.join(migrationsFolder, 'meta', '_journal.json');
       let journalStr = '';
       try {
         journalStr = await fs.readFile(journalPath, 'utf8');
       } catch (e) {
         if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-          this.logger.warn(`No _journal.json found at ${journalPath}, skipping migrations.`);
+          this.logger.warn(`No _journal.json at ${journalPath} — skipping.`);
           return;
         }
         throw e;
       }
 
-      const journal = JSON.parse(journalStr);
-      if (!journal.entries || journal.entries.length === 0) {
+      const journal = JSON.parse(journalStr) as { entries?: Array<{ tag: string }> };
+      if (!journal.entries?.length) {
         return;
       }
 
-      // 3. Fetch applied migrations
-      const appliedRes = await runQuery(`SELECT id, hash, created_at FROM "__drizzle_migrations" ORDER BY created_at ASC;`, client);
-      // handle difference between pg and drizzle return structures
-      const appliedRows = appliedRes.rows || appliedRes;
-      const appliedHashes = new Set(appliedRows.map((r: Record<string, unknown>) => r.hash as string));
+      // ── Applied-hash set ─────────────────────────────────────────────────────
+      const appliedRes = await runQuery(
+        `SELECT hash FROM "__drizzle_migrations" ORDER BY created_at ASC;`,
+      );
+      const appliedRows: Array<{ hash: string }> = appliedRes.rows ?? appliedRes;
+      const appliedHashes = new Set(appliedRows.map((r) => r.hash));
 
+      // ── Apply pending migrations ─────────────────────────────────────────────
       for (const entry of journal.entries) {
-        const migrationFileName = `${entry.tag}.sql`;
-        const migrationPath = path.join(migrationsFolder, migrationFileName);
-        const content = await fs.readFile(migrationPath, 'utf8');
+        const fileName = `${entry.tag}.sql`;
+        const filePath  = path.join(migrationsFolder, fileName);
+        const content   = await fs.readFile(filePath, 'utf8');
 
-        // Drizzle kit uses SHA-256 of the file content for hash
         const hash = crypto.createHash('sha256').update(content).digest('hex');
-
         if (appliedHashes.has(hash)) {
-          // Already applied
           continue;
         }
 
-        this.logger.log(`Applying migration: ${migrationFileName}`);
+        this.logger.log(`Applying migration: ${fileName}`);
 
         const disableTransaction = content.includes('--disable-ddl-transaction');
         const ts = Date.now();
 
         if (disableTransaction) {
-          this.logger.log(`Executing ${migrationFileName} OUTSIDE transaction (disable-ddl-transaction detected)`);
-          await runQuery(content, client);
-          // Record it outside transaction
-          await runQuery(`INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES ('${hash}', ${ts});`, client);
+          // Some DDL (e.g. CREATE INDEX CONCURRENTLY) cannot run inside a
+          // transaction.  search_path is already set at session level so these
+          // statements resolve against the correct schema automatically.
+          this.logger.log(
+            `Executing ${fileName} outside transaction (--disable-ddl-transaction)`,
+          );
+          await runQuery(content);
+          // Record the hash atomically in its own transaction.
+          await runQuery('BEGIN;');
+          try {
+            await runQuery(
+              `INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES ('${hash}', ${ts});`,
+            );
+            await runQuery('COMMIT;');
+          } catch (e) {
+            await runQuery('ROLLBACK;');
+            throw e;
+          }
         } else {
-          this.logger.log(`Executing ${migrationFileName} inside transaction`);
-          // Execute migration and record hash atomically
-          const r = client as Record<string, unknown>;
-          if (typeof r.transaction === 'function') {
-            await (r.transaction as (cb: (tx: unknown) => Promise<void>) => Promise<void>)(async (tx: unknown) => {
-              await runQuery(content, tx);
-              await runQuery(`INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES ('${hash}', ${ts});`, tx);
-            });
-          } else {
-            // Fallback for pg Pool/Client
-            await runQuery('BEGIN;', client);
-            try {
-              await runQuery(content, client);
-              await runQuery(`INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES ('${hash}', ${ts});`, client);
-              await runQuery('COMMIT;', client);
-            } catch (e) {
-              await runQuery('ROLLBACK;', client);
-              throw e;
-            }
+          // Standard path: wrap migration SQL + hash recording in a single atomic
+          // transaction.  PostgreSQL supports transactional DDL, so a failure here
+          // leaves the schema fully unchanged — no partial state.
+          this.logger.log(`Executing ${fileName} inside transaction`);
+          await runQuery('BEGIN;');
+          try {
+            await runQuery(content);
+            await runQuery(
+              `INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES ('${hash}', ${ts});`,
+            );
+            await runQuery('COMMIT;');
+          } catch (e) {
+            await runQuery('ROLLBACK;');
+            throw e;
           }
         }
 
-        this.logger.log(`Successfully applied ${migrationFileName}`);
+        this.logger.log(`Successfully applied ${fileName}`);
       }
 
     } finally {
-      // Release lock
+      // ── Release advisory lock ─────────────────────────────────────────────
       try {
-        if (typeof schemaLockId !== 'undefined') {
-          await runQuery(`SELECT pg_advisory_unlock(${schemaLockId});`, client);
-          this.logger.log(`Released migration lock for schema (ID: ${schemaLockId}).`);
-        }
+        await runQuery(`SELECT pg_advisory_unlock(${schemaLockId});`);
+        this.logger.log(
+          `Released migration lock for schema "${schemaLockKey}" (ID: ${schemaLockId}).`,
+        );
       } catch (e) {
         this.logger.error(`Failed to release migration lock: ${e}`);
       }
 
-      // Release client if we acquired it
+      // ── Return client to pool in a clean state ────────────────────────────
+      // RESET search_path restores the server/role default — the semantically
+      // correct reset, unlike hard-coding "public" which would break installations
+      // where search_path is configured differently at the database or role level.
       if (shouldReleaseClient) {
-        const c = client as Record<string, unknown>;
-        if (typeof c.release === 'function') {
-          (c.release as () => void)();
+        try {
+          await runQuery('RESET search_path;');
+        } catch {
+          // Best-effort: if the connection is already broken the pool will
+          // destroy it on release.
+        }
+        if (typeof client.release === 'function') {
+          (client.release as () => void)();
         }
       }
     }

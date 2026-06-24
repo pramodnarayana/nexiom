@@ -1,7 +1,7 @@
 import { pgTable, uuid, text, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { authTypeEnum, connectionStatusEnum } from './routing.js';
-import { dataSources } from './data-sources.js';
+import { dataSources } from '../shared/data-sources.js';
 
 /**
  * Credentials tied to a Data Source.

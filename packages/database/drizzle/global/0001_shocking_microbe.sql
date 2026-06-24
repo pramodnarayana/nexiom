@@ -1,1 +1,0 @@
-ALTER TABLE "tenant_storage_registry" ADD COLUMN "status" varchar(20) DEFAULT 'ACTIVE' NOT NULL;

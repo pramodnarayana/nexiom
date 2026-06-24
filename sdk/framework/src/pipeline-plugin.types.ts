@@ -68,13 +68,6 @@ export interface PluginPipelineHooks {
   ): Promise<Record<string, unknown>>;
 
   /**
-   * Provision — Optional: Idempotent DDL for application-owned domain tables.
-   * Called once per tenant schema when a stitch for this app is first activated.
-   * All DDL inside MUST use IF NOT EXISTS.
-   */
-  provisionDomain?(db: AppsConnectorDb, schemaName: string): Promise<void>;
-
-  /**
    * Optional — Return a custom HTTP response for vendor-specific webhook
    * acknowledgment (e.g. Salesforce Outbound Message SOAP ACK).
    * Return null if this request does not require a custom response.

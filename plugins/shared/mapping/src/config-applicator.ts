@@ -1,7 +1,7 @@
 /**
  * Config Applicator — applies StitchConfig behavioral flags to a built payload.
  *
- * Called by MappingEngine.build() AFTER all field mapping rules have been
+ * Called by Mapper.build() AFTER all field mapping rules have been
  * applied. It layers customer-specific behavioral overrides on top of the
  * field-mapped payload.
  *

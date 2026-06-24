@@ -1,5 +1,5 @@
 import { Injectable, Inject } from "@nestjs/common";
-import { eq, inArray, and } from "drizzle-orm";
+import { eq, inArray, notInArray, and } from "drizzle-orm";
 import { DATABASE_CONNECTION, globalRegistryOutbox, assertValidSchemaName } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
 import { DB_MANAGER } from "@soopa/dbmanager";
@@ -14,16 +14,26 @@ import type {
 // ISO 8601 pattern — matches timestamps stored as strings in JSONB
 const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 
-function rehydrateDates(obj: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (typeof v === "string" && ISO_TIMESTAMP_RE.test(v)) {
-      out[k] = new Date(v);
-    } else {
-      out[k] = v;
-    }
+function rehydrateDates(obj: unknown): any {
+  if (obj === null || obj === undefined) return obj;
+  
+  if (typeof obj === "string" && ISO_TIMESTAMP_RE.test(obj)) {
+    return new Date(obj);
   }
-  return out;
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => rehydrateDates(item));
+  }
+  
+  if (typeof obj === "object" && !(obj instanceof Date)) {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      out[k] = rehydrateDates(v);
+    }
+    return out;
+  }
+  
+  return obj;
 }
 
 
@@ -66,6 +76,7 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
     entityType:
       | "APP_CONNECTION"
       | "UI_WORKSPACE"
+      | "UI_WORKSPACE_DATA_SOURCE"
       | "INTEGRATION_STITCH"
       | "FIELD_MAPPING"
       | "SCHEMA_PROVISION",
@@ -87,7 +98,21 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
             `UPSERT action requires a payload, but received null for entityType=${entityType}, entityId=${entityId}`,
           );
         }
-        const data = rehydrateDates(payload);
+        const data: Record<string, unknown> = rehydrateDates(payload);
+
+        let nestedMappings: unknown[] | undefined = undefined;
+        if (entityType === "INTEGRATION_STITCH" && data.fieldMappings !== undefined) {
+          nestedMappings = data.fieldMappings as unknown[];
+          delete data.fieldMappings;
+        }
+        
+        // Workaround for Drizzle ORM bug: .onConflictDoUpdate({ set: data }) does NOT automatically 
+        // stringify objects for jsonb columns, causing the pg driver to crash.
+        for (const [key, value] of Object.entries(data)) {
+            if (value !== null && typeof value === 'object' && !(value instanceof Date)) {
+                data[key] = JSON.stringify(value);
+            }
+        }
 
         if (entityType === "APP_CONNECTION") {
           await tx
@@ -105,6 +130,7 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
               target: [schema.uiWorkspaces.id],
               set: data as typeof schema.uiWorkspaces.$inferInsert,
             });
+
         } else if (entityType === "INTEGRATION_STITCH") {
           await tx
             .insert(schema.integrationStitches)
@@ -113,6 +139,50 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
               target: [schema.integrationStitches.id],
               set: data as typeof schema.integrationStitches.$inferInsert,
             });
+
+          if (Array.isArray(nestedMappings)) {
+            const incomingCanonicals = nestedMappings
+              .map((m: unknown) => (m as { sourceCanonical?: string }).sourceCanonical)
+              .filter((c): c is string => typeof c === 'string' && c.length > 0);
+
+            const stitchId = data.id as string;
+
+            if (incomingCanonicals.length > 0) {
+              await tx
+                .delete(schema.fieldMappings)
+                .where(
+                  and(
+                    eq(schema.fieldMappings.stitchId, stitchId),
+                    notInArray(schema.fieldMappings.sourceCanonical, incomingCanonicals),
+                  ),
+                );
+            } else {
+              await tx
+                .delete(schema.fieldMappings)
+                .where(eq(schema.fieldMappings.stitchId, stitchId));
+            }
+
+            for (const mapping of nestedMappings) {
+              // The workaround above didn't touch mapping.mappingRules, so we need to stringify it manually 
+              // for Drizzle ORM if it's an object/array.
+              const m = mapping as Record<string, unknown>;
+              const mappingRules = m.mappingRules;
+              const stringifiedRules =
+                mappingRules !== null && typeof mappingRules === 'object'
+                  ? JSON.stringify(mappingRules)
+                  : mappingRules;
+
+              const payloadToUpsert = { ...m, mappingRules: stringifiedRules } as typeof schema.fieldMappings.$inferInsert;
+
+              await tx
+                .insert(schema.fieldMappings)
+                .values(payloadToUpsert)
+                .onConflictDoUpdate({
+                  target: [schema.fieldMappings.stitchId, schema.fieldMappings.sourceCanonical],
+                  set: payloadToUpsert,
+                });
+            }
+          }
         } else if (entityType === "FIELD_MAPPING") {
           await tx
             .insert(schema.fieldMappings)
@@ -131,6 +201,7 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
           await tx
             .delete(schema.uiWorkspaces)
             .where(eq(schema.uiWorkspaces.id, entityId));
+
         } else if (entityType === "INTEGRATION_STITCH") {
           await tx
             .delete(schema.integrationStitches)
@@ -199,7 +270,7 @@ export class RegistryReplicationAdapter implements RegistryReplicationPort {
         .set({ status: 'ACTIVE' })
         .where(eq(schema.credentials.dataSourceId, connectionId));
 
-      // Push updated data source to tenant outbox so replication picks up STANDARD_ACTIVE
+      // Push updated data source to tenant outbox so replication picks up SCHEMA_ACTIVE
       await tx.insert(globalRegistryOutbox).values({
         tenantId,
         entityType: 'APP_CONNECTION',

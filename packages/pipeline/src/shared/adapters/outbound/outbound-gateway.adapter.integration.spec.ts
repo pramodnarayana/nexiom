@@ -27,10 +27,7 @@ describe("OutboundGatewayAdapter", () => {
 
   beforeEach(async () => {
     currentSchemaName = "ws_" + uuidv4().replace(/-/g, "");
-    await dbManager.applyPlan(tenantId, currentSchemaName, SchemaPlan.STANDARD_ACTIVE, {
-      appName: "test_app",
-      appProfile: "standard",
-    });
+    await dbManager.applyPlan(tenantId, currentSchemaName, SchemaPlan.SCHEMA_ACTIVE);
   }, 30000);
 
   it("should insert a new pending record and return its details", async () => {

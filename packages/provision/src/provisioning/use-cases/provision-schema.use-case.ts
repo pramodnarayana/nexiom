@@ -2,6 +2,8 @@ import { Logger } from '@nestjs/common';
 import type { RegistryReplicationPort } from '../../shared/ports/registry-replication.port.js';
 import type { DatabaseManager, SchemaPlan } from '@soopa/dbmanager';
 
+import type { DomainProvisionerPort } from '../ports/domain-provisioner.port.js';
+
 export interface ProvisionSchemaCommand {
   outboxId: string;
 }
@@ -12,6 +14,7 @@ export class ProvisionSchemaUseCase {
   constructor(
     private readonly registryPort: RegistryReplicationPort,
     private readonly dbManager: DatabaseManager,
+    private readonly domainProvisioner: DomainProvisionerPort,
   ) {}
 
   async execute(command: ProvisionSchemaCommand): Promise<void> {
@@ -29,14 +32,18 @@ export class ProvisionSchemaUseCase {
         appProfile: string;
       };
 
+      // 1. Provision Pipeline tables via DB Manager
       await this.dbManager.applyPlan(
         row.tenantId,
         payload.schemaName,
-        payload.plan,
-        {
-          appName: payload.appName,
-          appProfile: payload.appProfile,
-        },
+        payload.plan
+      );
+
+      // 2. Provision Domain tables via the dynamic Plugin Registry Adapter
+      await this.domainProvisioner.provisionDomainSchema(
+        row.tenantId,
+        payload.schemaName,
+        payload.appName
       );
 
       // Enterprise Grade: Register CDC publication inside the worker after schema exists
@@ -47,7 +54,7 @@ export class ProvisionSchemaUseCase {
         await this.registryPort.activateConnection(row.tenantId, row.entityId, payload.plan);
       }
 
-      this.logger.debug(
+      this.logger.log(
         `Successfully provisioned schema ${payload.schemaName} for connection ${row.entityId} in tenant ${row.tenantId}`,
       );
 

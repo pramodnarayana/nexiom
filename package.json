@@ -31,7 +31,6 @@
 	},
 	"devDependencies": {
 		"@changesets/cli": "^2.31.0",
-		"@soopa/migrator": "workspace:*",
 		"@swc/cli": "^0.8.0",
 		"@swc/core": "^1.15.11",
 		"@testcontainers/postgresql": "^12.0.1",

@@ -1,6 +1,6 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { sql, eq, and } from "drizzle-orm";
-import { integrationStitches, uiWorkspaceDataSources, DATABASE_CONNECTION, type DrizzleDb } from "@soopa/database";
+import { integrationStitches, DATABASE_CONNECTION, type DrizzleDb } from "@soopa/database";
 import { StitchRepositoryPort, ActiveStitch } from '../../../shared/ports/stitch.repository.port.js';
 
 @Injectable()
@@ -30,21 +30,12 @@ export class DrizzleSharedStitchRepositoryAdapter implements StitchRepositoryPor
         sourceDataSourceId: integrationStitches.sourceDataSourceId,
       })
       .from(integrationStitches)
-      .innerJoin(
-        uiWorkspaceDataSources,
-        and(
-          eq(
-            integrationStitches.workspaceId,
-            uiWorkspaceDataSources.workspaceId,
-          ),
-          eq(uiWorkspaceDataSources.dataSourceId, dataSourceId),
-        ),
-      )
       .where(
         and(
           eq(integrationStitches.orgId, tenantId),
           eq(integrationStitches.canonicalObject, canonicalType),
           eq(integrationStitches.status, 'ACTIVE'),
+          eq(integrationStitches.sourceDataSourceId, dataSourceId),
         )
       );
 

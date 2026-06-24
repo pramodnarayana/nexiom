@@ -41,10 +41,10 @@ describe("DeliveryService", () => {
     currentSchemaName = "ws_" + uuidv4().replace(/-/g, "");
     currentWorkspaceId = uuidv4();
 
-    const sqlManager = new SqlDatabaseManager(testDbManager.db!);
-    // Apply namespace, outbound and inbound plans for proper tables
-    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.NAMESPACE_ONLY, { appName: "testApp", appProfile: "online" });
-    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.STANDARD_ACTIVE, { appName: "testApp", appProfile: "online" });
+    const migratorMock = { runMigrationsForSchema: async () => {} } as any;
+    const sqlManager = new SqlDatabaseManager(testDbManager.db!, migratorMock);
+    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.NAMESPACE_ONLY);
+    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.SCHEMA_ACTIVE);
     // Global map table
     await testDbManager.db!.execute(sql`
       CREATE TABLE IF NOT EXISTS public.global_entity_map (

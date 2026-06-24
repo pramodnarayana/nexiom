@@ -17,10 +17,7 @@ describe("RegistryReplicationAdapter", () => {
     dbManager = new MockDatabaseManager(testDbManager.db!);
     let tenantId = uuidv4();
     const currentSchemaName = "ws_test_tenant";
-    await dbManager.applyPlan(tenantId, currentSchemaName, SchemaPlan.STANDARD_ACTIVE, {
-      appName: "test_app",
-      appProfile: "standard",
-    });
+    await dbManager.applyPlan(tenantId, currentSchemaName, SchemaPlan.SCHEMA_ACTIVE);
 
     adapter = new RegistryReplicationAdapter(testDbManager.db!, dbManager);
   }, 60000);
@@ -157,15 +154,31 @@ describe("RegistryReplicationAdapter", () => {
         sourceDataSourceId: srcDsId,
         destDataSourceId: destDsId,
         canonicalObject: "Contact",
-        targetObject: "Contact",
         isActive: true,
         status: "ACTIVE",
+        createdAt: "2024-06-23T12:00:00.000Z",
+        updatedAt: "2024-06-23T12:00:00.000Z",
+        fieldMappings: [
+          {
+            stitchId,
+            sourceCanonical: "Contact",
+            mappingRules: JSON.stringify([{ src: "$.Id", dest: "$.ExternalId" }]),
+            createdAt: "2024-06-23T12:00:00.000Z",
+            updatedAt: "2024-06-23T12:00:00.000Z",
+          }
+        ]
       };
 
       await adapter.replicateEntity(tenantId, "UPSERT", "INTEGRATION_STITCH", stitchId, payload);
       
       let rows = await testDbManager.db!.select().from(integrationStitches).where(eq(integrationStitches.id, stitchId));
       expect(rows).toHaveLength(1);
+      expect(rows[0].createdAt).toBeInstanceOf(Date);
+
+      const mappings = await testDbManager.db!.select().from(fieldMappings).where(eq(fieldMappings.stitchId, stitchId));
+      expect(mappings).toHaveLength(1);
+      expect(mappings[0].sourceCanonical).toBe("Contact");
+      expect(mappings[0].createdAt).toBeInstanceOf(Date);
 
       await adapter.replicateEntity(tenantId, "DELETE", "INTEGRATION_STITCH", stitchId, null);
       

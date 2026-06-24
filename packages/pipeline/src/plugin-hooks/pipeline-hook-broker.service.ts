@@ -80,21 +80,6 @@ export class PipelineHookBrokerService {
     return hooks.buildTarget(db, schemaName, normalizedEntityType, srcEntityId);
   }
 
-  async provisionDomain(
-    appName: string,
-    appProfile: string,
-    db: AppsConnectorDb,
-    schemaName: string,
-  ): Promise<void> {
-    this.logger.log({ event: 'hook.provisionDomain', appName, appProfile, schemaName }, 'Executing provisionDomain hook');
-    const hooks = this.getHooks(appName, 'provisionDomain');
-    if (hooks?.provisionDomain) {
-      await hooks.provisionDomain(db, schemaName);
-      return;
-    }
-    this.logger.debug({ event: 'hook.provisionDomain', appName, appProfile }, 'No domain provisioner registered. Skipping.');
-  }
-
   async prepareUpdate(
     appName: string,
     appProfile: string,

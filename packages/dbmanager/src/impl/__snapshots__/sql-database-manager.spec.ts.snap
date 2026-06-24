@@ -1,9 +1,0 @@
-// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
-
-exports[`SqlDatabaseManager > STANDARD_ACTIVE calls CREATE SCHEMA + gateway DDL > STANDARD_ACTIVE DDL count 1`] = `34`;
-
-exports[`SqlDatabaseManager > STANDARD_ACTIVE calls all five provisioning stages > STANDARD_ACTIVE DDL count 1`] = `34`;
-
-exports[`SqlDatabaseManager > STANDARD_ACTIVE calls schema + gateway + replica + normalize DDL > STANDARD_ACTIVE DDL count 1`] = `34`;
-
-exports[`SqlDatabaseManager > STANDARD_ACTIVE calls schema + gateway + replica DDL > STANDARD_ACTIVE DDL count 1`] = `34`;

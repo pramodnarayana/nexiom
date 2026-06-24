@@ -4,6 +4,8 @@ import { DB_MANAGER } from '@soopa/dbmanager';
 import type { DatabaseManager } from '@soopa/dbmanager';
 import type { RegistryReplicationPort } from '../shared/ports/registry-replication.port.js';
 import { ProvisionSchemaUseCase } from './use-cases/provision-schema.use-case.js';
+import { DOMAIN_PROVISIONER } from './ports/domain-provisioner.port.js';
+import type { DomainProvisionerPort } from './ports/domain-provisioner.port.js';
 
 @Injectable()
 export class SchemaProvisionWorker implements OnModuleInit {
@@ -15,8 +17,9 @@ export class SchemaProvisionWorker implements OnModuleInit {
     @Inject('RegistryReplicationPort')
     registryPort: RegistryReplicationPort,
     @Inject(DB_MANAGER) dbManager: DatabaseManager,
+    @Inject(DOMAIN_PROVISIONER) domainProvisioner: DomainProvisionerPort,
   ) {
-    this.useCase = new ProvisionSchemaUseCase(registryPort, dbManager);
+    this.useCase = new ProvisionSchemaUseCase(registryPort, dbManager, domainProvisioner);
   }
 
   onModuleInit() {

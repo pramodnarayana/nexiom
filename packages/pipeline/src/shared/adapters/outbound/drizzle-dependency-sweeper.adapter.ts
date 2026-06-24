@@ -35,7 +35,7 @@ export class DrizzleDependencySweeperRepositoryAdapter implements DependencySwee
       .where(
         and(
           eq(integrationStitches.status, "ACTIVE"),
-          sql`${dataSources.schemaPlan} IN ('STANDARD_ACTIVE', 'CANONICAL_ACTIVE')`,
+          sql`${dataSources.schemaPlan} IN ('SCHEMA_ACTIVE')`,
         ),
       );
   }
