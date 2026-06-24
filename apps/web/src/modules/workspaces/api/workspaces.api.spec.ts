@@ -66,7 +66,7 @@ describe('Workspaces API', () => {
     vi.mocked(apiClient.post).mockResolvedValueOnce({ data: { success: true } });
     const res = await WorkspacesApi.syncConnection(mockWorkspaceId, mockDataSourceId, 'Customer');
     expect(apiClient.post).toHaveBeenCalledWith(`/workspaces/${mockWorkspaceId}/connections/${mockDataSourceId}/sync/Customer`);
-    expect(res).toBeUndefined();
+    expect(res).toEqual({ success: true });
   });
 
   it('fetchConnectionRecords posts correctly', async () => {
@@ -76,6 +76,6 @@ describe('Workspaces API', () => {
       `/workspaces/${mockWorkspaceId}/connections/${mockDataSourceId}/sync/Customer/fetch`,
       { recordIds: ['id1'] }
     );
-    expect(res).toBeUndefined();
+    expect(res).toEqual({ success: true });
   });
 });

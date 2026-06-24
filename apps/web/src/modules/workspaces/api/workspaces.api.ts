@@ -59,10 +59,19 @@ export async function listWorkspaceConnections(workspaceId: string): Promise<Wor
   const res = await apiClient.get<WorkspaceConnectionResponse[]>(`/workspaces/${workspaceId}/connections`);
   return res.data;
 }
-export async function syncConnection(workspaceId: string, dataSourceId: string, objectType: string): Promise<void> {
-  await apiClient.post(`/workspaces/${workspaceId}/connections/${dataSourceId}/sync/${objectType}`);
+export interface SyncResult {
+  status: 'success' | 'failed' | 'partial';
+  message?: string;
+  recordsSynced?: number;
+  recordsFailed?: number;
 }
 
-export async function fetchConnectionRecords(workspaceId: string, dataSourceId: string, objectType: string, recordIds: string[]): Promise<void> {
-  await apiClient.post(`/workspaces/${workspaceId}/connections/${dataSourceId}/sync/${objectType}/fetch`, { recordIds });
+export async function syncConnection(workspaceId: string, dataSourceId: string, objectType: string): Promise<SyncResult> {
+  const res = await apiClient.post<SyncResult>(`/workspaces/${workspaceId}/connections/${dataSourceId}/sync/${objectType}`);
+  return res.data;
+}
+
+export async function fetchConnectionRecords(workspaceId: string, dataSourceId: string, objectType: string, recordIds: string[]): Promise<SyncResult> {
+  const res = await apiClient.post<SyncResult>(`/workspaces/${workspaceId}/connections/${dataSourceId}/sync/${objectType}/fetch`, { recordIds });
+  return res.data;
 }

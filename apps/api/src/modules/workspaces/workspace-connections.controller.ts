@@ -111,9 +111,9 @@ export class WorkspaceConnectionsController {
     if (!Array.isArray(recordIds) || recordIds.length === 0) {
       throw new BadRequestException('recordIds must be a non-empty array');
     }
-    if (recordIds.length > 500) {
+    if (recordIds.length > 100) {
       throw new BadRequestException(
-        'recordIds cannot exceed 500 items per request',
+        'recordIds cannot exceed 100 items per request',
       );
     }
     if (recordIds.some((id) => typeof id !== 'string' || !id.trim())) {
@@ -131,6 +131,11 @@ export class WorkspaceConnectionsController {
       );
     }
 
-    return this.syncRunner.fetchRecords(connection.id, objectType, recordIds);
+    const trimmedRecordIds = recordIds.map((id) => id.trim());
+    return this.syncRunner.fetchRecords(
+      connection.id,
+      objectType,
+      trimmedRecordIds,
+    );
   }
 }

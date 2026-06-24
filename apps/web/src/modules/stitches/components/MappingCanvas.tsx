@@ -79,6 +79,7 @@ function reducer(state: CanvasState, action: Action): CanvasState {
 }
 
 const EMPTY_ARRAY: string[] = [];
+const EMPTY_CONDITIONS: SyncConditionRule[] = [];
 
 export function MappingCanvas({
   srcDataSourceId,
@@ -87,7 +88,7 @@ export function MappingCanvas({
   destDataSourceId,
   targetObject,
   initialRules,
-  initialConditions = [],
+  initialConditions = EMPTY_CONDITIONS,
   onChange
 }: Readonly<MappingCanvasProps>) {
   

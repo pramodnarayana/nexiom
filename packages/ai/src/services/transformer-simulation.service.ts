@@ -107,7 +107,10 @@ export class TransformerSimulationService {
       let primaryResult: Record<string, unknown> | undefined;
       
       if (Array.isArray(results) && results.length > 0) {
-          primaryResult = results[0] as Record<string, unknown>;
+          const candidate = results[0];
+          if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+              primaryResult = candidate as Record<string, unknown>;
+          }
       } else if (results && typeof results === 'object' && !Array.isArray(results)) {
           primaryResult = results as Record<string, unknown>;
       }
@@ -123,7 +126,7 @@ export class TransformerSimulationService {
       const relatedObjects = await this.metadataService.describeRelatedObjects(tenantId, conn.id, resolvedObjectName);
 
       const relatedResults: Array<{ objectType: string; relationshipType: string; records: unknown[] }> = [];
-      if (primaryId !== undefined && primaryId !== null) {
+      if (primaryId !== undefined && primaryId !== null && primaryId !== '') {
         for (const rel of relatedObjects) {
             try {
                 const relRecords = await piece.executeFind(rel.objectName, { [rel.relationField]: primaryId }, credentials as any);
