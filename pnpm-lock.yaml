@@ -110,15 +110,9 @@ importers:
       '@soopa/dbmanager':
         specifier: workspace:*
         version: link:../../packages/dbmanager
-      '@soopa/domain-tms':
-        specifier: workspace:*
-        version: link:../../plugins/domain/tms
       '@soopa/identity':
         specifier: workspace:*
         version: link:../../packages/identity
-      '@soopa/migrator':
-        specifier: workspace:*
-        version: link:../../packages/migrator
       '@soopa/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -702,9 +696,6 @@ importers:
       '@soopa/identity':
         specifier: workspace:*
         version: link:../../packages/identity
-      '@soopa/migrator':
-        specifier: workspace:*
-        version: link:../../packages/migrator
       '@soopa/observability':
         specifier: workspace:*
         version: link:../../packages/observability

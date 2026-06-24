@@ -175,7 +175,8 @@ CREATE TABLE "global_registry_outbox" (
 	"error_message" varchar(1000),
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "registry_outbox_status_check" CHECK (status IN ('PENDING', 'RETRY', 'FAIL', 'SUCCESS', 'PROCESSING'))
+	CONSTRAINT "registry_outbox_status_check" CHECK (status IN ('PENDING', 'RETRY', 'FAIL', 'SUCCESS', 'PROCESSING')),
+	CONSTRAINT "registry_outbox_attempts_check" CHECK ("attempts" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE "shard_registry" (
@@ -187,7 +188,9 @@ CREATE TABLE "shard_registry" (
 	"max_tenants" integer DEFAULT 1000 NOT NULL,
 	"current_tenants" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "shard_registry_max_tenants_check" CHECK ("max_tenants" > 0),
+	CONSTRAINT "shard_registry_current_tenants_check" CHECK ("current_tenants" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE "tenant_storage_registry" (
@@ -228,7 +231,8 @@ CREATE TABLE "data_source" (
 	"schedule_enabled" boolean DEFAULT true NOT NULL,
 	"last_scheduled_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "data_source_sync_interval_check" CHECK ("sync_interval_minutes" > 0)
 );
 --> statement-breakpoint
 CREATE TABLE "field_mapping" (
@@ -264,7 +268,8 @@ CREATE TABLE "scheduler_outbox" (
 	"next_retry_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"error_message" text,
 	"processed_at" timestamp with time zone,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "scheduler_outbox_attempts_check" CHECK ("attempts" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE "ui_workspace" (

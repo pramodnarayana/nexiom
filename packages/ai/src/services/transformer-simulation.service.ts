@@ -82,7 +82,10 @@ export class TransformerSimulationService {
 
     } else if (toolType === 'hydrator') {
       // Inline the Hydrator tool logic for precise telemetry tracking
-      const objectType = String(payload.objectType || '');
+      if (typeof payload.objectType !== 'string' || !payload.objectType) {
+        throw new BadRequestException('objectType must be a non-empty string');
+      }
+      const objectType = payload.objectType;
       const filters = (payload.filters || {}) as Record<string, unknown>;
       
       if (!piece.executeFind) {
@@ -111,23 +114,31 @@ export class TransformerSimulationService {
 
       const primaryId = primaryResult.Id ?? primaryResult.id ?? primaryResult.internalId;
       const relatedObjects = await this.metadataService.describeRelatedObjects(tenantId, conn.id, resolvedObjectName);
-      
+
       const relatedResults: Array<{ objectType: string; relationshipType: string; records: unknown[] }> = [];
-      for (const rel of relatedObjects) {
-          try {
-              const relRecords = await piece.executeFind(rel.objectName, { [rel.relationField]: primaryId }, credentials as any);
-              relatedResults.push({
-                  objectType: rel.objectName,
-                  relationshipType: rel.relationshipType,
-                  records: Array.isArray(relRecords) ? relRecords : [relRecords]
-              });
-          } catch (e) {
-              this.logger.warn(`Failed to fetch related ${rel.objectName}`, e);
-          }
+      if (primaryId !== undefined && primaryId !== null) {
+        for (const rel of relatedObjects) {
+            try {
+                const relRecords = await piece.executeFind(rel.objectName, { [rel.relationField]: primaryId }, credentials as any);
+                relatedResults.push({
+                    objectType: rel.objectName,
+                    relationshipType: rel.relationshipType,
+                    records: Array.isArray(relRecords) ? relRecords : [relRecords]
+                });
+            } catch (e) {
+                this.logger.warn(`Failed to fetch related ${rel.objectName}`, e);
+            }
+        }
       }
 
       const relationsPayload = Object.fromEntries(
-          relatedResults.filter(r => r.records.length > 0).map(r => [`${r.objectType}|${r.relationshipType}`, r])
+          relatedResults
+              .filter(r => r.records.length > 0 && r.records.some(rec => rec != null))
+              .map(r => ({
+                  ...r,
+                  records: r.records.filter(rec => rec != null)
+              }))
+              .map(r => [`${r.objectType}|${r.relationshipType}`, r])
       );
 
       rawData = {

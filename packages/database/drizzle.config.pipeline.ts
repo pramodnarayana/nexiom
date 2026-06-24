@@ -20,8 +20,9 @@ if (existsSync(rootEnv)) {
     eitherFound = true;
 }
 
-if (!process.env.DATABASE_URL) {
-    throw new Error('[drizzle.config.pipeline] DATABASE_URL is not set.');
+const pipelineDbUrl = process.env.TENANT_DATABASE_URL || process.env.DATABASE_URL;
+if (!pipelineDbUrl) {
+    throw new Error('[drizzle.config.pipeline] Neither TENANT_DATABASE_URL nor DATABASE_URL is set.');
 }
 
 export default {
@@ -29,6 +30,6 @@ export default {
     out: './drizzle/pipeline',
     dialect: 'postgresql',
     dbCredentials: {
-        url: process.env.DATABASE_URL,
+        url: pipelineDbUrl,
     },
 } satisfies Config;
