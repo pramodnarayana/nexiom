@@ -82,10 +82,10 @@ export class TransformerSimulationService {
 
     } else if (toolType === 'hydrator') {
       // Inline the Hydrator tool logic for precise telemetry tracking
-      if (typeof payload.objectType !== 'string' || !payload.objectType) {
+      if (typeof payload.objectType !== 'string' || !payload.objectType.trim()) {
         throw new BadRequestException('objectType must be a non-empty string');
       }
-      const objectType = payload.objectType;
+      const objectType = payload.objectType.trim();
       
       let filters: Record<string, unknown> = {};
       if ('filters' in payload && payload.filters !== undefined && payload.filters !== null) {
@@ -154,11 +154,23 @@ export class TransformerSimulationService {
           relations: relationsPayload
       };
 
+      const assumedCategoryRaw = payload.assumedCategory ?? 'TMS';
+      if (typeof assumedCategoryRaw !== 'string' || !assumedCategoryRaw.trim()) {
+        throw new BadRequestException('assumedCategory must be a non-empty string');
+      }
+      const assumedCategory = assumedCategoryRaw.trim();
+
+      const viewModeRaw = payload.viewMode ?? 'summary';
+      if (typeof viewModeRaw !== 'string' || !viewModeRaw.trim()) {
+        throw new BadRequestException('viewMode must be a non-empty string');
+      }
+      const viewMode = viewModeRaw.trim();
+
       const mappingConfig = await this.mappingService.getMapping(
           conn.appName,
-          String(payload.assumedCategory || 'TMS'),
+          assumedCategory,
           resolvedObjectName,
-          String(payload.viewMode || 'summary'),
+          viewMode,
           tenantId
       );
 

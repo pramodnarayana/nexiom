@@ -52,11 +52,10 @@ describe('CanonicalMetadataController', () => {
       expect(fields[0]?.name).toBe('stub_field');
     });
 
-    it('should return a fallback id field if the port returns an empty array', async () => {
-      const fields = await controller.listFields('UNKNOWN_OBJECT');
-      expect(fields).toHaveLength(1);
-      expect(fields[0]?.name).toBe('id');
-      expect(fields[0]?.label).toBe('Hub ID');
+    it('should throw NotFoundException if the port returns an empty array', async () => {
+      await expect(controller.listFields('UNKNOWN_OBJECT')).rejects.toThrow(
+        "Canonical object 'UNKNOWN_OBJECT' not found or has no fields.",
+      );
     });
   });
 });

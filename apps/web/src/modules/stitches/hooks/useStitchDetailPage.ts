@@ -109,7 +109,7 @@ export function useStitchDetailPage(id: string | undefined) {
   };
 
   const handleStatusToggle = async () => {
-    if (!stitch) return;
+    if (!stitch || stitch.status === 'ARCHIVED') return;
     const next = stitch.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     setTogglingStatus(true);
     try {

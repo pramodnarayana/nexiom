@@ -13,7 +13,7 @@ import {
 } from '@/shared/components/ui/select';
 import { Combobox } from '@/shared/components/ui/combobox';
 import { MultiCombobox } from '@/shared/components/ui/multi-combobox';
-import type { AvailableConnectionResponse } from '@/modules/workspaces/api/workspaces.api';
+import type { WorkspaceConnectionResponse } from '@/modules/workspaces/api/workspaces.api';
 import type { ObjectDescriptor } from '../api/metadata.api';
 import { useCreateStitchPage } from '../hooks/useCreateStitchPage';
 import { MappingCanvas } from '../components/MappingCanvas';
@@ -134,7 +134,7 @@ function ObjectPickerBody({
 
 interface ConnectionObjectPickerProps {
   label: string;
-  connections: AvailableConnectionResponse[];
+  connections: WorkspaceConnectionResponse[];
   dataSourceId: string;
   onConnectionChange: (id: string) => void;
   objects: ObjectDescriptor[];
@@ -238,6 +238,11 @@ export function CreateStitchPage() {
     step1Valid,
     step2Valid,
   } = useCreateStitchPage(workspaceId);
+
+  const selectedRelatedObjects = useMemo(
+    () => wizard.sourceObjects?.slice(1) ?? [],
+    [wizard.sourceObjects]
+  );
 
   if (!workspaceId) {
     return <div className="p-6 text-sm text-destructive">Invalid workspace URL.</div>;
@@ -347,7 +352,7 @@ export function CreateStitchPage() {
                   <MappingCanvas
                       srcDataSourceId={wizard.srcDataSourceId}
                       sourceObject={wizard.sourceObjects[0]}
-                      selectedRelatedObjects={wizard.sourceObjects.slice(1)}
+                      selectedRelatedObjects={selectedRelatedObjects}
                       destDataSourceId={wizard.destDataSourceId}
                       targetObject={wizard.targetObject}
                       onChange={handleMappingChange}

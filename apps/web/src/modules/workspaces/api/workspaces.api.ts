@@ -59,24 +59,10 @@ export async function listWorkspaceConnections(workspaceId: string): Promise<Wor
   const res = await apiClient.get<WorkspaceConnectionResponse[]>(`/workspaces/${workspaceId}/connections`);
   return res.data;
 }
-export interface AvailableConnectionResponse {
-  id: string;
-  appName: string;
-  externalId: string;
-  displayName: string;
-  authType: string;
-  status: string;
+export async function syncConnection(workspaceId: string, dataSourceId: string, objectType: string): Promise<void> {
+  await apiClient.post(`/workspaces/${workspaceId}/connections/${dataSourceId}/sync/${objectType}`);
 }
 
-export async function listAvailableConnections(workspaceId: string): Promise<AvailableConnectionResponse[]> {
-  const res = await apiClient.get<AvailableConnectionResponse[]>(`/workspaces/${workspaceId}/connections/available`);
-  return res.data;
-}
-
-export async function assignConnection(workspaceId: string, dataSourceId: string): Promise<void> {
-  await apiClient.post(`/workspaces/${workspaceId}/connections/${dataSourceId}`);
-}
-
-export async function unassignConnection(workspaceId: string, dataSourceId: string): Promise<void> {
-  await apiClient.delete(`/workspaces/${workspaceId}/connections/${dataSourceId}`);
+export async function fetchConnectionRecords(workspaceId: string, dataSourceId: string, objectType: string, recordIds: string[]): Promise<void> {
+  await apiClient.post(`/workspaces/${workspaceId}/connections/${dataSourceId}/sync/${objectType}/fetch`, { recordIds });
 }

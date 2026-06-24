@@ -21,9 +21,15 @@ export class DrizzleCanonicalSchemaAdapter implements CanonicalSchemaRepositoryP
     // Register all tables by their uppercase table name (e.g., 'TMS_CUSTOMER')
     for (const schema of this.schemaProviders) {
       for (const table of Object.values(schema)) {
-        // We know these are PgTable instances because of SchemaRegistryInput
         const pgTable = table;
         const tableName = getTableName(pgTable).toUpperCase();
+
+        if (tableName in this.tables) {
+          throw new Error(
+            `Duplicate canonical table name detected: ${tableName}`,
+          );
+        }
+
         this.tables[tableName] = pgTable;
       }
     }

@@ -35,8 +35,8 @@ export const CreateStitchSchema = z.object({
   workspaceId: z.string().uuid(),
   sourceDataSourceId: z.string().uuid(),
   destDataSourceId: z.string().uuid(),
-  canonicalObject: z.string().trim().max(255).optional().default(''),
-  targetObject: z.string().trim().max(255).optional().default(''),
+  canonicalObject: z.string().trim().min(1).max(255),
+  targetObject: z.string().trim().min(1).max(255),
   syncCondition: z.array(SyncConditionRule).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   /**

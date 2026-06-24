@@ -111,6 +111,14 @@ export class WorkspaceConnectionsController {
     if (!Array.isArray(recordIds) || recordIds.length === 0) {
       throw new BadRequestException('recordIds must be a non-empty array');
     }
+    if (recordIds.length > 500) {
+      throw new BadRequestException(
+        'recordIds cannot exceed 500 items per request',
+      );
+    }
+    if (recordIds.some((id) => typeof id !== 'string' || !id.trim())) {
+      throw new BadRequestException('Each recordId must be a non-empty string');
+    }
 
     const connection = await this.getConnectionForSyncUseCase.execute(
       dataSourceId,

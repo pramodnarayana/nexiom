@@ -23,10 +23,9 @@ export class DomainProvisionerAdapter implements DomainProvisionerPort {
   ): Promise<void> {
     const piece = this.pieceRegistry.getPiece(appName);
     if (!piece) {
-      this.logger.warn(
+      throw new Error(
         `Piece ${appName} not found in registry. Cannot provision domain schema.`,
       );
-      return;
     }
 
     if (!piece.migrationsFolder) {

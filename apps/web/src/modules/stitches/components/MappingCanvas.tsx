@@ -25,6 +25,7 @@ export interface MappingCanvasProps {
   destDataSourceId: string;
   targetObject: string;
   initialRules?: MappingRule[];
+  initialConditions?: SyncConditionRule[];
   onChange: (rules: MappingRule[], conditions: SyncConditionRule[]) => void;
 }
 
@@ -86,6 +87,7 @@ export function MappingCanvas({
   destDataSourceId,
   targetObject,
   initialRules,
+  initialConditions = [],
   onChange
 }: Readonly<MappingCanvasProps>) {
   
@@ -178,9 +180,9 @@ export function MappingCanvas({
       });
       
     // Hub translation logic is simulated here. In a real app, backend translates it.
-    // For conditions, we pass empty array as we removed them from this UI for simplicity
-    onChangeRef.current(rules, []);
-  }, [state.mappings]);
+    // Preserve the initial conditions instead of overwriting with []
+    onChangeRef.current(rules, initialConditions);
+  }, [state.mappings, initialConditions]);
 
   // Formula Builder Modal State
   const [formulaField, setFormulaField] = useState<FieldDescriptor | null>(null);

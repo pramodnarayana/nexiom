@@ -140,9 +140,6 @@ export function MultiCombobox({
           sideOffset={4}
           // Match the trigger width exactly
           className="z-50 w-[--radix-popover-trigger-width] rounded-md border bg-popover text-popover-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2"
-          // Prevent focus returning to the trigger on close — the keyboard user
-          // dismissed the popover intentionally and focus should stay where it is.
-          onCloseAutoFocus={(e) => { e.preventDefault() }}
         >
           {/* ── Search bar ─────────────────────────────────────────────── */}
           <div className="flex items-center gap-1.5 border-b px-2 py-1.5">
@@ -183,6 +180,7 @@ export function MultiCombobox({
             id={listId}
             role="listbox"
             aria-label="Options"
+            aria-multiselectable="true"
             className="max-h-60 overflow-y-auto p-1"
           >
             {filtered.map((option, index) => (

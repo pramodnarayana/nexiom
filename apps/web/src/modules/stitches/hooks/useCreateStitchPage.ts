@@ -138,7 +138,7 @@ export function useCreateStitchPage(workspaceId: string | undefined) {
         targetObject: wizard.targetObject,
         ...(wizard.syncConditions.length > 0 && { syncCondition: wizard.syncConditions }),
         ...(wizard.mappingRules.length > 0 && {
-          fieldMappings: [{ sourceCanonical: wizard.sourceObjects[0], mappingRules: wizard.mappingRules }],
+          fieldMappings: wizard.sourceObjects.map(obj => ({ sourceCanonical: obj, mappingRules: wizard.mappingRules })),
         }),
       });
       navigate(stitchesHref);

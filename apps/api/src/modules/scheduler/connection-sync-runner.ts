@@ -132,8 +132,13 @@ export class ConnectionSyncRunner {
     const credentials =
       await this.tokenManager.getValidCredentials(connectionId);
 
-    // Resolve the piece
     const piece = this.resolvePiece(conn.appName);
+
+    if (typeof piece.poll !== 'function') {
+      throw new BadRequestException(
+        `Piece "${conn.appName}" does not support polling (no poll() method)`,
+      );
+    }
 
     // Get ALL streams for the connection if objectType is not provided
     let streams: StreamDescriptor[] = [];
@@ -197,6 +202,12 @@ export class ConnectionSyncRunner {
     }
 
     const tenantDb = await this.dbManager.getTenantDb(conn.orgId);
+
+    if (recordIds.length > 100) {
+      throw new BadRequestException(
+        `Payload too large: maximum 100 recordIds allowed per request.`,
+      );
+    }
 
     const fetches = recordIds.map(async (recordId) => {
       try {
@@ -510,11 +521,6 @@ export class ConnectionSyncRunner {
     const piece = this.pieceRegistry.getPiece(appName);
     if (!piece) {
       throw new BadRequestException(`Piece not registered: "${appName}"`);
-    }
-    if (typeof piece.poll !== 'function') {
-      throw new BadRequestException(
-        `Piece "${appName}" does not support polling (no poll() method)`,
-      );
     }
     return piece;
   }

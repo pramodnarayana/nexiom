@@ -124,7 +124,7 @@ export class DrizzleWorkspaceRepositoryAdapter implements WorkspaceRepositoryPor
           entityType: 'UI_WORKSPACE',
           entityId: deleted.id,
           action: 'DELETE',
-          payload: null,
+          payload: deleted,
         });
       }
 

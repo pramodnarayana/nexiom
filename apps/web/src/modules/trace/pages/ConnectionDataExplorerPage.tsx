@@ -222,7 +222,7 @@ function DataTableRow<T extends Record<string, unknown>>({
       </tr>
       {expanded && (
         <tr className="border-b border-border bg-muted/5">
-          <td colSpan={row.getVisibleCells().length + 1} className="p-4">
+          <td colSpan={row.getVisibleCells().length + 2} className="p-4">
             <div className="bg-background rounded-md border border-border p-4 shadow-sm max-h-[500px] overflow-auto">
               <div className="flex justify-between items-center mb-4 border-b border-border pb-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Full Record Details</h4>
@@ -357,6 +357,17 @@ function DataTable<T extends Record<string, unknown>>({
   readonly onFetchSelected?: (rows: T[]) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setSelectedIds(prev => {
+      const currentIds = new Set(rows.map(r => String(r.id)));
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (currentIds.has(id)) next.add(id);
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [rows]);
 
   const columnSet = new Set<string>();
   for (const row of rows) {
@@ -782,7 +793,7 @@ function TabPanel({
         onViewTrace={handleViewTrace}
         onFetchSelected={async (rows) => {
           if (!objectType) return;
-          const ids = rows.map(r => String(r.id));
+          const ids = rows.map(r => String(r.sourceId ?? r.entityId ?? r.id));
           try {
             await syncConnectionRecord(workspaceId, getDataSourceId(), objectType, ids);
             toast({ description: `Successfully triggered fetch for ${ids.length} records. Data should appear shortly.` });

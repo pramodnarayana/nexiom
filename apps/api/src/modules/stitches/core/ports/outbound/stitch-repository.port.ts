@@ -16,7 +16,7 @@ export interface StitchRepositoryPort {
       canonicalObject?: string;
       targetObject?: string;
       syncCondition?: unknown[];
-      status?: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
+      status?: 'ACTIVE' | 'INACTIVE';
       fieldMappings?: {
         sourceCanonical: string;
         mappingRules: unknown[];

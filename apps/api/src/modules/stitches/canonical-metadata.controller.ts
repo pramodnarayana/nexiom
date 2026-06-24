@@ -1,4 +1,11 @@
-import { Controller, Get, Param, UseGuards, Inject } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  UseGuards,
+  Inject,
+  NotFoundException,
+} from '@nestjs/common';
 import { AuthGuard, PermissionsGuard, RequirePermission } from '@soopa/auth';
 import {
   CANONICAL_SCHEMA_REPOSITORY_PORT,
@@ -29,17 +36,9 @@ export class CanonicalMetadataController {
   async listFields(@Param('objectName') objectName: string) {
     const fields = await this.canonicalRegistry.listFields(objectName);
     if (!fields || fields.length === 0) {
-      // Fallback
-      return [
-        {
-          name: 'id',
-          label: 'Hub ID',
-          type: 'string',
-          filterable: true,
-          sortable: true,
-          nillable: false,
-        },
-      ];
+      throw new NotFoundException(
+        `Canonical object '${objectName}' not found or has no fields.`,
+      );
     }
     return fields;
   }

@@ -116,7 +116,7 @@ export function StitchDetailPage() {
               <Badge variant={stitch.status === 'ACTIVE' ? 'default' : 'secondary'}>{stitch.status}</Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              Syncing {[stitch.canonicalObject, ...(stitch.config?.selectedRelatedObjects as string[] || [])].join(', ')} → {stitch.targetObject}
+              Syncing {[stitch.canonicalObject, ...(Array.isArray(stitch.config?.selectedRelatedObjects) ? (stitch.config.selectedRelatedObjects as string[]) : [])].join(', ')} → {stitch.targetObject}
             </p>
           </div>
         </div>
