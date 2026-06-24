@@ -74,6 +74,9 @@ describe('ConnectionLifecycleService', () => {
       dbManager,
       storageResolver,
       eventEmitter,
+      { addToQueue: vi.fn().mockResolvedValue(undefined) } as any,
+      { getPiece: vi.fn().mockReturnValue(undefined) } as any,
+      { isPluginInstalled: vi.fn().mockReturnValue(false) } as any,
     );
   });
 

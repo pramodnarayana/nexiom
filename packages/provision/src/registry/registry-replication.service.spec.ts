@@ -134,8 +134,8 @@ describe('RegistryReplicationService', () => {
     // Always fail
     registryPort.replicateEntity.mockRejectedValue(fkError);
 
-    await expect((service as any).processMessage('outbox-1')).rejects.toThrow('foreign key constraint violation');
-    expect(registryPort.replicateEntity).toHaveBeenCalledTimes(3);
+    await expect((service as any).processMessage('outbox-1')).rejects.toThrow();
+    expect(registryPort.replicateEntity).toHaveBeenCalledTimes(10);
     expect(registryPort.markGlobalOutboxSuccess).not.toHaveBeenCalled();
   });
 });

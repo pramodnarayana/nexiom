@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import { Injectable, Logger, BadRequestException, Inject } from '@nestjs/common';
 import { DATABASE_CONNECTION, dataSources } from '@soopa/database';
 import { eq, and } from 'drizzle-orm';
@@ -9,6 +8,16 @@ import { MetadataDiscoveryService } from '@soopa/piece-registry';
 import { MappingService } from '../categories/mapping.service.js';
 import { Transformer } from '@soopa/transformer';
 import { optimizePayloadTokens } from '../transformers/token-optimizer.util.js';
+
+export interface SimulationResult {
+    executionProfile: {
+        latencyMs: number;
+        rawSizeBytes: number;
+        finalSizeBytes: number;
+        compressionRatio: string;
+    };
+    payload: unknown;
+}
 
 @Injectable()
 export class TransformerSimulationService {
@@ -31,8 +40,8 @@ export class TransformerSimulationService {
     connectionId: string,
     toolType: 'hydrator' | 'action',
     actionName: string | null,
-    payload: Record<string, any>,
-  ): Promise<any> {
+    payload: Record<string, unknown>,
+  ): Promise<SimulationResult> {
     const startTime = Date.now();
     
     // 1. Resolve Connection
@@ -58,22 +67,34 @@ export class TransformerSimulationService {
         throw new BadRequestException(`Piece ${conn.appName} not found in registry`);
     }
 
-    const credentials = (await this.tokenManager.getValidCredentials(conn.id)) as any;
+    const credentials = await this.tokenManager.getValidCredentials(conn.id) as unknown as Record<string, unknown>;
 
-    let rawData: any = null;
-    let transformedData: any = null;
+    let rawData: unknown = null;
+    let transformedData: unknown = null;
 
     if (toolType === 'action') {
       if (!actionName || !piece.actions?.[actionName]) {
         throw new BadRequestException(`Action ${actionName} not supported by piece ${conn.appName}`);
       }
       const action = piece.actions[actionName];
-      rawData = await action.run({ auth: credentials, propsValue: payload });
-      transformedData = optimizePayloadTokens(rawData) || rawData;
+      rawData = await action.run({ auth: credentials, propsValue: payload as Record<string, any> });
+      transformedData = optimizePayloadTokens(rawData as Record<string, unknown>) || rawData;
 
     } else if (toolType === 'hydrator') {
       // Inline the Hydrator tool logic for precise telemetry tracking
-      const { objectType, filters } = payload;
+      if (typeof payload.objectType !== 'string' || !payload.objectType.trim()) {
+        throw new BadRequestException('objectType must be a non-empty string');
+      }
+      const objectType = payload.objectType.trim();
+      
+      let filters: Record<string, unknown> = {};
+      if ('filters' in payload && payload.filters !== undefined && payload.filters !== null) {
+        if (typeof payload.filters !== 'object' || Array.isArray(payload.filters)) {
+          throw new BadRequestException('filters must be an object');
+        }
+        filters = payload.filters as Record<string, unknown>;
+      }
+      
       if (!piece.executeFind) {
           throw new BadRequestException(`executeFind not natively supported by piece ${conn.appName}`);
       }
@@ -82,46 +103,82 @@ export class TransformerSimulationService {
       const match = objects.find(o => o.label === objectType || o.name === objectType);
       const resolvedObjectName = match ? match.name : objectType;
 
-      const results = await piece.executeFind(resolvedObjectName, filters, credentials);
-      let primaryResult: any = Array.isArray(results) ? results[0] : results;
+      const results = await piece.executeFind(resolvedObjectName, filters, credentials as any);
+      let primaryResult: Record<string, unknown> | undefined;
+      
+      if (Array.isArray(results) && results.length > 0) {
+          const candidate = results[0];
+          if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+              primaryResult = candidate as Record<string, unknown>;
+          }
+      } else if (results && typeof results === 'object' && !Array.isArray(results)) {
+          primaryResult = results as Record<string, unknown>;
+      }
       
       if (!primaryResult) {
-          return { error: 'No records found' };
+          return {
+              executionProfile: { latencyMs: Date.now() - startTime, rawSizeBytes: 0, finalSizeBytes: 0, compressionRatio: '0%' },
+              payload: { error: 'No records found' }
+          };
       }
 
-      const primaryId = primaryResult.Id || primaryResult.id || primaryResult.internalId;
+      const primaryId = primaryResult.Id ?? primaryResult.id ?? primaryResult.internalId;
       const relatedObjects = await this.metadataService.describeRelatedObjects(tenantId, conn.id, resolvedObjectName);
-      
-      const relatedResults = [];
-      for (const rel of relatedObjects) {
-          try {
-              const relRecords = await piece.executeFind(rel.objectName, { [rel.relationField]: primaryId }, credentials);
-              relatedResults.push({
-                  objectType: rel.objectName,
-                  relationshipType: rel.relationshipType,
-                  records: Array.isArray(relRecords) ? relRecords : [relRecords]
-              });
-          } catch (e) {
-              this.logger.warn(`Failed to fetch related ${rel.objectName}`, e);
-          }
+
+      const relatedResults: Array<{ objectType: string; relationshipType: string; records: unknown[] }> = [];
+      if (primaryId !== undefined && primaryId !== null && primaryId !== '') {
+        for (const rel of relatedObjects) {
+            try {
+                const relRecords = await piece.executeFind(rel.objectName, { [rel.relationField]: primaryId }, credentials as any);
+                relatedResults.push({
+                    objectType: rel.objectName,
+                    relationshipType: rel.relationshipType,
+                    records: Array.isArray(relRecords) ? relRecords : [relRecords]
+                });
+            } catch (e) {
+                this.logger.warn(`Failed to fetch related ${rel.objectName}`, e);
+            }
+        }
       }
+
+      const relationsPayload = Object.fromEntries(
+          relatedResults
+              .filter(r => r.records.length > 0 && r.records.some(rec => rec != null))
+              .map(r => ({
+                  ...r,
+                  records: r.records.filter(rec => rec != null)
+              }))
+              .map(r => [`${r.objectType}|${r.relationshipType}`, r])
+      );
 
       rawData = {
           connectionName: conn.appName,
           [resolvedObjectName]: primaryResult,
-          relations: Object.fromEntries(relatedResults.filter(r => r.records?.length).map(r => [`${r.objectType}|${r.relationshipType}`, r]))
+          relations: relationsPayload
       };
+
+      const assumedCategoryRaw = payload.assumedCategory ?? 'TMS';
+      if (typeof assumedCategoryRaw !== 'string' || !assumedCategoryRaw.trim()) {
+        throw new BadRequestException('assumedCategory must be a non-empty string');
+      }
+      const assumedCategory = assumedCategoryRaw.trim();
+
+      const viewModeRaw = payload.viewMode ?? 'summary';
+      if (typeof viewModeRaw !== 'string' || !viewModeRaw.trim()) {
+        throw new BadRequestException('viewMode must be a non-empty string');
+      }
+      const viewMode = viewModeRaw.trim();
 
       const mappingConfig = await this.mappingService.getMapping(
           conn.appName,
-          payload.assumedCategory || 'TMS',
+          assumedCategory,
           resolvedObjectName,
-          payload.viewMode || 'summary',
+          viewMode,
           tenantId
       );
 
       transformedData = mappingConfig
-          ? new Transformer(mappingConfig as Record<string, unknown>).transform(rawData, {
+          ? new Transformer(mappingConfig as Record<string, unknown>).transform(rawData as Record<string, unknown>, {
               traceId: `simulation-${tenantId}-${Date.now()}`,
               tenantId,
               logger: {

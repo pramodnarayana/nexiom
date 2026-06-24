@@ -1,120 +1,9 @@
 {
-  "id": "01f8af89-fcb6-4992-a950-0cfd0857f334",
+  "id": "1a8e044e-bd6c-43a8-a61e-1b4dd268c2a6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.canonical_mappings": {
-      "name": "canonical_mappings",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "app_name": {
-          "name": "app_name",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "category": {
-          "name": "category",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "entity": {
-          "name": "entity",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "view_mode": {
-          "name": "view_mode",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "version": {
-          "name": "version",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'v1'"
-        },
-        "mapping_config": {
-          "name": "mapping_config",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "canonical_mapping_unique_idx": {
-          "name": "canonical_mapping_unique_idx",
-          "columns": [
-            {
-              "expression": "app_name",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "category",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "entity",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "view_mode",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "version",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.ai_conversations": {
       "name": "ai_conversations",
       "schema": "",
@@ -335,90 +224,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.connector_object_profiles": {
-      "name": "connector_object_profiles",
-      "schema": "",
-      "columns": {
-        "connection_id": {
-          "name": "connection_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "object_name": {
-          "name": "object_name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "profile": {
-          "name": "profile",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "cop_connection_idx": {
-          "name": "cop_connection_idx",
-          "columns": [
-            {
-              "expression": "connection_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "connector_object_profiles_connection_id_app_connection_id_fk": {
-          "name": "connector_object_profiles_connection_id_app_connection_id_fk",
-          "tableFrom": "connector_object_profiles",
-          "tableTo": "app_connection",
-          "columnsFrom": [
-            "connection_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "connector_object_profiles_connection_id_object_name_pk": {
-          "name": "connector_object_profiles_connection_id_object_name_pk",
-          "columns": [
-            "connection_id",
-            "object_name"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.global_entity_map": {
       "name": "global_entity_map",
       "schema": "",
@@ -442,8 +247,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "source_app_id": {
-          "name": "source_app_id",
+        "source_data_source_id": {
+          "name": "source_data_source_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -490,8 +295,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "dest_app_id": {
-          "name": "dest_app_id",
+        "dest_data_source_id": {
+          "name": "dest_data_source_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -548,45 +353,6 @@
         }
       },
       "indexes": {
-        "gem_unique_mapping_idx": {
-          "name": "gem_unique_mapping_idx",
-          "columns": [
-            {
-              "expression": "stitch_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "source_app_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "source_entity_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "dest_app_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "dest_entity_type",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "gem_src_lookup_idx": {
           "name": "gem_src_lookup_idx",
           "columns": [
@@ -597,7 +363,7 @@
               "nulls": "last"
             },
             {
-              "expression": "source_app_id",
+              "expression": "source_data_source_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -618,7 +384,7 @@
               "nulls": "last"
             },
             {
-              "expression": "dest_app_id",
+              "expression": "dest_data_source_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -629,11 +395,11 @@
           "method": "btree",
           "with": {}
         },
-        "gem_source_app_idx": {
-          "name": "gem_source_app_idx",
+        "gem_source_ds_idx": {
+          "name": "gem_source_ds_idx",
           "columns": [
             {
-              "expression": "source_app_id",
+              "expression": "source_data_source_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -644,11 +410,11 @@
           "method": "btree",
           "with": {}
         },
-        "gem_dest_app_idx": {
-          "name": "gem_dest_app_idx",
+        "gem_dest_ds_idx": {
+          "name": "gem_dest_ds_idx",
           "columns": [
             {
-              "expression": "dest_app_id",
+              "expression": "dest_data_source_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -719,12 +485,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "global_entity_map_source_app_id_app_connection_id_fk": {
-          "name": "global_entity_map_source_app_id_app_connection_id_fk",
+        "global_entity_map_source_data_source_id_data_source_id_fk": {
+          "name": "global_entity_map_source_data_source_id_data_source_id_fk",
           "tableFrom": "global_entity_map",
-          "tableTo": "app_connection",
+          "tableTo": "data_source",
           "columnsFrom": [
-            "source_app_id"
+            "source_data_source_id"
           ],
           "columnsTo": [
             "id"
@@ -732,12 +498,12 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "global_entity_map_dest_app_id_app_connection_id_fk": {
-          "name": "global_entity_map_dest_app_id_app_connection_id_fk",
+        "global_entity_map_dest_data_source_id_data_source_id_fk": {
+          "name": "global_entity_map_dest_data_source_id_data_source_id_fk",
           "tableFrom": "global_entity_map",
-          "tableTo": "app_connection",
+          "tableTo": "data_source",
           "columnsFrom": [
-            "dest_app_id"
+            "dest_data_source_id"
           ],
           "columnsTo": [
             "id"
@@ -746,6 +512,227 @@
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "gem_unique_mapping_idx": {
+          "name": "gem_unique_mapping_idx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "stitch_id",
+            "source_data_source_id",
+            "source_entity_id",
+            "dest_data_source_id",
+            "dest_entity_type"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.data_source": {
+      "name": "data_source",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "app_name": {
+          "name": "app_name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_id": {
+          "name": "external_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "env_type": {
+          "name": "env_type",
+          "type": "env_type_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PRODUCTION'"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "schema_plan": {
+          "name": "schema_plan",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'NAMESPACE_ONLY'"
+        },
+        "schema_name": {
+          "name": "schema_name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sync_interval_minutes": {
+          "name": "sync_interval_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 30
+        },
+        "schedule_enabled": {
+          "name": "schedule_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "last_scheduled_at": {
+          "name": "last_scheduled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ds_tenant_idx": {
+          "name": "ds_tenant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ds_tenant_external_id_idx": {
+          "name": "ds_tenant_external_id_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "external_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ds_tenant_app_display_name_lower_idx": {
+          "name": "ds_tenant_app_display_name_lower_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "app_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lower(\"display_name\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ds_tenant_organization_id_idx": {
+          "name": "ds_tenant_organization_id_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "app_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "env_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -870,20 +857,20 @@
           "primaryKey": false,
           "notNull": true
         },
-        "src_connection_id": {
-          "name": "src_connection_id",
+        "source_data_source_id": {
+          "name": "source_data_source_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "dest_connection_id": {
-          "name": "dest_connection_id",
+        "dest_data_source_id": {
+          "name": "dest_data_source_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "source_object": {
-          "name": "source_object",
+        "canonical_object": {
+          "name": "canonical_object",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
@@ -907,27 +894,7 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": "'ACTIVE'"
-        },
-        "sync_interval_minutes": {
-          "name": "sync_interval_minutes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 30
-        },
-        "schedule_enabled": {
-          "name": "schedule_enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "last_scheduled_at": {
-          "name": "last_scheduled_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
+          "default": "'INACTIVE'"
         },
         "created_at": {
           "name": "created_at",
@@ -966,6 +933,39 @@
           "method": "btree",
           "with": {}
         },
+        "stitch_identity_unique_idx": {
+          "name": "stitch_identity_unique_idx",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_data_source_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "dest_data_source_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "canonical_object",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "stitch_workspace_idx": {
           "name": "stitch_workspace_idx",
           "columns": [
@@ -996,11 +996,11 @@
           "method": "btree",
           "with": {}
         },
-        "stitch_src_conn_idx": {
-          "name": "stitch_src_conn_idx",
+        "stitch_source_ds_idx": {
+          "name": "stitch_source_ds_idx",
           "columns": [
             {
-              "expression": "src_connection_id",
+              "expression": "source_data_source_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1011,11 +1011,11 @@
           "method": "btree",
           "with": {}
         },
-        "stitch_dest_conn_idx": {
-          "name": "stitch_dest_conn_idx",
+        "stitch_dest_ds_idx": {
+          "name": "stitch_dest_ds_idx",
           "columns": [
             {
-              "expression": "dest_connection_id",
+              "expression": "dest_data_source_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1064,12 +1064,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "stitch_src_connection_fk": {
-          "name": "stitch_src_connection_fk",
+        "stitch_source_data_source_fk": {
+          "name": "stitch_source_data_source_fk",
           "tableFrom": "integration_stitch",
-          "tableTo": "app_connection",
+          "tableTo": "data_source",
           "columnsFrom": [
-            "src_connection_id"
+            "source_data_source_id"
           ],
           "columnsTo": [
             "id"
@@ -1077,12 +1077,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "stitch_dest_connection_fk": {
-          "name": "stitch_dest_connection_fk",
+        "stitch_dest_data_source_fk": {
+          "name": "stitch_dest_data_source_fk",
           "tableFrom": "integration_stitch",
-          "tableTo": "app_connection",
+          "tableTo": "data_source",
           "columnsFrom": [
-            "dest_connection_id"
+            "dest_data_source_id"
           ],
           "columnsTo": [
             "id"
@@ -1092,526 +1092,6 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "sync_interval_minutes_positive": {
-          "name": "sync_interval_minutes_positive",
-          "value": "\"integration_stitch\".\"sync_interval_minutes\" > 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.scheduler_outbox": {
-      "name": "scheduler_outbox",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "stitch_id": {
-          "name": "stitch_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "action": {
-          "name": "action",
-          "type": "scheduler_outbox_action_enum",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "scheduler_outbox_status_enum",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "next_retry_at": {
-          "name": "next_retry_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "last_error": {
-          "name": "last_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "processed_at": {
-          "name": "processed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "scheduler_outbox_poll_idx": {
-          "name": "scheduler_outbox_poll_idx",
-          "columns": [
-            {
-              "expression": "next_retry_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "status = 'pending'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "scheduler_outbox_stitch_idx": {
-          "name": "scheduler_outbox_stitch_idx",
-          "columns": [
-            {
-              "expression": "stitch_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "scheduler_outbox_stitch_fk": {
-          "name": "scheduler_outbox_stitch_fk",
-          "tableFrom": "scheduler_outbox",
-          "tableTo": "integration_stitch",
-          "columnsFrom": [
-            "stitch_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.sync_cursors": {
-      "name": "sync_cursors",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "stitch_id": {
-          "name": "stitch_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "stream_name": {
-          "name": "stream_name",
-          "type": "varchar(200)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "state_document": {
-          "name": "state_document",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{\"bookmarks\":{},\"versions\":{},\"currently_syncing\":null}'::jsonb"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "sync_cursors_stitch_stream_unique_idx": {
-          "name": "sync_cursors_stitch_stream_unique_idx",
-          "columns": [
-            {
-              "expression": "stitch_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "stream_name",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "sync_cursors_stitch_idx": {
-          "name": "sync_cursors_stitch_idx",
-          "columns": [
-            {
-              "expression": "stitch_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "sync_cursors_stitch_fk": {
-          "name": "sync_cursors_stitch_fk",
-          "tableFrom": "sync_cursors",
-          "tableTo": "integration_stitch",
-          "columnsFrom": [
-            "stitch_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.app_connection": {
-      "name": "app_connection",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "tenant_id": {
-          "name": "tenant_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "app_name": {
-          "name": "app_name",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_id": {
-          "name": "external_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "display_name": {
-          "name": "display_name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "auth_type": {
-          "name": "auth_type",
-          "type": "auth_type_enum",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "value": {
-          "name": "value",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "connection_status_enum",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'ACTIVE'"
-        },
-        "env_type": {
-          "name": "env_type",
-          "type": "env_type_enum",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'PRODUCTION'"
-        },
-        "metadata": {
-          "name": "metadata",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'{}'::jsonb"
-        },
-        "schema_plan": {
-          "name": "schema_plan",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'NAMESPACE_ONLY'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "app_name_idx": {
-          "name": "app_name_idx",
-          "columns": [
-            {
-              "expression": "app_name",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "tenant_status_idx": {
-          "name": "tenant_status_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "connection_expires_at_idx": {
-          "name": "connection_expires_at_idx",
-          "columns": [
-            {
-              "expression": "expires_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"app_connection\".\"expires_at\" IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "tenant_external_id_unique_idx": {
-          "name": "tenant_external_id_unique_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "external_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "tenant_app_display_name_lower_idx": {
-          "name": "tenant_app_display_name_lower_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "app_name",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "lower(\"display_name\")",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.ui_workspace_connection": {
-      "name": "ui_workspace_connection",
-      "schema": "",
-      "columns": {
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "connection_id": {
-          "name": "connection_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "assigned_at": {
-          "name": "assigned_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "workspace_connection_conn_idx": {
-          "name": "workspace_connection_conn_idx",
-          "columns": [
-            {
-              "expression": "connection_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "ui_workspace_connection_workspace_id_ui_workspace_id_fk": {
-          "name": "ui_workspace_connection_workspace_id_ui_workspace_id_fk",
-          "tableFrom": "ui_workspace_connection",
-          "tableTo": "ui_workspace",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "ui_workspace_connection_connection_id_app_connection_id_fk": {
-          "name": "ui_workspace_connection_connection_id_app_connection_id_fk",
-          "tableFrom": "ui_workspace_connection",
-          "tableTo": "app_connection",
-          "columnsFrom": [
-            "connection_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "ui_workspace_connection_workspace_id_connection_id_pk": {
-          "name": "ui_workspace_connection_workspace_id_connection_id_pk",
-          "columns": [
-            "workspace_id",
-            "connection_id"
-          ]
-        }
-      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -1664,8 +1144,8 @@
         }
       },
       "indexes": {
-        "ui_workspace_org_name_lower_unique_idx": {
-          "name": "ui_workspace_org_name_lower_unique_idx",
+        "ui_ws_org_name_lower_unique_idx": {
+          "name": "ui_ws_org_name_lower_unique_idx",
           "columns": [
             {
               "expression": "org_id",
@@ -1691,8 +1171,8 @@
           "method": "btree",
           "with": {}
         },
-        "ui_workspace_org_idx": {
-          "name": "ui_workspace_org_idx",
+        "ui_ws_org_idx": {
+          "name": "ui_ws_org_idx",
           "columns": [
             {
               "expression": "org_id",
@@ -1706,8 +1186,8 @@
           "method": "btree",
           "with": {}
         },
-        "ui_workspace_env_idx": {
-          "name": "ui_workspace_env_idx",
+        "ui_ws_env_idx": {
+          "name": "ui_ws_env_idx",
           "columns": [
             {
               "expression": "org_id",
@@ -1731,8 +1211,8 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "ui_workspace_id_org_unique_idx": {
-          "name": "ui_workspace_id_org_unique_idx",
+        "ui_ws_id_org_unique_idx": {
+          "name": "ui_ws_id_org_unique_idx",
           "nullsNotDistinct": false,
           "columns": [
             "id",
@@ -1740,6 +1220,368 @@
           ]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sync_cursors": {
+      "name": "sync_cursors",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "data_source_id": {
+          "name": "data_source_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stream_name": {
+          "name": "stream_name",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state_document": {
+          "name": "state_document",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{\"bookmarks\":{},\"versions\":{},\"currently_syncing\":null}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_sync_cursors_ds": {
+          "name": "idx_sync_cursors_ds",
+          "columns": [
+            {
+              "expression": "data_source_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "sync_cursors_unique_constraint": {
+          "name": "sync_cursors_unique_constraint",
+          "nullsNotDistinct": false,
+          "columns": [
+            "data_source_id",
+            "stream_name"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.canonical_mappings": {
+      "name": "canonical_mappings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "app_name": {
+          "name": "app_name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity": {
+          "name": "entity",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "view_mode": {
+          "name": "view_mode",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'v1'"
+        },
+        "mapping_config": {
+          "name": "mapping_config",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "canonical_mapping_tenant_idx": {
+          "name": "canonical_mapping_tenant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "app_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "category",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "view_mode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"canonical_mappings\".\"tenant_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "canonical_mapping_global_idx": {
+          "name": "canonical_mapping_global_idx",
+          "columns": [
+            {
+              "expression": "app_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "category",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "view_mode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"canonical_mappings\".\"tenant_id\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.scheduler_outbox": {
+      "name": "scheduler_outbox",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "data_source_id": {
+          "name": "data_source_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "scheduler_outbox_action_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "scheduler_outbox_status_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PENDING'"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "next_retry_at": {
+          "name": "next_retry_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "processed_at": {
+          "name": "processed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "scheduler_outbox_poll_idx": {
+          "name": "scheduler_outbox_poll_idx",
+          "columns": [
+            {
+              "expression": "next_retry_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "status = 'PENDING'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "scheduler_outbox_data_source_idx": {
+          "name": "scheduler_outbox_data_source_idx",
+          "columns": [
+            {
+              "expression": "data_source_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "scheduler_outbox_data_source_fk": {
+          "name": "scheduler_outbox_data_source_fk",
+          "tableFrom": "scheduler_outbox",
+          "tableTo": "data_source",
+          "columnsFrom": [
+            "data_source_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1771,26 +1613,27 @@
         "SUCCESS",
         "FAIL",
         "RETRY",
-        "DISMISSED"
+        "DISMISSED",
+        "DEFERRED_DEPENDENCY"
       ]
     },
     "public.scheduler_outbox_action_enum": {
       "name": "scheduler_outbox_action_enum",
       "schema": "public",
       "values": [
-        "created",
-        "updated",
-        "deleted"
+        "CREATED",
+        "UPDATED",
+        "DELETED"
       ]
     },
     "public.scheduler_outbox_status_enum": {
       "name": "scheduler_outbox_status_enum",
       "schema": "public",
       "values": [
-        "pending",
-        "processing",
-        "succeeded",
-        "failed"
+        "PENDING",
+        "PROCESSING",
+        "SUCCEEDED",
+        "FAILED"
       ]
     },
     "public.stitch_status_enum": {
@@ -1798,29 +1641,8 @@
       "schema": "public",
       "values": [
         "ACTIVE",
-        "PAUSED",
-        "ARCHIVED"
-      ]
-    },
-    "public.auth_type_enum": {
-      "name": "auth_type_enum",
-      "schema": "public",
-      "values": [
-        "OAUTH2",
-        "API_KEY",
-        "BASIC"
-      ]
-    },
-    "public.connection_status_enum": {
-      "name": "connection_status_enum",
-      "schema": "public",
-      "values": [
-        "ACTIVE",
         "INACTIVE",
-        "REVOKED",
-        "EXPIRED",
-        "PROVISIONING",
-        "FAILED"
+        "ARCHIVED"
       ]
     },
     "public.env_type_enum": {

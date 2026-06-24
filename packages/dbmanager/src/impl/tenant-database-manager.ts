@@ -4,6 +4,7 @@ import type { DrizzleDb } from '@soopa/database';
 import { tenantStorageRegistry, shardRegistry, organization } from '@soopa/database';
 import { eq, sql } from 'drizzle-orm';
 import { SqlDatabaseManager } from './sql-database-manager.js';
+import type { MigrationRunnerPort } from '@soopa/migrator';
 
 interface Logger {
     debug(msg: string, ...args: unknown[]): void;
@@ -41,11 +42,12 @@ export class TenantDatabaseManager implements DatabaseManager {
     private readonly logger: Logger;
     private readonly dbCache = new Map<string, DrizzleDb>();
     private readonly inProgress = new Map<string, Promise<DrizzleDb>>();
+    private readonly urlCache = new Map<string, string>();
 
     constructor(
         private readonly globalDb: DrizzleDb,
         private readonly dbFactory: (connectionString: string) => DrizzleDb,
-        private readonly domainProvisionerResolver?: (appName: string, appProfile: string) => ((db: DrizzleDb, schemaName: string) => Promise<void>) | undefined,
+        private readonly migrator: MigrationRunnerPort,
         logger?: Logger,
         /** Resolves credentials for a given credential-less host URL at connection time. */
         private readonly credentialResolver?: CredentialResolver,
@@ -196,6 +198,7 @@ export class TenantDatabaseManager implements DatabaseManager {
 
                 const tenantDb = this.dbFactory(fullUrl);
                 this.dbCache.set(tenantId, tenantDb);
+                this.urlCache.set(tenantId, fullUrl);
 
                 return tenantDb;
             } finally {
@@ -239,24 +242,57 @@ export class TenantDatabaseManager implements DatabaseManager {
     }
 
     /**
-     * Idempotently bring the schema up to the desired plan level.
+     * Executes a callback using a dedicated, single-use database connection.
+     * Guarantees that DDL operations (like schema creation) do not taint the
+     * main application's connection pool with sticky `search_path` state.
      */
-    async applyPlan(tenantId: string, schemaName: string, plan: SchemaPlan, context?: { appName: string, appProfile: string }): Promise<void> {
+    private async runWithDedicatedMigrationConnection<T>(
+        tenantId: string,
+        schemaName: string,
+        fn: (sqlManager: SqlDatabaseManager) => Promise<T>
+    ): Promise<T> {
+        // Ensure the tenant DB is initialized and URL is cached
         const tenantDb = await this.getTenantDb(tenantId);
-        const sqlManager = new SqlDatabaseManager(tenantDb, this.logger, this.domainProvisionerResolver);
+        const fullUrl = this.urlCache.get(tenantId);
         
-        await this.withSchemaLock(tenantDb, schemaName, async () => {
-            await sqlManager.applyPlan(schemaName, plan, context);
+        if (!fullUrl) {
+            throw new Error(`[TenantDatabaseManager] URL cache miss for tenant ${tenantId}`);
+        }
+
+        this.logger.debug(`Spawning dedicated migration connection for tenant ${tenantId}`);
+        // Create a completely separate instance (and pool) for the migration
+        const dedicatedDb = this.dbFactory(fullUrl);
+        const sqlManager = new SqlDatabaseManager(dedicatedDb, this.migrator, this.logger);
+        
+        return await this.withSchemaLock(tenantDb, schemaName, async () => {
+            try {
+                return await fn(sqlManager);
+            } finally {
+                // Permanently destroy the dedicated connection/pool to prevent leakage
+                const db = dedicatedDb as unknown as { $client?: { end: () => Promise<void> }; end?: () => Promise<void> };
+                if (typeof db.$client?.end === 'function') {
+                    await db.$client.end();
+                } else if (typeof db.end === 'function') {
+                    await db.end();
+                }
+            }
         });
     }
 
     /**
-     * Migrates an existing tenant schema to STANDARD_ACTIVE state.
+     * Idempotently bring the schema up to the desired plan level.
+     */
+    async applyPlan(tenantId: string, schemaName: string, plan: SchemaPlan): Promise<void> {
+        await this.runWithDedicatedMigrationConnection(tenantId, schemaName, async (sqlManager) => {
+            await sqlManager.applyPlan(schemaName, plan);
+        });
+    }
+
+    /**
+     * Migrates an existing tenant schema to SCHEMA_ACTIVE state.
      */
     async migrateToStandardActive(tenantId: string, schemaName: string): Promise<void> {
-        const tenantDb = await this.getTenantDb(tenantId);
-        const sqlManager = new SqlDatabaseManager(tenantDb, this.logger, this.domainProvisionerResolver);
-        await this.withSchemaLock(tenantDb, schemaName, async () => {
+        await this.runWithDedicatedMigrationConnection(tenantId, schemaName, async (sqlManager) => {
             await sqlManager.migrateToStandardActive(schemaName);
         });
     }

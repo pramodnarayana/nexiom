@@ -1,7 +1,7 @@
 import { apiClient } from '@/shared/lib/api-client';
 import type { FieldMappingResponse } from './field-mappings.api';
 
-export type StitchStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
+export type StitchStatus = 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
 
 /** Shared type for sync condition values across all payload/response shapes. */
 export type SyncConditionValue = string | number | boolean;
@@ -11,9 +11,9 @@ export interface StitchResponse {
   orgId: string;
   workspaceId: string;
   name: string;
-  srcDataSourceId: string;
+  sourceDataSourceId: string;
   destDataSourceId: string;
-  sourceObject: string;
+  canonicalObject: string;
   targetObject: string;
   syncCondition: Array<{
     field: string;
@@ -22,9 +22,6 @@ export interface StitchResponse {
     logic?: 'AND' | 'OR';
   }>;
   status: StitchStatus;
-  syncIntervalMinutes: number;
-  scheduleEnabled: boolean;
-  lastScheduledAt: string | null;
   config?: Record<string, unknown>;
   fieldMappings?: FieldMappingResponse[];
   createdAt: string;
@@ -34,11 +31,11 @@ export interface StitchResponse {
 export interface CreateStitchPayload {
   workspaceId: string;
   name: string;
-  srcDataSourceId: string;
+  sourceDataSourceId: string;
   destDataSourceId: string;
-  /** Vendor object name on the source connection (e.g. "Contact"). NOT NULL in DB. */
-  sourceObject: string;
-  /** Vendor object name on the destination connection (e.g. "Customer"). NOT NULL in DB. */
+  /** Primary Canonical Hub object name (e.g. "TMS_CARRIER"). */
+  canonicalObject: string;
+  /** Destination vendor object name (e.g. "Vendor"). NOT NULL in DB. */
   targetObject: string;
   /** Optional filter conditions applied at sync time. */
   syncCondition?: Array<{
@@ -56,8 +53,6 @@ export interface CreateStitchPayload {
     sourceCanonical: string;
     mappingRules: Array<{ src: string; dest: string; transform?: string }>;
   }>;
-  /** Stitch-level configuration options applied during mapping execution */
-  config?: Record<string, unknown>;
 }
 
 
@@ -73,10 +68,7 @@ export interface UpdateStitchPayload {
   config?: Record<string, unknown>;
 }
 
-export interface UpdateSchedulePayload {
-  syncIntervalMinutes?: number;
-  scheduleEnabled?: boolean;
-}
+
 
 export async function listStitches(workspaceId: string): Promise<StitchResponse[]> {
   const res = await apiClient.get<StitchResponse[]>('/stitches', {
@@ -103,45 +95,6 @@ export async function updateStitch(
   return res.data;
 }
 
-export async function updateSchedule(
-  id: string,
-  payload: UpdateSchedulePayload,
-): Promise<StitchResponse> {
-  const res = await apiClient.patch<StitchResponse>(`/stitches/${id}/schedule`, payload);
-  return res.data;
-}
-
 export async function archiveStitch(id: string): Promise<void> {
   await apiClient.delete(`/stitches/${id}`);
-}
-
-export async function triggerSchedule(id: string): Promise<void> {
-  await apiClient.post(`/stitches/${id}/schedule/trigger`);
-}
-
-const PRESET_SYNC_INTERVALS: { label: string; value: number }[] = [
-  { label: '30 min', value: 30 },
-  { label: '1 hr', value: 60 },
-  { label: '2 hr', value: 120 },
-  { label: '4 hr', value: 240 },
-  { label: '6 hr', value: 360 },
-  { label: '12 hr', value: 720 },
-  { label: '24 hr', value: 1440 },
-];
-
-/**
- * Returns the sync interval options for UI dropdowns.
- * If `current` is a positive integer not already in the preset list
- * (e.g. a support-team override), it is inserted in sorted order with a
- * generated label so the UI can display and resubmit the value correctly.
- */
-export function getSyncIntervalOptions(
-  current?: number,
-): { label: string; value: number }[] {
-  const presetValues = new Set(PRESET_SYNC_INTERVALS.map((o) => o.value));
-  if (current !== undefined && current > 0 && !presetValues.has(current)) {
-    const custom = { label: `${current} min`, value: current };
-    return [...PRESET_SYNC_INTERVALS, custom].sort((a, b) => a.value - b.value);
-  }
-  return PRESET_SYNC_INTERVALS;
 }

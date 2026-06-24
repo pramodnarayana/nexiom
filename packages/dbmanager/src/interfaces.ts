@@ -10,25 +10,11 @@ export enum SchemaPlan {
     NAMESPACE_ONLY = 'NAMESPACE_ONLY',
 
     /**
-     * Per-entity typed canonical tables (canonical_account, canonical_tp).
-     * Provisioned dynamically when an initial sync happens for a specific app.
-     * These replace the generic normalized_entity JSONB blob with typed
-     * columns and native FK relationships for SQL JOIN enrichment.
+     * The complete set of tables for a connection (both standard pipeline and canonical tables).
+     * Provisioned when a connection is activated.
      */
-    CANONICAL_ACTIVE = 'CANONICAL_ACTIVE',
+    SCHEMA_ACTIVE = 'SCHEMA_ACTIVE',
 
-    /**
-     * The L5/L6 Outbound tables (outbound_gateway, sync_log).
-     * Now called STANDARD_ACTIVE to represent the complete set of generic pipeline tables.
-     * Provisioned when delivery is activated for a connection.
-     */
-    STANDARD_ACTIVE = 'STANDARD_ACTIVE',
-
-    /**
-     * Represents a connection that is actively having its STANDARD tables provisioned
-     * in the background worker. Will transition to STANDARD_ACTIVE upon success.
-     */
-    STANDARD_PROVISIONING = 'STANDARD_PROVISIONING',
 }
 
 /**
@@ -46,10 +32,10 @@ export interface DatabaseManager {
      * Idempotently bring the schema up to the desired plan level.
      * If the schema already exceeds the plan, it does nothing.
      */
-    applyPlan(tenantId: string, schemaName: string, plan: SchemaPlan, context?: { appName: string, appProfile: string }): Promise<void>;
+    applyPlan(tenantId: string, schemaName: string, plan: SchemaPlan): Promise<void>;
 
     /**
-     * Migrates an existing tenant schema to STANDARD_ACTIVE state.
+     * Migrates an existing tenant schema to SCHEMA_ACTIVE state.
      */
     migrateToStandardActive?(tenantId: string, schemaName: string): Promise<void>;
 }

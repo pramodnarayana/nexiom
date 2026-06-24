@@ -11,16 +11,13 @@ git add "plugins/**/drizzle/migrations/**/*" 2>/dev/null || true
 echo "📝 Linting staged files..."
 pnpm lint-staged --concurrent false || exit 1
 
-# Run full lint check
-echo "🔎 Running full lint check..."
-pnpm lint || exit 1
 
-# Run build check (Strict Type Checking)
-echo "🏗️  Running type check..."
-pnpm typecheck || exit 1
+# Run build check (Strict Type Checking) ONLY for affected packages
+echo "🏗️  Running type check for changed packages..."
+pnpm turbo run typecheck --filter="...[HEAD]" || exit 1
 
-# Run tests with coverage
-echo "🧪 Running tests with coverage..."
-pnpm test:cov || exit 1
+# Run tests ONLY for packages that have changed to save time locally
+echo "🧪 Running tests for changed packages..."
+pnpm turbo run test --filter="...[HEAD]" || exit 1
 
 echo "✅ All pre-commit checks passed!"

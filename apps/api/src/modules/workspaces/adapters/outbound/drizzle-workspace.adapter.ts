@@ -1,13 +1,13 @@
 import { Injectable, Inject, ConflictException } from '@nestjs/common';
-import { eq, and, asc, notInArray, inArray } from 'drizzle-orm';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   uiWorkspaces,
-  uiWorkspaceDataSources,
   dataSources,
   credentials,
   AppConnectionStatus,
+  globalRegistryOutbox,
 } from '@soopa/database';
 import { isUniqueViolation } from '../../../../shared/db.utils.js';
 import type {
@@ -24,14 +24,26 @@ export class DrizzleWorkspaceRepositoryAdapter implements WorkspaceRepositoryPor
 
   async create(params: CreateWorkspaceParams): Promise<WorkspaceRecord> {
     try {
-      const [workspace] = await this.db
-        .insert(uiWorkspaces)
-        .values({
-          orgId: params.orgId,
-          name: params.name,
-          envType: params.envType,
-        })
-        .returning();
+      const workspace = await this.db.transaction(async (tx) => {
+        const [row] = await tx
+          .insert(uiWorkspaces)
+          .values({
+            orgId: params.orgId,
+            name: params.name,
+            envType: params.envType,
+          })
+          .returning();
+
+        await tx.insert(globalRegistryOutbox).values({
+          tenantId: params.orgId,
+          entityType: 'UI_WORKSPACE',
+          entityId: row.id,
+          action: 'UPSERT',
+          payload: row,
+        });
+
+        return row;
+      });
 
       return workspace;
     } catch (err) {
@@ -64,17 +76,31 @@ export class DrizzleWorkspaceRepositoryAdapter implements WorkspaceRepositoryPor
     params: UpdateWorkspaceParams,
   ): Promise<WorkspaceRecord | null> {
     try {
-      const [updated] = await this.db
-        .update(uiWorkspaces)
-        .set({
-          ...(params.name !== undefined && { name: params.name }),
-          ...(params.envType !== undefined && { envType: params.envType }),
-          updatedAt: new Date(),
-        })
-        .where(and(eq(uiWorkspaces.id, id), eq(uiWorkspaces.orgId, orgId)))
-        .returning();
+      const updated = await this.db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(uiWorkspaces)
+          .set({
+            ...(params.name !== undefined && { name: params.name }),
+            ...(params.envType !== undefined && { envType: params.envType }),
+            updatedAt: new Date(),
+          })
+          .where(and(eq(uiWorkspaces.id, id), eq(uiWorkspaces.orgId, orgId)))
+          .returning();
 
-      return updated || null;
+        if (row) {
+          await tx.insert(globalRegistryOutbox).values({
+            tenantId: orgId,
+            entityType: 'UI_WORKSPACE',
+            entityId: row.id,
+            action: 'UPSERT',
+            payload: row,
+          });
+        }
+
+        return row || null;
+      });
+
+      return updated;
     } catch (err) {
       if (isUniqueViolation(err)) {
         throw new ConflictException(
@@ -86,59 +112,24 @@ export class DrizzleWorkspaceRepositoryAdapter implements WorkspaceRepositoryPor
   }
 
   async remove(orgId: string, id: string): Promise<WorkspaceRecord | null> {
-    const [deleted] = await this.db
-      .delete(uiWorkspaces)
-      .where(and(eq(uiWorkspaces.id, id), eq(uiWorkspaces.orgId, orgId)))
-      .returning();
+    return this.db.transaction(async (tx) => {
+      const [deleted] = await tx
+        .delete(uiWorkspaces)
+        .where(and(eq(uiWorkspaces.id, id), eq(uiWorkspaces.orgId, orgId)))
+        .returning();
 
-    return deleted || null;
-  }
+      if (deleted) {
+        await tx.insert(globalRegistryOutbox).values({
+          tenantId: orgId,
+          entityType: 'UI_WORKSPACE',
+          entityId: deleted.id,
+          action: 'DELETE',
+          payload: deleted,
+        });
+      }
 
-  async listAvailableConnections(
-    orgId: string,
-    workspaceId: string,
-  ): Promise<ConnectionRecord[]> {
-    const workspace = await this.findOne(orgId, workspaceId);
-    if (!workspace) return [];
-
-    const assigned = await this.db
-      .select({ dataSourceId: uiWorkspaceDataSources.dataSourceId })
-      .from(uiWorkspaceDataSources)
-      .where(eq(uiWorkspaceDataSources.workspaceId, workspaceId));
-
-    const assignedIds = assigned.map((r) => r.dataSourceId);
-
-    const conditions = [
-      eq(dataSources.tenantId, orgId),
-      eq(credentials.status, AppConnectionStatus.ACTIVE),
-      eq(dataSources.envType, workspace.envType),
-    ];
-
-    if (assignedIds.length > 0) {
-      conditions.push(notInArray(dataSources.id, assignedIds));
-    }
-
-    const rows = await this.db
-      .select({
-        id: dataSources.id,
-        appName: dataSources.appName,
-        externalId: dataSources.externalId,
-        displayName: dataSources.displayName,
-        authType: credentials.authType,
-        status: credentials.status,
-        envType: dataSources.envType,
-        metadata: dataSources.metadata,
-      })
-      .from(dataSources)
-      .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
-      .where(and(...conditions))
-      .orderBy(asc(dataSources.displayName));
-
-    return rows.map((r) => ({
-      ...r,
-      envType: r.envType,
-      metadata: r.metadata as Record<string, unknown> | null,
-    }));
+      return deleted || null;
+    });
   }
 
   async listConnections(
@@ -188,25 +179,6 @@ export class DrizzleWorkspaceRepositoryAdapter implements WorkspaceRepositoryPor
     }));
   }
 
-  async findConnectionForAssignment(
-    dataSourceId: string,
-    orgId: string,
-  ): Promise<{ id: string; envType: 'PRODUCTION' | 'SANDBOX' } | null> {
-    const [row] = await this.db
-      .select({ id: dataSources.id, envType: dataSources.envType })
-      .from(dataSources)
-      .where(
-        and(eq(dataSources.id, dataSourceId), eq(dataSources.tenantId, orgId)),
-      )
-      .limit(1);
-
-    if (!row) return null;
-    return {
-      id: row.id,
-      envType: row.envType,
-    };
-  }
-
   async findConnectionForSync(
     dataSourceId: string,
     orgId: string,
@@ -224,35 +196,5 @@ export class DrizzleWorkspaceRepositoryAdapter implements WorkspaceRepositoryPor
       )
       .limit(1);
     return row ?? null;
-  }
-
-  async assignConnection(
-    workspaceId: string,
-    dataSourceId: string,
-  ): Promise<{ workspaceId: string; dataSourceId: string } | null> {
-    try {
-      const [assignment] = await this.db
-        .insert(uiWorkspaceDataSources)
-        .values({ workspaceId, dataSourceId })
-        .returning();
-      return assignment;
-    } catch (err: unknown) {
-      if (isUniqueViolation(err)) return null;
-      throw err;
-    }
-  }
-
-  async unassignConnection(
-    workspaceId: string,
-    dataSourceId: string,
-  ): Promise<void> {
-    await this.db
-      .delete(uiWorkspaceDataSources)
-      .where(
-        and(
-          eq(uiWorkspaceDataSources.workspaceId, workspaceId),
-          eq(uiWorkspaceDataSources.dataSourceId, dataSourceId),
-        ),
-      );
   }
 }

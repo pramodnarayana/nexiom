@@ -2,7 +2,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { DATABASE_CONNECTION } from '@soopa/database';
-import { DB_MANAGER, SchemaPlan } from '@soopa/dbmanager';
+import { DB_MANAGER } from '@soopa/dbmanager';
 import { REDIS_CLIENT } from '@soopa/cache';
 import { TokenManagerService } from '@soopa/credentials';
 import { PieceRegistryService } from '@soopa/piece-registry';
@@ -135,12 +135,6 @@ describe('ConnectionSyncRunner', () => {
     expect(result.status).toBe('succeeded');
     expect(result.streamResults).toBeDefined();
     expect(result.streamResults![0].status).toBe('succeeded');
-    expect(dbManagerMock.applyPlan).toHaveBeenCalledWith(
-      'org-1',
-      'ws_123',
-      SchemaPlan.CANONICAL_ACTIVE,
-      { appName: 'test-app', appProfile: 'standard' },
-    );
   });
 
   it('should run all streams if objectType is not provided', async () => {

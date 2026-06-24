@@ -18,13 +18,8 @@ import {
   GetWorkspaceUseCase,
   ListWorkspacesUseCase,
   ListWorkspaceConnectionsUseCase,
-} from './core/use-cases/workspace.use-case.js';
-import {
-  AssignConnectionUseCase,
-  UnassignConnectionUseCase,
-  GetConnectionForAssignmentUseCase,
   GetConnectionForSyncUseCase,
-} from './core/use-cases/connection-assignment.use-case.js';
+} from './core/use-cases/workspace.use-case.js';
 
 import { QueueModule } from '@soopa/queue';
 import { SchedulerModule } from '../scheduler/scheduler.module.js';
@@ -75,24 +70,7 @@ import { SchedulerModule } from '../scheduler/scheduler.module.js';
         new ListWorkspaceConnectionsUseCase(repo),
       inject: [DrizzleWorkspaceRepositoryAdapter],
     },
-    {
-      provide: AssignConnectionUseCase,
-      useFactory: (repo: WorkspaceRepositoryPort) =>
-        new AssignConnectionUseCase(repo),
-      inject: [DrizzleWorkspaceRepositoryAdapter],
-    },
-    {
-      provide: UnassignConnectionUseCase,
-      useFactory: (repo: WorkspaceRepositoryPort) =>
-        new UnassignConnectionUseCase(repo),
-      inject: [DrizzleWorkspaceRepositoryAdapter],
-    },
-    {
-      provide: GetConnectionForAssignmentUseCase,
-      useFactory: (repo: WorkspaceRepositoryPort) =>
-        new GetConnectionForAssignmentUseCase(repo),
-      inject: [DrizzleWorkspaceRepositoryAdapter],
-    },
+
     {
       provide: GetConnectionForSyncUseCase,
       useFactory: (repo: WorkspaceRepositoryPort) =>

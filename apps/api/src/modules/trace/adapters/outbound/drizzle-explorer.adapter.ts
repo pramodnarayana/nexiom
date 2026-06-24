@@ -371,20 +371,29 @@ export class DrizzleExplorerRepositoryAdapter implements ExplorerRepositoryPort 
       LIMIT ${limit} OFFSET ${offset}
     `;
 
-    const [countRes, dataRes] = await Promise.all([
-      tenantDb.execute(countQuery),
-      tenantDb.execute(dataQuery),
-    ]);
+    try {
+      const [countRes, dataRes] = await Promise.all([
+        tenantDb.execute(countQuery),
+        tenantDb.execute(dataQuery),
+      ]);
 
-    const countRows = this.extractRows(countRes);
-    const dataRows = this.extractRows(dataRes);
+      const countRows = this.extractRows(countRes);
+      const dataRows = this.extractRows(dataRes);
 
-    return {
-      data: dataRows,
-      total: Number(countRows[0]?.count ?? 0),
-      page,
-      limit,
-    };
+      return {
+        data: dataRows,
+        total: Number(countRows[0]?.count ?? 0),
+        page,
+        limit,
+      };
+    } catch (e: unknown) {
+      if ((e as { code?: string })?.code === '42P01') {
+        // Relation does not exist - this can happen if the canonical tables
+        // haven't been provisioned for this connection yet.
+        return { data: [], total: 0, page, limit };
+      }
+      throw e;
+    }
   }
 
   async listNormalizedTypes(

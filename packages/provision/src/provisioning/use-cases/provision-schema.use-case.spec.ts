@@ -2,12 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ProvisionSchemaUseCase } from './provision-schema.use-case.js';
 import type { RegistryReplicationPort } from '../../shared/ports/registry-replication.port.js';
 import type { DatabaseManager } from '@soopa/dbmanager';
+import type { DomainProvisionerPort } from '../ports/domain-provisioner.port.js';
 import { SchemaPlan } from '@soopa/dbmanager';
 
 describe('ProvisionSchemaUseCase', () => {
   let useCase: ProvisionSchemaUseCase;
   let registryPort: import('vitest').Mocked<RegistryReplicationPort>;
   let dbManager: import('vitest').Mocked<DatabaseManager>;
+  let domainProvisioner: import('vitest').Mocked<DomainProvisionerPort>;
 
   beforeEach(() => {
     registryPort = {
@@ -24,13 +26,18 @@ describe('ProvisionSchemaUseCase', () => {
       getTenantDb: vi.fn(),
     } as any;
 
-    useCase = new ProvisionSchemaUseCase(registryPort, dbManager);
+    domainProvisioner = {
+      provisionDomainSchema: vi.fn(),
+    };
+
+    useCase = new ProvisionSchemaUseCase(registryPort, dbManager, domainProvisioner);
   });
 
   it('should ignore if outbox record is not found', async () => {
     registryPort.fetchGlobalOutboxRecord.mockResolvedValue(null);
     await useCase.execute({ outboxId: '123' });
     expect(dbManager.applyPlan).not.toHaveBeenCalled();
+    expect(domainProvisioner.provisionDomainSchema).not.toHaveBeenCalled();
     expect(registryPort.markGlobalOutboxSuccess).not.toHaveBeenCalled();
   });
 
@@ -42,7 +49,7 @@ describe('ProvisionSchemaUseCase', () => {
       entityId: 'conn-1',
       action: 'APPLY' as any,
       payload: {
-        plan: SchemaPlan.STANDARD_ACTIVE,
+        plan: SchemaPlan.SCHEMA_ACTIVE,
         schemaName: 'ws_test_schema',
         appName: 'test-app',
         appProfile: 'test-profile'
@@ -55,11 +62,15 @@ describe('ProvisionSchemaUseCase', () => {
     expect(dbManager.applyPlan).toHaveBeenCalledWith(
       'tenant-1',
       'ws_test_schema',
-      SchemaPlan.STANDARD_ACTIVE,
-      { appName: 'test-app', appProfile: 'test-profile' }
+      SchemaPlan.SCHEMA_ACTIVE,
+    );
+    expect(domainProvisioner.provisionDomainSchema).toHaveBeenCalledWith(
+      'tenant-1',
+      'ws_test_schema',
+      'test-app'
     );
     expect(registryPort.registerCdcTables).toHaveBeenCalledWith('tenant-1', 'ws_test_schema');
-    expect(registryPort.activateConnection).toHaveBeenCalledWith('tenant-1', 'conn-1', SchemaPlan.STANDARD_ACTIVE);
+    expect(registryPort.activateConnection).toHaveBeenCalledWith('tenant-1', 'conn-1', SchemaPlan.SCHEMA_ACTIVE);
     expect(registryPort.markGlobalOutboxSuccess).toHaveBeenCalledWith('123');
   });
 

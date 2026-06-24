@@ -9,7 +9,7 @@ const VALID_CREATE = {
   workspaceId: '11111111-1111-4111-8111-111111111111',
   sourceDataSourceId: '22222222-2222-4222-8222-222222222222',
   destDataSourceId: '33333333-3333-4333-8333-333333333333',
-  sourceObject: 'rtms__Load__c',
+  canonicalObject: 'rtms__Load__c',
   targetObject: 'Invoice',
 };
 
@@ -22,7 +22,7 @@ describe('CreateStitchSchema', () => {
     const result = CreateStitchSchema.safeParse({
       ...VALID_CREATE,
       syncCondition: [{ field: 'Region', op: 'eq', value: 'US' }],
-      status: 'PAUSED',
+      status: 'INACTIVE',
     });
     expect(result.success).toBe(true);
   });
@@ -71,13 +71,13 @@ describe('CreateStitchSchema', () => {
     }
   });
 
-  it('accepts ACTIVE and PAUSED status on create', () => {
+  it('accepts ACTIVE and INACTIVE status on create', () => {
     expect(
       CreateStitchSchema.safeParse({ ...VALID_CREATE, status: 'ACTIVE' })
         .success,
     ).toBe(true);
     expect(
-      CreateStitchSchema.safeParse({ ...VALID_CREATE, status: 'PAUSED' })
+      CreateStitchSchema.safeParse({ ...VALID_CREATE, status: 'INACTIVE' })
         .success,
     ).toBe(true);
   });

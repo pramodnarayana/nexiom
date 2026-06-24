@@ -40,7 +40,7 @@ if (!tenantDbUrl) {
 // Tenant-specific schema ONLY — connections, stitches, workspaces, cursors, etc.
 // Global tables (identity, registry, pieces) are in drizzle.config.ts.
 export default {
-    schema: './dist/schema/tenant/**/*.js',
+    schema: ['./dist/schema/tenant/**/*.js', './dist/schema/shared/**/*.js'],
     out: './drizzle/tenant',
     dialect: 'postgresql',
     dbCredentials: {

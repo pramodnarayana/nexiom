@@ -1,15 +1,10 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, Loader2, Pause, Pencil, Play, Save, X } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, Pencil, Save, X } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/shared/components/ui/card';
 import { useStitchDetailPage } from '../hooks/useStitchDetailPage';
-import { SchedulePanel } from '../components/SchedulePanel';
-import { DependencyList } from '../components/DependencyList';
-import { StitchConfigPanel } from '../components/StitchConfigPanel';
-import {
-  MultiObjectMappingEditor,
-} from '../components/MultiObjectMappingEditor';
+import { MultiObjectMappingEditor } from '../components/MultiObjectMappingEditor';
 
 
 export function StitchDetailPage() {
@@ -18,7 +13,6 @@ export function StitchDetailPage() {
 
   const {
     stitch,
-    setStitch,
     loading,
     error,
     editingName,
@@ -27,22 +21,15 @@ export function StitchDetailPage() {
     savingName,
     nameInputRef,
     cancellingRef,
-    togglingStatus,
-    configDraft,
-    setConfigDraft,
-    savingConfig,
     canonicalMappings,
     syncConditions,
     savingMappings,
     mappingsDirty,
-    isConfigDirty,
     startEditingName,
     cancelEditingName,
     handleNameSave,
-    handleStatusToggle,
     handleMappingChange,
     handleMappingSave,
-    handleConfigSave,
   } = useStitchDetailPage(id);
 
   if (loading) {
@@ -71,7 +58,7 @@ export function StitchDetailPage() {
   // Determine if config changed
 
   return (
-    <div className="container py-8 max-w-5xl space-y-8 animate-in fade-in duration-500">
+    <div className="w-full px-6 py-8 space-y-8 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate(`/dashboard/workspaces/${workspaceId}/stitches`)}>
@@ -129,30 +116,13 @@ export function StitchDetailPage() {
               <Badge variant={stitch.status === 'ACTIVE' ? 'default' : 'secondary'}>{stitch.status}</Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              Syncing {stitch.sourceObject} → {stitch.targetObject}
+              Syncing {[stitch.canonicalObject, ...(Array.isArray(stitch.config?.selectedRelatedObjects) ? (stitch.config.selectedRelatedObjects as string[]) : [])].join(', ')} → {stitch.targetObject}
             </p>
           </div>
         </div>
-        {/* ── Status toggle ── */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void handleStatusToggle()}
-          disabled={togglingStatus || stitch.status === 'ARCHIVED'}
-          className="gap-2"
-        >
-          {togglingStatus
-            ? <Loader2 className="h-4 w-4 animate-spin" />
-            : stitch.status === 'ACTIVE'
-              ? <Pause className="h-4 w-4" />
-              : <Play className="h-4 w-4" />
-          }
-          {stitch.status === 'ACTIVE' ? 'Pause' : 'Resume'}
-        </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-        <div className="md:col-span-8 space-y-8">
+      <div className="space-y-8">
           <Card className="border shadow-sm">
             <CardHeader className="py-4 border-b bg-muted/20">
               <CardTitle className="text-lg font-semibold flex items-center justify-between">
@@ -163,9 +133,9 @@ export function StitchDetailPage() {
               {stitch && canonicalMappings.length > 0 && (
                 <MultiObjectMappingEditor
                   key={stitch.id}
-                  srcDataSourceId={stitch.srcDataSourceId}
+                  srcDataSourceId={stitch.sourceDataSourceId}
                   destDataSourceId={stitch.destDataSourceId}
-                  primaryObject={stitch.sourceObject}
+                  primaryObject={stitch.canonicalObject}
                   targetObject={stitch.targetObject}
                   initialMappings={canonicalMappings}
                   initialConditions={syncConditions}
@@ -185,43 +155,7 @@ export function StitchDetailPage() {
               </div>
             </CardFooter>
           </Card>
-          
-          <Card className="border shadow-sm">
-            <CardHeader className="py-4 border-b bg-muted/20">
-              <CardTitle className="text-lg font-semibold flex items-center justify-between">
-                <span>Advanced Configuration</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              {configDraft && (
-                <StitchConfigPanel
-                  dataSourceId={stitch.srcDataSourceId}
-                  value={configDraft}
-                  onChange={setConfigDraft}
-                />
-              )}
-            </CardContent>
-            <CardFooter className="bg-muted/10 border-t py-4 justify-end">
-               <div className="flex items-center gap-3 w-full justify-between">
-                 <span className="text-xs text-muted-foreground">Changes to configuration will take effect on the next execution.</span>
-                 <Button onClick={handleConfigSave} disabled={!isConfigDirty || savingConfig}>
-                   {savingConfig ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                   Save Changes
-                 </Button>
-               </div>
-            </CardFooter>
-          </Card>
-        </div>
 
-        <div className="md:col-span-4 space-y-8">
-          <SchedulePanel stitch={stitch} onUpdated={setStitch} />
-          <DependencyList 
-            dataSourceId={stitch.srcDataSourceId}
-            objectName={stitch.sourceObject}
-            selected={(configDraft?.selectedRelatedObjects as string[]) || []}
-            onSelectionChange={(selected) => setConfigDraft(prev => ({ ...(prev || {}), selectedRelatedObjects: selected }))}
-          />
-        </div>
       </div>
     </div>
   );

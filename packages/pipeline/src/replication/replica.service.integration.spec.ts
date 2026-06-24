@@ -36,9 +36,10 @@ describe("ReplicaService", () => {
     // Clean global tables
     await testDbManager.db!.execute(sql`TRUNCATE TABLE data_source CASCADE`);
 
-    const sqlManager = new SqlDatabaseManager(testDbManager.db!);
-    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.NAMESPACE_ONLY, { appName: "testApp", appProfile: "online" });
-    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.STANDARD_ACTIVE, { appName: "testApp", appProfile: "online" });
+    const migratorMock = { runMigrationsForSchema: async () => {} } as any;
+    const sqlManager = new SqlDatabaseManager(testDbManager.db!, migratorMock);
+    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.NAMESPACE_ONLY);
+    await sqlManager.applyPlan(currentSchemaName, SchemaPlan.SCHEMA_ACTIVE);
 
     queueService = {
       consume: vi.fn(),

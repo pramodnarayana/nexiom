@@ -57,9 +57,7 @@ export class NormalizedOutboxPoller {
               organizationId: dataSources.organizationId,
             })
             .from(dataSources)
-            .where(
-              sql`${dataSources.schemaPlan} IN ('STANDARD_ACTIVE', 'CANONICAL_ACTIVE')`,
-            );
+            .where(sql`${dataSources.schemaPlan} IN ('SCHEMA_ACTIVE')`);
 
           if (!tenantConnections || tenantConnections.length === 0) {
             return;

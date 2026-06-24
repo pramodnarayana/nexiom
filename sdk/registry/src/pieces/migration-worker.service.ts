@@ -130,7 +130,36 @@ export class MigrationWorkerService implements OnModuleInit {
 
     try {
       const tenantDb = await this.getTenantDbConnection(event.tenantId);
-      await this.migrator.runMigrations(tenantDb, { migrationsFolder });
+      
+      const { dataSources } = await import('@soopa/database');
+      const { and, eq } = await import('drizzle-orm');
+      
+      // Query the dynamic schemas for this plugin in the tenant's db
+      const connections = await tenantDb.select().from(dataSources).where(
+        and(
+          eq(dataSources.tenantId, event.tenantId),
+          eq(dataSources.appName, event.pieceName),
+          eq(dataSources.schemaPlan, 'SCHEMA_ACTIVE') // Only migrate provisioned schemas
+        )
+      );
+
+      if (connections.length === 0) {
+        this.logger.debug(`[Worker] Tenant ${event.tenantId} has no active connections for ${event.pieceName}. Skipping.`);
+        return;
+      }
+
+      // A single tenant may have multiple connections to the same plugin (e.g. 2 instances of 'tms')
+      // Execute the migrator against each isolated connection schema
+      for (const ds of connections) {
+        if (!ds.schemaName) continue;
+
+        this.logger.log(`[Worker] Applying migrations for tenant ${event.tenantId} in schema ${ds.schemaName}`);
+        await this.migrator.runMigrations(tenantDb, { 
+          migrationsFolder,
+          searchPath: ds.schemaName 
+        });
+      }
+
       this.logger.debug(
         `[Worker] Successfully migrated tenant: ${event.tenantId}`,
       );

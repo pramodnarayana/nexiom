@@ -4,7 +4,7 @@
  * These types are the contract between:
  *  - The API (which stores mapping expressions in field_mapping table)
  *  - The UI canvas (which produces MappingRule[] from field connections + formula picker)
- *  - The Worker FanOutService (which calls MappingEngine.build())
+ *  - The Worker FanOutService (which calls Mapper.build())
  *
  * ## How JSONata fits in
  *
@@ -82,7 +82,7 @@ export interface MappingRule {
 export type StitchConfig = Record<string, unknown>;
 
 /**
- * Input to MappingEngine.build().
+ * Input to Mapper.build().
  */
 export interface MappingInput {
   /**
@@ -99,7 +99,7 @@ export interface MappingInput {
    * Each rule maps a source field to a target field, with an optional JSONata
    * expression transform in between.
    *
-   * When `mappingRules` is **empty**, `MappingEngine.build()` produces an
+   * When `mappingRules` is **empty**, `Mapper.build()` produces an
    * **empty payload** `{}` — there is no implicit pass-through of
    * `compositeJson`. This is intentional: an unconfigured stitch should
    * deliver nothing rather than inadvertently forwarding raw internal data
@@ -115,7 +115,7 @@ export interface MappingInput {
 }
 
 /**
- * Result returned by MappingEngine.build().
+ * Result returned by Mapper.build().
  */
 export interface MappingResult {
   /** The assembled target JSON payload ready for delivery (L5). */

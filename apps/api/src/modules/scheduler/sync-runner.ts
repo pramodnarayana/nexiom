@@ -22,4 +22,9 @@ export interface SyncResult {
  */
 export abstract class SyncRunner {
   abstract run(connectionId: string, objectType?: string): Promise<SyncResult>;
+  abstract fetchRecords(
+    connectionId: string,
+    objectType: string,
+    recordIds: string[],
+  ): Promise<SyncResult>;
 }

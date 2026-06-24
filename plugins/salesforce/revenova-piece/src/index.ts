@@ -1,5 +1,5 @@
 /* v8 ignore start */
-import type { Piece, AppsConnectorDb } from '@soopa/piece-framework';
+import type { Piece } from '@soopa/piece-framework';
 import { PieceCategory } from '@soopa/piece-framework';
 import { upsertRevenovaObject } from './upsertRevenovaObject.js';
 import { normalizeRevenovaToTms } from './normalizeRevenovaToTms.js';
@@ -24,12 +24,12 @@ export function register(): Piece {
         logoUrl: 'https://cdn.activepieces.com/pieces/salesforce.png',
         categories: [PieceCategory.SALES_AND_CRM],
         appProfile: 'revenova',
+        migrationsFolder: domainTmsApi.getTmsMigrationsFolder(),
         appHooks: {
             extractReplica: upsertRevenovaObject,
             normalize: normalizeRevenovaToTms,
             writeNormalized: domainTmsApi.tmsNormalizedWriter,
             buildTarget: domainTmsApi.tmsTargetBuilder,
-            provisionDomain: (db, schemaName) => domainTmsApi.provisionTmsTables(db as AppsConnectorDb, schemaName),
             getWebhookResponse: (body, headers) => {
                 const contentType = (headers['content-type'] || (typeof body === 'object' && body && 'contentType' in body ? String(body.contentType) : '')).toLowerCase();
 

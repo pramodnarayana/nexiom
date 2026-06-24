@@ -1,9 +1,9 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useCreateStitchPage } from './useCreateStitchPage';
-import { listAvailableConnections } from '@/modules/workspaces/api/workspaces.api';
+import { listWorkspaceConnections } from '@/modules/workspaces/api/workspaces.api';
 import { createStitch } from '../api/stitches.api';
-import { listObjects } from '../api/metadata.api';
+import { listObjects, listCanonicalObjects } from '../api/metadata.api';
 import { useNavigate } from 'react-router-dom';
 
 vi.mock('react-router-dom', () => ({
@@ -11,7 +11,7 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('@/modules/workspaces/api/workspaces.api', () => ({
-  listAvailableConnections: vi.fn(),
+  listWorkspaceConnections: vi.fn(),
 }));
 
 vi.mock('../api/stitches.api', () => ({
@@ -20,6 +20,7 @@ vi.mock('../api/stitches.api', () => ({
 
 vi.mock('../api/metadata.api', () => ({
   listObjects: vi.fn(),
+  listCanonicalObjects: vi.fn(),
 }));
 
 describe('useCreateStitchPage', () => {
@@ -31,7 +32,7 @@ describe('useCreateStitchPage', () => {
   });
 
   it('loads connections on mount', async () => {
-    vi.mocked(listAvailableConnections).mockResolvedValueOnce([{ id: 'c1', displayName: 'Conn 1' } as any]);
+    vi.mocked(listWorkspaceConnections).mockResolvedValueOnce([{ id: 'c1', displayName: 'Conn 1' } as any]);
 
     const { result } = renderHook(() => useCreateStitchPage('w1'));
 
@@ -41,13 +42,13 @@ describe('useCreateStitchPage', () => {
       expect(result.current.connectionsLoading).toBe(false);
     });
 
-    expect(listAvailableConnections).toHaveBeenCalledWith('w1');
+    expect(listWorkspaceConnections).toHaveBeenCalledWith('w1');
     expect(result.current.connections).toEqual([{ id: 'c1', displayName: 'Conn 1' }]);
   });
 
   it('handles connection changes and loads objects', async () => {
-    vi.mocked(listAvailableConnections).mockResolvedValueOnce([]);
-    vi.mocked(listObjects).mockResolvedValueOnce([{ name: 'Obj1' } as any]);
+    vi.mocked(listWorkspaceConnections).mockResolvedValueOnce([]);
+    vi.mocked(listCanonicalObjects).mockResolvedValueOnce([{ name: 'Obj1' } as any]);
 
     const { result } = renderHook(() => useCreateStitchPage('w1'));
 
@@ -56,19 +57,19 @@ describe('useCreateStitchPage', () => {
     });
 
     expect(result.current.wizard.srcDataSourceId).toBe('c1');
-    expect(result.current.wizard.sourceObject).toBe('');
+    expect(result.current.wizard.sourceObjects).toEqual([]);
     expect(result.current.srcObjectsLoading).toBe(true);
 
     await vi.waitFor(() => {
       expect(result.current.srcObjectsLoading).toBe(false);
     });
 
-    expect(listObjects).toHaveBeenCalledWith('c1', { refresh: false });
+    expect(listCanonicalObjects).toHaveBeenCalled();
     expect(result.current.srcObjects).toEqual([{ name: 'Obj1' }]);
   });
 
   it('handles create stitch', async () => {
-    vi.mocked(listAvailableConnections).mockResolvedValueOnce([]);
+    vi.mocked(listWorkspaceConnections).mockResolvedValueOnce([]);
     vi.mocked(createStitch).mockResolvedValueOnce({ id: 'new-stitch' } as any);
 
     const { result } = renderHook(() => useCreateStitchPage('w1'));
@@ -77,7 +78,7 @@ describe('useCreateStitchPage', () => {
       result.current.setWizard({
         name: 'New Stitch',
         srcDataSourceId: 'c1',
-        sourceObject: 'Obj1',
+        sourceObjects: ['Obj1'],
         destDataSourceId: 'c2',
         targetObject: 'Obj2',
         mappingRules: [],
@@ -95,10 +96,9 @@ describe('useCreateStitchPage', () => {
   });
 
   it('handles src and dest object load errors', async () => {
-    vi.mocked(listAvailableConnections).mockResolvedValueOnce([]);
-    vi.mocked(listObjects)
-      .mockRejectedValueOnce(new Error('Src failure'))
-      .mockRejectedValueOnce(new Error('Dest failure'));
+    vi.mocked(listWorkspaceConnections).mockResolvedValueOnce([]);
+    vi.mocked(listCanonicalObjects).mockRejectedValueOnce(new Error('Src failure'));
+    vi.mocked(listObjects).mockRejectedValueOnce(new Error('Dest failure'));
 
     const { result } = renderHook(() => useCreateStitchPage('w1'));
 
@@ -122,7 +122,7 @@ describe('useCreateStitchPage', () => {
   });
 
   it('handles handleCreate failure', async () => {
-    vi.mocked(listAvailableConnections).mockResolvedValueOnce([]);
+    vi.mocked(listWorkspaceConnections).mockResolvedValueOnce([]);
     vi.mocked(createStitch).mockRejectedValueOnce(new Error('Create failure'));
 
     const { result } = renderHook(() => useCreateStitchPage('w1'));
@@ -131,7 +131,7 @@ describe('useCreateStitchPage', () => {
       result.current.setWizard({
         name: 'New Stitch',
         srcDataSourceId: 'c1',
-        sourceObject: 'Obj1',
+        sourceObjects: ['Obj1'],
         destDataSourceId: 'c2',
         targetObject: 'Obj2',
         mappingRules: [],
@@ -149,7 +149,7 @@ describe('useCreateStitchPage', () => {
   });
 
   it('handles mapping changes', () => {
-    vi.mocked(listAvailableConnections).mockResolvedValueOnce([]);
+    vi.mocked(listWorkspaceConnections).mockResolvedValueOnce([]);
     const { result } = renderHook(() => useCreateStitchPage('w1'));
 
     act(() => {

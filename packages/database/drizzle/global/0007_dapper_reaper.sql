@@ -1,1 +1,0 @@
-ALTER TYPE "public"."registry_outbox_entity_enum" ADD VALUE 'UI_WORKSPACE' BEFORE 'INTEGRATION_STITCH';

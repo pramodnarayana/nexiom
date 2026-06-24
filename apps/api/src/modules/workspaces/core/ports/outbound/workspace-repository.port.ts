@@ -40,26 +40,15 @@ export interface WorkspaceRepositoryPort {
     params: UpdateWorkspaceParams,
   ): Promise<WorkspaceRecord | null>;
   remove(orgId: string, id: string): Promise<WorkspaceRecord | null>;
-  listAvailableConnections(
-    orgId: string,
-    workspaceId: string,
-  ): Promise<ConnectionRecord[]>;
+
   listConnections(
     orgId: string,
     workspaceId: string,
   ): Promise<ConnectionRecord[]>;
-  findConnectionForAssignment(
-    dataSourceId: string,
-    orgId: string,
-  ): Promise<{ id: string; envType: 'PRODUCTION' | 'SANDBOX' } | null>;
+
   findConnectionForSync(
     dataSourceId: string,
     orgId: string,
     envType: 'PRODUCTION' | 'SANDBOX',
   ): Promise<{ id: string } | null>;
-  assignConnection(
-    workspaceId: string,
-    dataSourceId: string,
-  ): Promise<{ workspaceId: string; dataSourceId: string } | null>;
-  unassignConnection(workspaceId: string, dataSourceId: string): Promise<void>;
 }

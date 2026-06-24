@@ -160,15 +160,23 @@ describe('MigrationWorkerService', () => {
   // ── runBackgroundMigrations: worker mode ──────────────────────────────────
 
   describe('runBackgroundMigrations — worker mode (with tenantId)', () => {
-    it('should run Drizzle migrate for the specified tenant', async () => {
+    it('should run Drizzle migrate for the specified tenant connections', async () => {
       const getActiveTenantsSpy = vi.spyOn(
         service as unknown as MigrationWorkerPrivate,
         'getActiveTenants',
       ).mockResolvedValue([]);
+
+      const mockConnections = [{ schemaName: 'ws_tenant_555' }, { schemaName: 'ws_tenant_666' }];
+      const mockWhere = vi.fn().mockResolvedValue(mockConnections);
+      const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+      const mockSelect = vi.fn().mockReturnValue({ from: mockFrom });
+
+      const fakeDb = { select: mockSelect } as unknown as DrizzleDb;
+      
       const getTenantDbSpy = vi.spyOn(
         service as unknown as MigrationWorkerPrivate,
         'getTenantDbConnection',
-      ).mockResolvedValue({} as DrizzleDb);
+      ).mockResolvedValue(fakeDb);
 
       await service.runBackgroundMigrations({
         pluginLocation: '/tmp/plugin',
@@ -181,14 +189,51 @@ describe('MigrationWorkerService', () => {
       expect(queueService.send).not.toHaveBeenCalled();
 
       expect(getTenantDbSpy).toHaveBeenCalledWith('tenant-555');
-      expect(migratorMock.runMigrations).toHaveBeenCalledWith(expect.any(Object), {
+      
+      // Should call runMigrations twice, once for each schema
+      expect(migratorMock.runMigrations).toHaveBeenCalledTimes(2);
+      expect(migratorMock.runMigrations).toHaveBeenNthCalledWith(1, fakeDb, {
         migrationsFolder: '/tmp/plugin/drizzle/migrations',
+        searchPath: 'ws_tenant_555',
       });
+      expect(migratorMock.runMigrations).toHaveBeenNthCalledWith(2, fakeDb, {
+        migrationsFolder: '/tmp/plugin/drizzle/migrations',
+        searchPath: 'ws_tenant_666',
+      });
+    });
+
+    it('should skip migrations gracefully if no connections exist for the plugin', async () => {
+      const getTenantDbSpy = vi.spyOn(
+        service as unknown as MigrationWorkerPrivate,
+        'getTenantDbConnection',
+      ).mockResolvedValue({
+        select: vi.fn().mockReturnValue({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+      } as unknown as DrizzleDb);
+
+      await service.runBackgroundMigrations({
+        pluginLocation: '/tmp/plugin',
+        pieceName: '@soopa/piece-migrate',
+        tenantId: 'tenant-555',
+      });
+
+      expect(migratorMock.runMigrations).not.toHaveBeenCalled();
     });
 
     it('should re-throw migration errors so SQS routes to DLQ', async () => {
       vi.spyOn(service as unknown as MigrationWorkerPrivate, 'getActiveTenants').mockResolvedValue([]);
-      vi.spyOn(service as unknown as MigrationWorkerPrivate, 'getTenantDbConnection').mockResolvedValue({} as DrizzleDb);
+      
+      const mockConnections = [{ schemaName: 'ws_tenant_999' }];
+      const mockWhere = vi.fn().mockResolvedValue(mockConnections);
+      const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+      const mockSelect = vi.fn().mockReturnValue({ from: mockFrom });
+
+      const fakeDb = { select: mockSelect } as unknown as DrizzleDb;
+      
+      vi.spyOn(service as unknown as MigrationWorkerPrivate, 'getTenantDbConnection').mockResolvedValue(fakeDb);
       migratorMock.runMigrations.mockRejectedValueOnce(new Error('DB Timeout'));
 
       await expect(

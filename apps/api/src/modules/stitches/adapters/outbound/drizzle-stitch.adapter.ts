@@ -35,14 +35,19 @@ export class DrizzleStitchRepositoryAdapter implements StitchRepositoryPort {
       destDataSourceId: string;
       canonicalObject?: string;
       targetObject?: string;
-      syncCondition?: any[];
-      status?: 'ACTIVE' | 'PAUSED';
+      syncCondition?: unknown[];
+      status?: 'ACTIVE' | 'INACTIVE';
       fieldMappings?: {
         sourceCanonical: string;
-        mappingRules: any[];
+        mappingRules: unknown[];
       }[];
     },
-  ): Promise<any> {
+  ): Promise<{
+    stitch: unknown;
+    destConnAppName: string;
+    destOrganizationId: string | null;
+    destAppProfile?: string;
+  }> {
     // Verify workspace belongs to org
     const workspace = await this.db.query.uiWorkspaces.findFirst({
       where: and(
@@ -99,8 +104,9 @@ export class DrizzleStitchRepositoryAdapter implements StitchRepositoryPort {
           );
         }
 
+        let insertedFms: (typeof fieldMappings.$inferSelect)[] = [];
         if (params.fieldMappings && params.fieldMappings.length > 0) {
-          const insertedFms = await tx
+          insertedFms = await tx
             .insert(fieldMappings)
             .values(
               params.fieldMappings.map((fm) => ({
@@ -110,16 +116,6 @@ export class DrizzleStitchRepositoryAdapter implements StitchRepositoryPort {
               })),
             )
             .returning();
-
-          await tx.insert(globalRegistryOutbox).values(
-            insertedFms.map((fm) => ({
-              tenantId: orgId,
-              entityType: 'FIELD_MAPPING' as const,
-              entityId: fm.id,
-              action: 'UPSERT' as const,
-              payload: fm,
-            })),
-          );
         }
 
         await tx.insert(globalRegistryOutbox).values({
@@ -127,7 +123,10 @@ export class DrizzleStitchRepositoryAdapter implements StitchRepositoryPort {
           entityType: 'INTEGRATION_STITCH',
           entityId: row.id,
           action: 'UPSERT',
-          payload: row,
+          payload: {
+            ...row,
+            fieldMappings: insertedFms,
+          },
         });
 
         return row;
@@ -166,7 +165,7 @@ export class DrizzleStitchRepositoryAdapter implements StitchRepositoryPort {
     orgId: string,
     workspaceId?: string,
     includeArchived = false,
-  ): Promise<any[]> {
+  ): Promise<unknown[]> {
     const conditions = [eq(integrationStitches.orgId, orgId)];
     if (workspaceId) {
       conditions.push(eq(integrationStitches.workspaceId, workspaceId));
@@ -181,7 +180,7 @@ export class DrizzleStitchRepositoryAdapter implements StitchRepositoryPort {
     });
   }
 
-  async getStitch(orgId: string, id: string): Promise<any> {
+  async getStitch(orgId: string, id: string): Promise<unknown> {
     const stitch = await this.db.query.integrationStitches.findFirst({
       where: and(
         eq(integrationStitches.id, id),
@@ -200,10 +199,10 @@ export class DrizzleStitchRepositoryAdapter implements StitchRepositoryPort {
     id: string,
     params: {
       name?: string;
-      status?: 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
-      syncCondition?: any[];
+      status?: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
+      syncCondition?: unknown[];
     },
-  ): Promise<any> {
+  ): Promise<unknown> {
     try {
       const updated = await this.db.transaction(async (tx) => {
         const [row] = await tx
@@ -228,12 +227,20 @@ export class DrizzleStitchRepositoryAdapter implements StitchRepositoryPort {
           throw new NotFoundException(`Stitch ${id} not found.`);
         }
 
+        const mappings = await tx
+          .select()
+          .from(fieldMappings)
+          .where(eq(fieldMappings.stitchId, row.id));
+
         await tx.insert(globalRegistryOutbox).values({
           tenantId: orgId,
           entityType: 'INTEGRATION_STITCH',
           entityId: row.id,
           action: 'UPSERT',
-          payload: row,
+          payload: {
+            ...row,
+            fieldMappings: mappings,
+          },
         });
 
         return row;

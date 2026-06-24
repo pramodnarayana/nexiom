@@ -45,12 +45,11 @@ export class RegistryReplicationService implements OnModuleInit {
       }
       let operationPerformed = false;
       let attempts = 0;
-      // FIELD_MAPPING has a FK dependency on INTEGRATION_STITCH. When both are
-      // queued at the same time (e.g. from create-stitch script), the stitch
-      // replication message may still be in-flight when the mapping arrives.
-      // Give it more retries with a longer backoff to let the parent arrive.
-      const maxAttempts = row.entityType === "FIELD_MAPPING" ? 10 : 3;
-      const retryDelayMs = row.entityType === "FIELD_MAPPING" ? 2000 : 1000;
+      // Because queue processing is concurrent, messages can arrive out of order.
+      // E.g., an INTEGRATION_STITCH might arrive before its parent UI_WORKSPACE.
+      // We catch FK violations and retry to give the parent time to be processed.
+      const maxAttempts = 10;
+      const retryDelayMs = 2000;
 
       while (attempts < maxAttempts) {
         try {
@@ -67,9 +66,12 @@ export class RegistryReplicationService implements OnModuleInit {
           break; // Transaction succeeded, break retry loop!
         } catch (err) {
           attempts++;
+          const pgErr = err as any;
+          const errorCode = pgErr.code || pgErr.cause?.code;
           const isFkViolation =
-            (err as { code?: string })?.code === "23503" ||
-            String(err).includes("foreign key constraint");
+            errorCode === "23503" ||
+            String(err).includes("foreign key constraint") ||
+            (pgErr.cause && String(pgErr.cause).includes("foreign key constraint"));
 
           if (isFkViolation && attempts < maxAttempts) {
             this.logger.warn(
@@ -93,13 +95,21 @@ export class RegistryReplicationService implements OnModuleInit {
       // Mark outbox as success ONLY after everything (including provisioning) succeeds
       await this.registryPort.markGlobalOutboxSuccess(outboxId);
 
-      this.logger.debug(
+      this.logger.log(
         `Successfully replicated ${row.entityType} ${row.entityId} to tenant ${row.tenantId}`,
       );
     } catch (err) {
+      const pgErr = err as any;
+      const errorCode = pgErr.code || pgErr.cause?.code || 'N/A';
+      const errorDetail = pgErr.detail || pgErr.cause?.detail || 'N/A';
+      const errorHint = pgErr.hint || pgErr.cause?.hint || 'N/A';
       const errorMessage = err instanceof Error ? err.message : String(err);
       this.logger.error(
-        `Failed to process registry replication for outboxId ${outboxId}: ${errorMessage}`,
+        `Failed to process registry replication for outboxId ${outboxId}. ` +
+        `Msg: ${errorMessage}. ` +
+        `PG Code: ${errorCode}. ` +
+        `PG Detail: ${errorDetail}. ` +
+        `PG Hint: ${errorHint}`
       );
 
       // We don't mark the outbox as FAILED here because the BullMQ retry mechanism will re-queue it,

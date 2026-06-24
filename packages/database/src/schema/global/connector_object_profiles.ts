@@ -1,5 +1,5 @@
 import { jsonb, pgTable, uuid, varchar, timestamp, primaryKey, index } from 'drizzle-orm/pg-core';
-import { dataSources } from '../global/data-sources.js';
+import { dataSources } from '../shared/data-sources.js';
 
 /**
  * CONNECTOR OBJECT PROFILES

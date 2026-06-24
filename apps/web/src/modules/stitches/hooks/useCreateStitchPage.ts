@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppRoutes } from '@/shared/lib/auth/constants';
-import { listAvailableConnections, type AvailableConnectionResponse } from '@/modules/workspaces/api/workspaces.api';
+import { listWorkspaceConnections, type WorkspaceConnectionResponse } from '@/modules/workspaces/api/workspaces.api';
 import { createStitch } from '../api/stitches.api';
-import { listObjects, type ObjectDescriptor } from '../api/metadata.api';
+import { listObjects, listCanonicalObjects, type ObjectDescriptor } from '../api/metadata.api';
 import type { MappingRule } from '../api/field-mappings.api';
 import type { SyncConditionRule } from '../components/MappingCanvas';
 
@@ -12,7 +12,7 @@ type Step = 1 | 2 | 3;
 export interface WizardState {
   name: string;
   srcDataSourceId: string;
-  sourceObject: string;
+  sourceObjects: string[];
   destDataSourceId: string;
   targetObject: string;
   mappingRules: MappingRule[];
@@ -23,7 +23,7 @@ export interface WizardState {
 const INITIAL_STATE: WizardState = {
   name: '',
   srcDataSourceId: '',
-  sourceObject: '',
+  sourceObjects: [],
   destDataSourceId: '',
   targetObject: '',
   mappingRules: [],
@@ -40,7 +40,7 @@ export function useCreateStitchPage(workspaceId: string | undefined) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const [connections, setConnections] = useState<AvailableConnectionResponse[]>([]);
+  const [connections, setConnections] = useState<WorkspaceConnectionResponse[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(true);
   const [connectionsError, setConnectionsError] = useState<string | null>(null);
 
@@ -64,7 +64,7 @@ export function useCreateStitchPage(workspaceId: string | undefined) {
     }
     let cancelled = false;
     setConnectionsLoading(true);
-    listAvailableConnections(workspaceId)
+    listWorkspaceConnections(workspaceId)
       .then((data) => {
         if (!cancelled) setConnections(data);
       })
@@ -81,12 +81,12 @@ export function useCreateStitchPage(workspaceId: string | undefined) {
     };
   }, [workspaceId]);
 
-  const loadSrcObjects = useCallback((dataSourceId: string, refresh = false) => {
+  const loadSrcObjects = useCallback(() => {
     setSrcObjects([]);
     setSrcObjectsError(null);
     setSrcObjectsLoading(true);
     const token = ++srcLoadTokenRef.current;
-    listObjects(dataSourceId, { refresh })
+    listCanonicalObjects()
       .then((objects) => { if (token === srcLoadTokenRef.current) setSrcObjects(objects); })
       .catch((e: unknown) => {
         if (token === srcLoadTokenRef.current) {
@@ -112,8 +112,8 @@ export function useCreateStitchPage(workspaceId: string | undefined) {
   }, []);
 
   function handleSrcConnectionChange(id: string) {
-    setWizard((prev) => ({ ...prev, srcDataSourceId: id, sourceObject: '' }));
-    loadSrcObjects(id);
+    setWizard((prev) => ({ ...prev, srcDataSourceId: id, sourceObjects: [] }));
+    loadSrcObjects();
   }
 
   function handleDestConnectionChange(id: string) {
@@ -121,7 +121,7 @@ export function useCreateStitchPage(workspaceId: string | undefined) {
     loadDestObjects(id);
   }
 
-  const step1Valid = wizard.srcDataSourceId && wizard.sourceObject && wizard.name.trim().length > 0;
+  const step1Valid = wizard.srcDataSourceId && wizard.sourceObjects.length > 0 && wizard.name.trim().length > 0;
   const step2Valid = wizard.destDataSourceId && wizard.targetObject;
 
   async function handleCreate() {
@@ -132,14 +132,13 @@ export function useCreateStitchPage(workspaceId: string | undefined) {
       await createStitch({
         workspaceId,
         name: wizard.name.trim(),
-        srcDataSourceId: wizard.srcDataSourceId,
+        sourceDataSourceId: wizard.srcDataSourceId,
         destDataSourceId: wizard.destDataSourceId,
-        sourceObject: wizard.sourceObject,
+        canonicalObject: wizard.sourceObjects[0],
         targetObject: wizard.targetObject,
-        config: Object.keys(wizard.config).length > 0 ? wizard.config : undefined,
         ...(wizard.syncConditions.length > 0 && { syncCondition: wizard.syncConditions }),
         ...(wizard.mappingRules.length > 0 && {
-          fieldMappings: [{ sourceCanonical: wizard.sourceObject, mappingRules: wizard.mappingRules }],
+          fieldMappings: [{ sourceCanonical: wizard.sourceObjects[0], mappingRules: wizard.mappingRules }],
         }),
       });
       navigate(stitchesHref);

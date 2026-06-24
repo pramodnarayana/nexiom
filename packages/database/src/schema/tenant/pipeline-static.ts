@@ -1,0 +1,14 @@
+import { buildTenantSchema } from './pipeline.js';
+const schema = buildTenantSchema('ws_template');
+export const inboundGateway = schema.inboundGateway;
+export const replicaEntity = schema.replicaEntity;
+export const normalizedEntity = schema.normalizedEntity;
+export const outboundGateway = schema.outboundGateway;
+export const syncLog = schema.syncLog;
+export const syncCursor = schema.syncCursor;
+export const inboundOutbox = schema.inboundOutbox;
+export const replicaOutbox = schema.replicaOutbox;
+export const normalizedOutbox = schema.normalizedOutbox;
+export const outboundOutbox = schema.outboundOutbox;
+export const activeSyncLocks = schema.activeSyncLocks;
+export * from './pipeline.js';

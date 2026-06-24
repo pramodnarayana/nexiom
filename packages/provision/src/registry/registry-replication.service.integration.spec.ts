@@ -46,11 +46,14 @@ describe("RegistryReplicationService", () => {
       markGlobalOutboxSuccess: vi.fn().mockResolvedValue(undefined),
     };
 
-    sqlManager = new SqlDatabaseManager(testDbManager.db!);
+    const migratorMock = {
+      runMigrationsForSchema: vi.fn().mockResolvedValue(undefined),
+    } as any;
+    sqlManager = new SqlDatabaseManager(testDbManager.db!, migratorMock);
     const dbManagerAdapter = {
       getTenantDb: async () => testDbManager.db!,
-      applyPlan: async (tenantId: string, schemaName: string, plan: any, context?: any) => {
-        return sqlManager.applyPlan(schemaName, plan, context);
+      applyPlan: async (tenantId: string, schemaName: string, plan: any) => {
+        return sqlManager.applyPlan(schemaName, plan);
       }
     };
     vi.spyOn(sqlManager, 'applyPlan');

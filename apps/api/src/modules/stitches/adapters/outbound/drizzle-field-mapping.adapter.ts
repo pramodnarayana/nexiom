@@ -6,6 +6,7 @@ import {
   fieldMappings,
   DATABASE_CONNECTION,
   SAVEPOINT_MANAGER,
+  globalRegistryOutbox,
 } from '@soopa/database';
 import type { DrizzleDb, ISavePointManager } from '@soopa/database';
 import { and, eq } from 'drizzle-orm';
@@ -53,24 +54,28 @@ export class DrizzleFieldMappingRepositoryAdapter
     const stitch = await this.findStitchForOrg(stitchId, orgId, ctx);
     if (!stitch) throw new NotFoundException(`Stitch ${stitchId} not found.`);
 
-    const exec = this.getExecutor(ctx);
-    const [result] = await exec
-      .insert(fieldMappings)
-      .values({
-        stitchId,
-        sourceCanonical: body.sourceCanonical,
-        mappingRules: body.mappingRules,
-      })
-      .onConflictDoUpdate({
-        target: [fieldMappings.stitchId, fieldMappings.sourceCanonical],
-        set: {
+    return this.transaction(async (txCtx) => {
+      const exec = this.getExecutor(txCtx);
+      const [result] = await exec
+        .insert(fieldMappings)
+        .values({
+          stitchId,
+          sourceCanonical: body.sourceCanonical,
           mappingRules: body.mappingRules,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
+        })
+        .onConflictDoUpdate({
+          target: [fieldMappings.stitchId, fieldMappings.sourceCanonical],
+          set: {
+            mappingRules: body.mappingRules,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
 
-    return result;
+      await this.emitStitchOutbox(txCtx, stitchId, orgId);
+
+      return result;
+    }, ctx);
   }
 
   /** Delete field mappings for a sourceCanonical. Idempotent — no error if absent. */
@@ -83,15 +88,19 @@ export class DrizzleFieldMappingRepositoryAdapter
     const stitch = await this.findStitchForOrg(stitchId, orgId, ctx);
     if (!stitch) throw new NotFoundException(`Stitch ${stitchId} not found.`);
 
-    const exec = this.getExecutor(ctx);
-    await exec
-      .delete(fieldMappings)
-      .where(
-        and(
-          eq(fieldMappings.stitchId, stitchId),
-          eq(fieldMappings.sourceCanonical, sourceCanonical),
-        ),
-      );
+    return this.transaction(async (txCtx) => {
+      const exec = this.getExecutor(txCtx);
+      await exec
+        .delete(fieldMappings)
+        .where(
+          and(
+            eq(fieldMappings.stitchId, stitchId),
+            eq(fieldMappings.sourceCanonical, sourceCanonical),
+          ),
+        );
+
+      await this.emitStitchOutbox(txCtx, stitchId, orgId);
+    }, ctx);
   }
 
   /**
@@ -143,7 +152,34 @@ export class DrizzleFieldMappingRepositoryAdapter
         results.push(result);
       }
 
+      await this.emitStitchOutbox(txCtx, stitchId, orgId);
+
       return results;
     }, ctx);
+  }
+
+  private async emitStitchOutbox(
+    ctx: RepositoryContext,
+    stitchId: string,
+    orgId: string,
+  ) {
+    const exec = this.getExecutor(ctx);
+    const stitch = await exec.query.integrationStitches.findFirst({
+      where: and(
+        eq(integrationStitches.id, stitchId),
+        eq(integrationStitches.orgId, orgId),
+      ),
+      with: { fieldMappings: true },
+    });
+
+    if (stitch) {
+      await exec.insert(globalRegistryOutbox).values({
+        tenantId: orgId,
+        entityType: 'INTEGRATION_STITCH',
+        entityId: stitch.id,
+        action: 'UPSERT',
+        payload: stitch,
+      });
+    }
   }
 }

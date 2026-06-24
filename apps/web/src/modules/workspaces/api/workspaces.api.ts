@@ -59,27 +59,19 @@ export async function listWorkspaceConnections(workspaceId: string): Promise<Wor
   const res = await apiClient.get<WorkspaceConnectionResponse[]>(`/workspaces/${workspaceId}/connections`);
   return res.data;
 }
-
-export async function assignConnection(workspaceId: string, dataSourceId: string): Promise<void> {
-  await apiClient.post(`/workspaces/${workspaceId}/connections/${dataSourceId}`);
+export interface SyncResult {
+  status: 'success' | 'failed' | 'partial';
+  message?: string;
+  recordsSynced?: number;
+  recordsFailed?: number;
 }
 
-export async function unassignConnection(workspaceId: string, dataSourceId: string): Promise<void> {
-  await apiClient.delete(`/workspaces/${workspaceId}/connections/${dataSourceId}`);
+export async function syncConnection(workspaceId: string, dataSourceId: string, objectType: string): Promise<SyncResult> {
+  const res = await apiClient.post<SyncResult>(`/workspaces/${workspaceId}/connections/${dataSourceId}/sync/${objectType}`);
+  return res.data;
 }
 
-/** Connections available to assign: env-type matched, not yet assigned to this workspace. */
-export interface AvailableConnectionResponse {
-  id: string;
-  appName: string;
-  externalId: string;
-  displayName: string;
-  authType: string;
-  status: string;
-  envType: EnvType;
-}
-
-export async function listAvailableConnections(workspaceId: string): Promise<AvailableConnectionResponse[]> {
-  const res = await apiClient.get<AvailableConnectionResponse[]>(`/workspaces/${workspaceId}/connections/available`);
+export async function fetchConnectionRecords(workspaceId: string, dataSourceId: string, objectType: string, recordIds: string[]): Promise<SyncResult> {
+  const res = await apiClient.post<SyncResult>(`/workspaces/${workspaceId}/connections/${dataSourceId}/sync/${objectType}/fetch`, { recordIds });
   return res.data;
 }

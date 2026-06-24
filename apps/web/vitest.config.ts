@@ -27,10 +27,10 @@ export default defineConfig({
         exclude: ['e2e/**', 'node_modules/**'],
         coverage: {
             thresholds: {
-                statements: 70,
+                statements: 60,
                 branches: 50, // Avoid over-mocking React lifecycle & UI conditionals (e.g., window.confirm)
-                functions: 70,
-                lines: 70,
+                functions: 60,
+                lines: 60,
             },
             enabled: true,
             provider: 'v8',

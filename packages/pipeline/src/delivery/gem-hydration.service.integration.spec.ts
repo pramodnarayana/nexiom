@@ -97,10 +97,7 @@ describe("GemHydrationService", () => {
     // 2. Setup tenant schema
     const tenantId = "ten1";
     const schemaName = `ws_${tenantId.replace(/-/g, "_")}`;
-    await dbManager.applyPlan(tenantId, schemaName, SchemaPlan.STANDARD_ACTIVE, {
-      appName: "testApp",
-      appProfile: "default",
-    });
+    await dbManager.applyPlan(tenantId, schemaName, SchemaPlan.SCHEMA_ACTIVE);
     const tenantDb = testDbManager.db!;
     
     // The table is already managed by drizzle migrations run in global-setup.ts

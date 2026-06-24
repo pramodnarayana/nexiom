@@ -24,10 +24,7 @@ describe("ReplicaStateAdapter", () => {
 
   beforeEach(async () => {
     currentSchemaName = "ws_" + uuidv4().replace(/-/g, "");
-    await dbManager.applyPlan(tenantId, currentSchemaName, SchemaPlan.STANDARD_ACTIVE, {
-      appName: "test_app",
-      appProfile: "standard",
-    });
+    await dbManager.applyPlan(tenantId, currentSchemaName, SchemaPlan.SCHEMA_ACTIVE);
     adapter = new ReplicaStateAdapter(dbManager);
   }, 30000);
 

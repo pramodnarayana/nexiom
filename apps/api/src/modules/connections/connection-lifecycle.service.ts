@@ -28,6 +28,11 @@ import { SchemaPlan } from '@soopa/dbmanager';
 import type { DatabaseManager } from '@soopa/dbmanager';
 import { DB_MANAGER } from '@soopa/dbmanager';
 import { StorageResolverService } from '@soopa/pipeline';
+import { QueueService } from '@soopa/queue';
+import {
+  PieceRegistryService,
+  PluginManagerService,
+} from '@soopa/piece-registry';
 
 export interface ProvisionInfo {
   schemaName: string;
@@ -44,6 +49,9 @@ export class ConnectionLifecycleService {
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
     private readonly storageResolver: StorageResolverService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly queueService: QueueService,
+    private readonly pieceRegistry: PieceRegistryService,
+    private readonly pluginManager: PluginManagerService,
   ) {}
 
   async provisionNamespace(
@@ -64,7 +72,7 @@ export class ConnectionLifecycleService {
       await this.dbManager.applyPlan(
         tenantId,
         workspaceProvisionInfo.schemaName,
-        SchemaPlan.STANDARD_ACTIVE,
+        SchemaPlan.SCHEMA_ACTIVE,
       );
 
       // Transition to ACTIVE only after namespace is successfully provisioned
@@ -72,7 +80,7 @@ export class ConnectionLifecycleService {
         const [activeConn] = await tx
           .update(dataSources)
           .set({
-            schemaPlan: SchemaPlan.STANDARD_ACTIVE,
+            schemaPlan: SchemaPlan.SCHEMA_ACTIVE,
           })
           .where(eq(dataSources.id, workspaceProvisionInfo.dataSourceId))
           .returning();

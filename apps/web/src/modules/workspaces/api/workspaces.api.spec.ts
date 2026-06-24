@@ -62,22 +62,20 @@ describe('Workspaces API', () => {
     expect(res).toEqual([{ id: 'c1' }]);
   });
 
-  it('assignConnection posts correctly', async () => {
-    vi.mocked(apiClient.post).mockResolvedValueOnce({});
-    await WorkspacesApi.assignConnection(mockWorkspaceId, mockDataSourceId);
-    expect(apiClient.post).toHaveBeenCalledWith(`/workspaces/${mockWorkspaceId}/connections/${mockDataSourceId}`);
+  it('syncConnection posts correctly', async () => {
+    vi.mocked(apiClient.post).mockResolvedValueOnce({ data: { success: true } });
+    const res = await WorkspacesApi.syncConnection(mockWorkspaceId, mockDataSourceId, 'Customer');
+    expect(apiClient.post).toHaveBeenCalledWith(`/workspaces/${mockWorkspaceId}/connections/${mockDataSourceId}/sync/Customer`);
+    expect(res).toEqual({ success: true });
   });
 
-  it('unassignConnection deletes correctly', async () => {
-    vi.mocked(apiClient.delete).mockResolvedValueOnce({});
-    await WorkspacesApi.unassignConnection(mockWorkspaceId, mockDataSourceId);
-    expect(apiClient.delete).toHaveBeenCalledWith(`/workspaces/${mockWorkspaceId}/connections/${mockDataSourceId}`);
-  });
-
-  it('listAvailableConnections fetches correctly', async () => {
-    vi.mocked(apiClient.get).mockResolvedValueOnce({ data: [{ id: 'c2' }] });
-    const res = await WorkspacesApi.listAvailableConnections(mockWorkspaceId);
-    expect(apiClient.get).toHaveBeenCalledWith(`/workspaces/${mockWorkspaceId}/connections/available`);
-    expect(res).toEqual([{ id: 'c2' }]);
+  it('fetchConnectionRecords posts correctly', async () => {
+    vi.mocked(apiClient.post).mockResolvedValueOnce({ data: { success: true } });
+    const res = await WorkspacesApi.fetchConnectionRecords(mockWorkspaceId, mockDataSourceId, 'Customer', ['id1']);
+    expect(apiClient.post).toHaveBeenCalledWith(
+      `/workspaces/${mockWorkspaceId}/connections/${mockDataSourceId}/sync/Customer/fetch`,
+      { recordIds: ['id1'] }
+    );
+    expect(res).toEqual({ success: true });
   });
 });

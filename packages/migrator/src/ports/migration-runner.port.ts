@@ -2,6 +2,7 @@ export const MIGRATION_RUNNER = 'MIGRATION_RUNNER';
 
 export interface RunMigrationsOptions {
   migrationsFolder: string;
+  searchPath?: string;
 }
 
 export interface MigrationRunnerPort {

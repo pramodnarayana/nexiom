@@ -35,6 +35,7 @@ describe('useStitchDetailPage', () => {
       id: 's1',
       name: 'Test Stitch',
       status: 'ACTIVE',
+      canonicalObject: 'Contact',
       sourceObject: 'Contact',
       targetObject: 'Lead',
       config: { pollInterval: 60 },
@@ -72,7 +73,7 @@ describe('useStitchDetailPage', () => {
 
   it('handles status toggle', async () => {
     vi.mocked(getStitch).mockResolvedValueOnce({ id: 's1', status: 'ACTIVE', name: 'Test', fieldMappings: [], syncCondition: [], config: {} } as any);
-    vi.mocked(updateStitch).mockResolvedValueOnce({ id: 's1', status: 'PAUSED', name: 'Test', fieldMappings: [], syncCondition: [], config: {} } as any);
+    vi.mocked(updateStitch).mockResolvedValueOnce({ id: 's1', status: 'INACTIVE', name: 'Test', fieldMappings: [], syncCondition: [], config: {} } as any);
 
     const { result } = renderHook(() => useStitchDetailPage('s1'));
 
@@ -84,8 +85,8 @@ describe('useStitchDetailPage', () => {
       await result.current.handleStatusToggle();
     });
 
-    expect(updateStitch).toHaveBeenCalledWith('s1', { status: 'PAUSED' });
-    expect(result.current.stitch?.status).toBe('PAUSED');
+    expect(updateStitch).toHaveBeenCalledWith('s1', { status: 'INACTIVE' });
+    expect(result.current.stitch?.status).toBe('INACTIVE');
   });
 
   it('handles config save', async () => {
@@ -146,6 +147,7 @@ describe('useStitchDetailPage', () => {
       .mockResolvedValueOnce({
         id: 's1',
         name: 'Test',
+        canonicalObject: 'Contact',
         config: {},
         syncCondition: [],
         fieldMappings: [{ sourceCanonical: 'Contact', mappingRules: [] }]
@@ -153,6 +155,7 @@ describe('useStitchDetailPage', () => {
       .mockResolvedValueOnce({
         id: 's1',
         name: 'Test',
+        canonicalObject: 'Contact',
         config: {},
         syncCondition: [],
         fieldMappings: [{ sourceCanonical: 'Contact', mappingRules: [{ dest: 'name', src: 'name' }] }]

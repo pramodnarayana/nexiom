@@ -32,7 +32,7 @@ type JsonataExpression = ReturnType<typeof jsonata>;
 
 /**
  * bindExtensions — registers all Soopa custom functions on a compiled JSONata expression.
- * Called once per expression during compilation in MappingEngine.
+ * Called once per expression during compilation in Mapper.
  *
  * @param expression  A compiled JSONata expression returned by jsonata(src)
  */

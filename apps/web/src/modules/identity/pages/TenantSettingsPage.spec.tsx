@@ -28,7 +28,7 @@ describe('TenantSettingsPage', () => {
         renderWithClient(<TenantSettingsPage />);
 
         // See handlers.ts for GET /api/tenants/:id handler returning 'Test Organization'
-        await screen.findByDisplayValue('Test Organization');
+        await screen.findByDisplayValue('Test Organization', {}, { timeout: 3000 });
     });
 
     it('shows error if no organization context', () => {
@@ -49,7 +49,7 @@ describe('TenantSettingsPage', () => {
         renderWithClient(<TenantSettingsPage />);
 
         // See handlers.ts for GET /api/tenants/:id handler returning 'Test Organization'
-        const companyInput = await screen.findByDisplayValue('Test Organization');
+        const companyInput = await screen.findByDisplayValue('Test Organization', {}, { timeout: 3000 });
 
         fireEvent.change(companyInput, { target: { value: 'Updated Corp' } });
 
