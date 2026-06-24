@@ -50,11 +50,18 @@ export class ListWorkspaceConnectionsUseCase {
   async execute(
     orgId: string,
     workspaceId: string,
-    availableOnly: boolean = false,
   ): Promise<ConnectionRecord[]> {
-    if (availableOnly) {
-      return this.repository.listAvailableConnections(orgId, workspaceId);
-    }
     return this.repository.listConnections(orgId, workspaceId);
+  }
+}
+
+export class GetConnectionForSyncUseCase {
+  constructor(private readonly repository: WorkspaceRepositoryPort) {}
+  async execute(
+    dataSourceId: string,
+    orgId: string,
+    envType: 'PRODUCTION' | 'SANDBOX',
+  ): Promise<{ id: string } | null> {
+    return this.repository.findConnectionForSync(dataSourceId, orgId, envType);
   }
 }

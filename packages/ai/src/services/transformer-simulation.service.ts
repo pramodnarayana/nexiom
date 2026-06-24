@@ -86,7 +86,14 @@ export class TransformerSimulationService {
         throw new BadRequestException('objectType must be a non-empty string');
       }
       const objectType = payload.objectType;
-      const filters = (payload.filters || {}) as Record<string, unknown>;
+      
+      let filters: Record<string, unknown> = {};
+      if ('filters' in payload && payload.filters !== undefined && payload.filters !== null) {
+        if (typeof payload.filters !== 'object' || Array.isArray(payload.filters)) {
+          throw new BadRequestException('filters must be an object');
+        }
+        filters = payload.filters as Record<string, unknown>;
+      }
       
       if (!piece.executeFind) {
           throw new BadRequestException(`executeFind not natively supported by piece ${conn.appName}`);

@@ -78,7 +78,7 @@ export class TransformerSimulationController {
       `Executing Transformer Simulation for Connection: [REDACTED]`,
       { dataSourceId: body.dataSourceId },
     );
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+
     return this.simulationService.simulateExecution(
       tenantId,
       body.dataSourceId,

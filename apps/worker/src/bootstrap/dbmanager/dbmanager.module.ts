@@ -11,7 +11,7 @@ import { DatabaseModule } from "@soopa/database";
 import { DATABASE_CONNECTION } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
 
-import { PipelineCoreModule, PipelineHookBrokerService } from "@soopa/pipeline";
+import { PipelineCoreModule } from "@soopa/pipeline";
 
 /**
  * Builds a CredentialResolver from the current process's DATABASE_URL.
@@ -59,42 +59,24 @@ function buildCredentialResolver(): CredentialResolver {
   };
 }
 
+import {
+  MIGRATION_RUNNER,
+  MigratorModule,
+  MigrationRunnerPort,
+} from "@soopa/migrator";
+
 @Global()
 @Module({
-  imports: [DatabaseModule, PipelineCoreModule],
+  imports: [DatabaseModule, PipelineCoreModule, MigratorModule],
   providers: [
     {
       provide: DB_MANAGER,
-      useFactory: (drizzleDb: DrizzleDb, broker: PipelineHookBrokerService) => {
-        const domainProvisionerResolver = (
-          appName: string,
-          appProfile: string,
-        ) => {
-          return async (tenantDb: DrizzleDb, schemaName: string) => {
-            try {
-              await broker.provisionDomain(
-                appName,
-                appProfile,
-                tenantDb,
-                schemaName,
-              );
-            } catch (err) {
-              console.error(
-                `Broker provisionDomain failed for ${appName}/${appProfile}:`,
-                err,
-              );
-              throw err;
-            }
-          };
-        };
-
+      useFactory: (drizzleDb: DrizzleDb, migrator: MigrationRunnerPort) => {
         return new TenantDatabaseManager(
           drizzleDb,
           (connectionString: string) => {
             const pool = new Pool({
               connectionString,
-              // Keep pool size small since the worker maintains connections across many tenants.
-              // Budget: 100 tenants × 5 = 500 max connections (well within limits).
               max: 5,
               idleTimeoutMillis: 60_000,
               connectionTimeoutMillis: 5_000,
@@ -121,12 +103,12 @@ function buildCredentialResolver(): CredentialResolver {
 
             return drizzle(pool, { schema }) as unknown as DrizzleDb;
           },
-          domainProvisionerResolver, // domainProvisionerResolver
-          undefined, // logger
+          migrator,
+          undefined, // logger — use default
           buildCredentialResolver(), // inject auth from env at connection time
         );
       },
-      inject: [DATABASE_CONNECTION, PipelineHookBrokerService],
+      inject: [DATABASE_CONNECTION, MIGRATION_RUNNER],
     },
   ],
   exports: [DB_MANAGER],

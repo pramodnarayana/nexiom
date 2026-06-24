@@ -11,8 +11,7 @@ import { DatabaseModule } from '@soopa/database';
 import { DATABASE_CONNECTION } from '@soopa/database';
 import type { DrizzleDb } from '@soopa/database';
 
-import { PiecesModule, PieceRegistryService } from '@soopa/piece-registry';
-import type { AppsConnectorDb } from '@soopa/piece-framework';
+import { PiecesModule } from '@soopa/piece-registry';
 
 /**
  * Builds a CredentialResolver from the current process's DATABASE_URL.
@@ -56,16 +55,19 @@ function buildCredentialResolver(): CredentialResolver {
   };
 }
 
+import {
+  MIGRATION_RUNNER,
+  MigratorModule,
+  MigrationRunnerPort,
+} from '@soopa/migrator';
+
 @Global()
 @Module({
-  imports: [DatabaseModule, PiecesModule],
+  imports: [DatabaseModule, PiecesModule, MigratorModule],
   providers: [
     {
       provide: DB_MANAGER,
-      useFactory: (
-        drizzleDb: DrizzleDb,
-        pieceRegistry: PieceRegistryService,
-      ) => {
+      useFactory: (drizzleDb: DrizzleDb, migrator: MigrationRunnerPort) => {
         return new TenantDatabaseManager(
           drizzleDb,
           (connectionString: string) => {
@@ -77,19 +79,12 @@ function buildCredentialResolver(): CredentialResolver {
             });
             return drizzle(pool, { schema }) as unknown as DrizzleDb;
           },
-          (appName: string) => {
-            const piece = pieceRegistry.getPiece(appName);
-            if (piece?.appHooks?.provisionDomain) {
-              return (db: AppsConnectorDb, schemaName: string) =>
-                piece.appHooks!.provisionDomain!(db, schemaName);
-            }
-            return undefined;
-          },
+          migrator,
           undefined, // logger — use default
           buildCredentialResolver(), // inject auth from env at connection time
         );
       },
-      inject: [DATABASE_CONNECTION, PieceRegistryService],
+      inject: [DATABASE_CONNECTION, MIGRATION_RUNNER],
     },
   ],
   exports: [DB_MANAGER],

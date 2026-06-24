@@ -62,6 +62,18 @@ export async function listFields(
   return res.data;
 }
 
+export async function listCanonicalObjects(): Promise<ObjectDescriptor[]> {
+  const res = await apiClient.get<ObjectDescriptor[]>('/stitches/canonical/objects');
+  return res.data;
+}
+
+export async function listCanonicalFields(objectName: string): Promise<FieldDescriptor[]> {
+  const res = await apiClient.get<FieldDescriptor[]>(
+    `/stitches/canonical/objects/${encodeURIComponent(objectName)}/fields`,
+  );
+  return res.data;
+}
+
 export interface RelatedObjectDescriptor {
   objectName: string;
   objectLabel?: string;

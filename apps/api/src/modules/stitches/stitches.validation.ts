@@ -38,7 +38,7 @@ export const CreateStitchSchema = z.object({
   canonicalObject: z.string().trim().max(255).optional().default(''),
   targetObject: z.string().trim().max(255).optional().default(''),
   syncCondition: z.array(SyncConditionRule).optional(),
-  status: z.enum(['ACTIVE', 'PAUSED']).optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   /**
    * Optional field mappings to create atomically with the stitch.
    * Prevents orphaned stitch rows when the mapping save step would otherwise
@@ -49,7 +49,7 @@ export const CreateStitchSchema = z.object({
 
 export const UpdateStitchSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
-  status: z.enum(['ACTIVE', 'PAUSED', 'ARCHIVED']).optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']).optional(),
   syncCondition: z.array(SyncConditionRule).optional(),
 });
 

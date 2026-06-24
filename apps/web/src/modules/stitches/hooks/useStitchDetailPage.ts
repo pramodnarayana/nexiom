@@ -45,10 +45,10 @@ export function useStitchDetailPage(id: string | undefined) {
           setNameDraft(data.name);
           setConfigDraft(data.config || {});
           
-          const primaryFm = data.fieldMappings?.find((fm) => fm.sourceCanonical === data.sourceObject);
-          const secondaryFms = (data.fieldMappings ?? []).filter((fm) => fm.sourceCanonical !== data.sourceObject);
+          const primaryFm = data.fieldMappings?.find((fm) => fm.sourceCanonical === data.canonicalObject);
+          const secondaryFms = (data.fieldMappings ?? []).filter((fm) => fm.sourceCanonical !== data.canonicalObject);
           setCanonicalMappings([
-            { sourceCanonical: data.sourceObject, mappingRules: primaryFm?.mappingRules ?? [] },
+            { sourceCanonical: data.canonicalObject, mappingRules: primaryFm?.mappingRules ?? [] },
             ...secondaryFms.map((fm) => ({ sourceCanonical: fm.sourceCanonical, mappingRules: fm.mappingRules })),
           ]);
           setSyncConditions(
@@ -110,7 +110,7 @@ export function useStitchDetailPage(id: string | undefined) {
 
   const handleStatusToggle = async () => {
     if (!stitch) return;
-    const next = stitch.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+    const next = stitch.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     setTogglingStatus(true);
     try {
       const updated = await updateStitch(stitch.id, { status: next });

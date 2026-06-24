@@ -49,7 +49,7 @@ export class DrizzleConnectionLifecycleAdapter implements ConnectionLifecyclePor
       await this.db.transaction(async (tx) => {
         const [activeConn] = await tx
           .update(dataSources)
-          .set({ schemaPlan: SchemaPlan.STANDARD_PROVISIONING })
+          .set({ updatedAt: new Date() })
           .where(
             and(
               eq(dataSources.id, workspaceProvisionInfo.dataSourceId),
@@ -85,7 +85,7 @@ export class DrizzleConnectionLifecycleAdapter implements ConnectionLifecyclePor
           entityId: activeConn.id,
           action: 'APPLY',
           payload: {
-            plan: SchemaPlan.STANDARD_ACTIVE,
+            plan: SchemaPlan.SCHEMA_ACTIVE,
             schemaName: workspaceProvisionInfo.schemaName,
             appName: providerName,
             appProfile: (metadata?.appProfile as string) || 'standard',

@@ -16,7 +16,7 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import {
   listConnectionInbound, listConnectionReplica, listConnectionNormalized, listConnectionOutbound, listConnectionNormalizedTypes,
-  updateRecord, deleteRecord, syncConnectionObject,
+  updateRecord, deleteRecord, syncConnectionObject, syncConnectionRecord,
   type ExplorerPage,
 } from '../api/data-explorer.api';
 import { listObjects } from '../../stitches/api/metadata.api';
@@ -156,15 +156,21 @@ function coerceValue(originalValue: unknown, stringValue: string): unknown {
 
 function DataTableRow<T extends Record<string, unknown>>({ 
   row, 
+  selected,
+  onToggleSelect,
   onDelete,
   onViewTrace,
+  onFetchLive,
   onUpdateCell,
   onEditJson,
   tabId
 }: { 
   readonly row: import('@tanstack/react-table').Row<T>; 
+  readonly selected?: boolean;
+  readonly onToggleSelect?: () => void;
   readonly onDelete: (row: T) => void;
   readonly onViewTrace: (row: T) => void;
+  readonly onFetchLive?: (row: T) => void;
   readonly onUpdateCell: (row: T, field: string, value: unknown) => Promise<void>;
   readonly onEditJson: (row: T, field: string, value: unknown) => void;
   readonly tabId: string;
@@ -176,8 +182,16 @@ function DataTableRow<T extends Record<string, unknown>>({
     <>
       <tr 
         onClick={() => setExpanded(!expanded)} 
-        className="border-b border-border/60 hover:bg-muted/20 transition-colors cursor-pointer bg-muted/10 group"
+        className={`border-b border-border/60 hover:bg-muted/20 transition-colors cursor-pointer group ${selected ? 'bg-primary/5' : 'bg-muted/10'}`}
       >
+        <td className="px-4 py-3 align-middle sticky left-0 z-10 border-r border-border/10 bg-inherit" onClick={e => e.stopPropagation()}>
+          <input 
+            type="checkbox" 
+            checked={selected} 
+            onChange={onToggleSelect}
+            className="rounded border-border focus:ring-primary"
+          />
+        </td>
         {row.getVisibleCells().map((cell: import('@tanstack/react-table').Cell<T, unknown>) => (
           <td key={cell.id} className="p-0 align-top max-w-[240px] border-r border-border/10">
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -213,6 +227,11 @@ function DataTableRow<T extends Record<string, unknown>>({
               <div className="flex justify-between items-center mb-4 border-b border-border pb-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Full Record Details</h4>
                 <div className="flex gap-2">
+                  {tabId === 'replica' && onFetchLive && (
+                    <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onFetchLive(rowData); }} className="h-7 text-xs shadow-sm text-primary border-primary/30 hover:bg-primary/5">
+                      <RefreshCw className="w-3 h-3 mr-1" /> Fetch Live
+                    </Button>
+                  )}
                   <Button variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); onDelete(rowData); }} className="h-7 text-xs">
                     <Trash2 className="w-3 h-3 mr-1" /> Delete
                   </Button>
@@ -326,7 +345,8 @@ function DataTable<T extends Record<string, unknown>>({
   onUpdateCell,
   onEditJson,
   onDelete,
-  onViewTrace
+  onViewTrace,
+  onFetchSelected
 }: { 
   readonly rows: T[];
   readonly tabId: string;
@@ -334,7 +354,10 @@ function DataTable<T extends Record<string, unknown>>({
   readonly onEditJson: (row: T, field: string, value: unknown) => void;
   readonly onDelete: (row: T) => void;
   readonly onViewTrace: (row: T) => void;
+  readonly onFetchSelected?: (rows: T[]) => void;
 }) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   const columnSet = new Set<string>();
   for (const row of rows) {
     for (const key of Object.keys(row)) {
@@ -393,8 +416,22 @@ function DataTable<T extends Record<string, unknown>>({
     getCoreRowModel: getCoreRowModel(),
   });
 
+  const allSelected = rows.length > 0 && selectedIds.size === rows.length;
+  const toggleAll = () => {
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(rows.map(r => String(r.id))));
+  };
+
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
+      {selectedIds.size > 0 && onFetchSelected && tabId === 'replica' && (
+        <div className="bg-primary/5 border-b border-border p-2 flex justify-between items-center px-4">
+          <span className="text-sm font-medium text-primary">{selectedIds.size} record{selectedIds.size > 1 ? 's' : ''} selected</span>
+          <Button size="sm" onClick={() => onFetchSelected(rows.filter(r => selectedIds.has(String(r.id))))} className="h-8 gap-2">
+            <RefreshCw className="h-3.5 w-3.5" /> Fetch Selected
+          </Button>
+        </div>
+      )}
       {rows.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground text-sm">No records found.</div>
       ) : (
@@ -402,6 +439,14 @@ function DataTable<T extends Record<string, unknown>>({
           <thead>
             {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id} className="bg-muted/40 border-b border-border">
+              <th className="px-4 py-3 w-12 sticky left-0 bg-muted/40 z-10 border-r border-border/10">
+                <input 
+                  type="checkbox" 
+                  checked={allSelected} 
+                  onChange={toggleAll}
+                  className="rounded border-border focus:ring-primary"
+                />
+              </th>
               {headerGroup.headers.map(header => (
                 <th key={header.id} className="text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap">
                   {flexRender(header.column.columnDef.header, header.getContext())}
@@ -416,8 +461,16 @@ function DataTable<T extends Record<string, unknown>>({
             <DataTableRow 
               key={row.id} 
               row={row} 
+              selected={selectedIds.has(String(row.original.id))}
+              onToggleSelect={() => {
+                const newSet = new Set(selectedIds);
+                if (newSet.has(String(row.original.id))) newSet.delete(String(row.original.id));
+                else newSet.add(String(row.original.id));
+                setSelectedIds(newSet);
+              }}
               onDelete={onDelete}
               onViewTrace={onViewTrace}
+              onFetchLive={onFetchSelected ? () => onFetchSelected([row.original]) : undefined}
               onUpdateCell={onUpdateCell}
               onEditJson={onEditJson}
               tabId={tabId}
@@ -548,6 +601,23 @@ function TabPanel({
     setAppliedFilters(filters);
   };
 
+  const [manualFetchId, setManualFetchId] = useState('');
+  const [isManualFetching, setIsManualFetching] = useState(false);
+
+  const handleManualFetch = async () => {
+    if (!manualFetchId.trim() || !objectType) return;
+    setIsManualFetching(true);
+    try {
+      await syncConnectionRecord(workspaceId, getDataSourceId(), objectType, [manualFetchId.trim()]);
+      toast({ description: `Triggered fetch for record ${manualFetchId.trim()}.` });
+      setManualFetchId('');
+    } catch (e: unknown) {
+      toast({ variant: 'destructive', description: `Failed to fetch record: ${(e as Error).message}` });
+    } finally {
+      setIsManualFetching(false);
+    }
+  };
+
   const handleUpdateCell = async (row: Record<string, unknown>, field: string, value: unknown) => {
     try {
       await updateRecord(workspaceId, getDataSourceId(), tabId, String(row.id), { [field]: value });
@@ -672,6 +742,28 @@ function TabPanel({
         </div>
       </div>
       
+      {tabId === 'replica' && objectType && (
+        <div className="flex items-center gap-2 mb-4 p-3 bg-muted/20 border border-border rounded-lg">
+          <input
+            type="text"
+            placeholder="Enter Source ID to fetch..."
+            className="h-8 text-sm rounded-md border border-border bg-background px-3 flex-1 max-w-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            value={manualFetchId}
+            onChange={(e) => setManualFetchId(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void handleManualFetch()}
+          />
+          <Button 
+            size="sm" 
+            onClick={() => void handleManualFetch()} 
+            disabled={!manualFetchId.trim() || isManualFetching}
+            className="h-8 gap-2"
+          >
+            {isManualFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Fetch Record
+          </Button>
+        </div>
+      )}
+
       {showFilters && (
         <QueryBuilder 
           filters={filters} 
@@ -688,6 +780,16 @@ function TabPanel({
         onEditJson={(row, field, value) => setEditingJson({ row, field, value })}
         onDelete={handleDelete}
         onViewTrace={handleViewTrace}
+        onFetchSelected={async (rows) => {
+          if (!objectType) return;
+          const ids = rows.map(r => String(r.id));
+          try {
+            await syncConnectionRecord(workspaceId, getDataSourceId(), objectType, ids);
+            toast({ description: `Successfully triggered fetch for ${ids.length} records. Data should appear shortly.` });
+          } catch (e: unknown) {
+            toast({ variant: 'destructive', description: `Failed to fetch records: ${(e as Error).message}` });
+          }
+        }}
       />
       {result && <Pagination page={page} total={result.total} limit={LIMIT} onPage={handlePage} />}
       

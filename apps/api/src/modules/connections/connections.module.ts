@@ -15,6 +15,7 @@ import { RegistryOAuthRefreshClient } from './connections/registry-token-refresh
 import { OauthStateService } from './oauth-state.service.js';
 import { PiecesModule } from '@soopa/piece-registry';
 import { StorageResolverModule } from '@soopa/pipeline';
+import { QueueModule } from '@soopa/queue';
 
 import { DATABASE_CONNECTION } from '@soopa/database';
 import { type DrizzleDb } from '@soopa/database';
@@ -53,7 +54,7 @@ import { GetExistingOAuthCredentialsUseCase } from './core/use-cases/get-existin
  */
 @Global()
 @Module({
-  imports: [DatabaseModule, PiecesModule, StorageResolverModule],
+  imports: [DatabaseModule, PiecesModule, StorageResolverModule, QueueModule],
   controllers: [OAuthCallbackController, CredentialController, OAuthController],
   providers: [
     {

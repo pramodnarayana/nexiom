@@ -8,6 +8,13 @@ class MockSyncRunner extends SyncRunner {
       status: 'succeeded',
     });
   }
+
+  fetchRecords(connectionId: string): Promise<SyncResult> {
+    return Promise.resolve({
+      connectionId,
+      status: 'succeeded',
+    });
+  }
 }
 
 describe('SyncRunner', () => {

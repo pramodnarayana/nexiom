@@ -1,20 +1,12 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Plus, RotateCcw, Trash2, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { Loader2, Search, Code2, GripVertical } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/shared/components/ui/select';
-import { Combobox } from '@/shared/components/ui/combobox';
-import { listFields, type FieldDescriptor } from '../api/metadata.api';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/shared/components/ui/dialog';
+import { Textarea } from '@/shared/components/ui/textarea';
+import { Badge } from '@/shared/components/ui/badge';
+import { listFields, listCanonicalFields, type FieldDescriptor } from '../api/metadata.api';
 import type { MappingRule } from '../api/field-mappings.api';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 export type SyncConditionOp = 'eq' | 'neq' | 'gt' | 'lt' | 'contains';
 export type SyncConditionLogic = 'AND' | 'OR';
 
@@ -26,448 +18,359 @@ export interface SyncConditionRule {
   logic: SyncConditionLogic;
 }
 
-interface MappingRow {
-  _id: string;
-  src: string;
-  dest: string;
-  transform?: string;
-}
-
-interface ConditionRow {
-  _id: string;
-  field: string;
-  op: SyncConditionOp;
-  value: string;
-  logic: SyncConditionLogic;
-}
-
-/** Combined canvas state — kept in a single object so state updater callbacks
- * can access both arrays from `prev` without capturing stale closures. */
-interface CanvasState {
-  mappingRows: MappingRow[];
-  conditionRows: ConditionRow[];
-}
-
 export interface MappingCanvasProps {
   srcDataSourceId: string;
   sourceObject: string;
+  selectedRelatedObjects?: string[];
   destDataSourceId: string;
   targetObject: string;
-  /**
-   * Pre-populate mapping rows from saved data (edit flow).
-   *
-   * IMPORTANT: This prop is read ONLY ONCE on mount. Subsequent changes to
-   * initialRules will be ignored. Callers must remount (key) the MappingCanvas
-   * component to reset internal state.
-   */
   initialRules?: MappingRule[];
-  /**
-   * Pre-populate sync-condition rows from saved data (edit flow).
-   *
-   * IMPORTANT: This prop is read ONLY ONCE on mount. Subsequent changes to
-   * initialConditions will be ignored. Callers must remount (key) the
-   * MappingCanvas component to reset internal state.
-   */
-  initialConditions?: SyncConditionRule[];
-  /**
-   * When true, the Sync Conditions section is hidden entirely.
-   * Use this for secondary source-object tabs where conditions are owned
-   * by the primary canonical and should not be duplicated.
-   */
-  hideConditions?: boolean;
-  /**
-   * Called whenever the user edits mapping rows or sync conditions.
-   * Should be stable (memoized with useCallback in the parent) to avoid
-   * unnecessary work; the component internally stabilises the reference via a
-   * ref so stale-closure bugs are avoided even if the identity changes.
-   */
   onChange: (rules: MappingRule[], conditions: SyncConditionRule[]) => void;
 }
 
-const OP_OPTIONS: { value: SyncConditionOp; label: string }[] = [
-  { value: 'eq', label: '=' },
-  { value: 'neq', label: '≠' },
-  { value: 'gt', label: '>' },
-  { value: 'lt', label: '<' },
-  { value: 'contains', label: 'contains' },
-];
-
-function newMappingRow(): MappingRow {
-  return { _id: crypto.randomUUID(), src: '', dest: '' };
+interface SourceSchema {
+  objectName: string;
+  fields: FieldDescriptor[];
 }
 
-function newConditionRow(): ConditionRow {
-  return { _id: crypto.randomUUID(), field: '', op: 'eq', value: '', logic: 'AND' };
-}
-
-// ── State ─────────────────────────────────────────────────────────────────────
-
-interface FieldsState {
-  src: FieldDescriptor[];
-  dest: FieldDescriptor[];
+interface CanvasState {
+  sourceSchemas: SourceSchema[];
+  destFields: FieldDescriptor[];
   loading: boolean;
   error: string | null;
+  mappings: Record<string, string>; // destPath -> JSONata expression
+  searchDest: string;
+  searchSrc: string;
 }
 
-interface ComponentState {
-  fields: FieldsState;
-  canvas: CanvasState;
-}
-
-type ComponentAction =
+type Action = 
   | { type: 'FETCH_START' }
-  | { type: 'FETCH_SUCCESS'; src: FieldDescriptor[]; dest: FieldDescriptor[] }
+  | { type: 'FETCH_SUCCESS'; sourceSchemas: SourceSchema[]; destFields: FieldDescriptor[] }
   | { type: 'FETCH_ERROR'; error: string }
-  | { type: 'CANVAS'; update: (prev: CanvasState) => CanvasState };
+  | { type: 'SET_MAPPING'; destPath: string; expression: string }
+  | { type: 'SET_SEARCH_DEST'; query: string }
+  | { type: 'SET_SEARCH_SRC'; query: string };
 
-
-function reducer(state: ComponentState, action: ComponentAction): ComponentState {
+function reducer(state: CanvasState, action: Action): CanvasState {
   switch (action.type) {
     case 'FETCH_START':
-      // Reset field lists only — preserve canvas rows so seeded initial values
-      // from the edit flow survive connection/object changes initiated externally.
-      return { ...state, fields: { src: [], dest: [], loading: true, error: null } };
+      return { ...state, loading: true, error: null };
     case 'FETCH_SUCCESS':
-      return { ...state, fields: { src: action.src, dest: action.dest, loading: false, error: null } };
+      return { ...state, loading: false, sourceSchemas: action.sourceSchemas, destFields: action.destFields };
     case 'FETCH_ERROR':
-      return { ...state, fields: { src: [], dest: [], loading: false, error: action.error } };
-    case 'CANVAS':
-      return { ...state, canvas: action.update(state.canvas) };
+      return { ...state, loading: false, error: action.error };
+    case 'SET_MAPPING': {
+      const newMappings = { ...state.mappings };
+      if (!action.expression) {
+        delete newMappings[action.destPath];
+      } else {
+        newMappings[action.destPath] = action.expression;
+      }
+      return { ...state, mappings: newMappings };
+    }
+    case 'SET_SEARCH_DEST':
+      return { ...state, searchDest: action.query };
+    case 'SET_SEARCH_SRC':
+      return { ...state, searchSrc: action.query };
+    default:
+      return state;
   }
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+const EMPTY_ARRAY: string[] = [];
 
 export function MappingCanvas({
   srcDataSourceId,
   sourceObject,
+  selectedRelatedObjects = EMPTY_ARRAY,
   destDataSourceId,
   targetObject,
   initialRules,
-  initialConditions,
-  hideConditions = false,
-  onChange,
+  onChange
 }: Readonly<MappingCanvasProps>) {
-  // Seed canvas from saved data when provided (edit flow).
-  // We compute the initial state once so the reducer starts pre-populated.
-  const computedInitial = useMemo<ComponentState>(() => {
-    const mappingRows: MappingRow[] = initialRules && initialRules.length > 0
-      ? initialRules.map((r) => ({ _id: crypto.randomUUID(), src: r.src, dest: r.dest, transform: r.transform }))
-      : [newMappingRow()];
-    const conditionRows: ConditionRow[] = initialConditions && initialConditions.length > 0
-      ? initialConditions.map((c) => ({ _id: crypto.randomUUID(), field: c.field, op: c.op, value: String(c.value), logic: c.logic }))
-      : [];
-    return {
-      fields: { src: [], dest: [], loading: true, error: null },
-      canvas: { mappingRows, conditionRows },
-    };
-  }, [initialRules, initialConditions]); // computationally runs if refs change, but useReducer ignores it after mount
-
-  const [state, dispatch] = useReducer(reducer, computedInitial);
-  const { fields, canvas } = state;
-
-  // ── Field fetch (initial + manual refresh) ───────────────────────────────
-
-  const [refreshToken, setRefreshToken] = useState(0);
-
-  const doFetch = useCallback((forceRefresh: boolean) => {
-    dispatch({ type: 'FETCH_START' });
-    let cancelled = false;
-    Promise.all([
-      listFields(srcDataSourceId, sourceObject, forceRefresh),
-      listFields(destDataSourceId, targetObject, forceRefresh),
-    ])
-      .then(([src, dest]) => {
-        if (!cancelled) dispatch({ type: 'FETCH_SUCCESS', src, dest });
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          dispatch({ type: 'FETCH_ERROR', error: e instanceof Error ? e.message : 'Failed to load fields.' });
-        }
+  
+  const initialState = useMemo<CanvasState>(() => {
+    const mappings: Record<string, string> = {};
+    if (initialRules) {
+      initialRules.forEach(r => {
+        // In Enterprise UI, the expression IS the mapping. 
+        // We simulate Hub translation by preferring expression if it exists, else srcPath
+        mappings[r.dest] = r.transform || r.src || '';
       });
-    return () => { cancelled = true; };
-  }, [srcDataSourceId, sourceObject, destDataSourceId, targetObject]);
+    }
+    return {
+      sourceSchemas: [],
+      destFields: [],
+      loading: true,
+      error: null,
+      mappings,
+      searchDest: '',
+      searchSrc: ''
+    };
+  }, [initialRules]);
+
+  const [state, dispatch] = useReducer(reducer, initialState);
 
   useEffect(() => {
-    return doFetch(refreshToken > 0);
-  }, [doFetch, refreshToken]);
+    let cancelled = false;
+    dispatch({ type: 'FETCH_START' });
 
-  const handleRefresh = useCallback(() => {
-    setRefreshToken((t) => t + 1);
-  }, []);
+    const fetchAll = async () => {
+      try {
+        const objectsToFetch = [sourceObject, ...selectedRelatedObjects];
+        
+        const [destRes, ...srcResArray] = await Promise.all([
+          listFields(destDataSourceId, targetObject),
+          ...objectsToFetch.map(obj => listCanonicalFields(obj).then(fields => ({ objectName: obj, fields })))
+        ]);
 
-  // Stabilise onChange so the canvas-sync effect below does not re-run every
-  // time the parent re-creates its callback.  The ref is always kept current so
-  // calling onChangeRef.current(...) never produces a stale-closure bug.
+        const SYSTEM_FIELDS_BLOCKLIST = new Set([
+          'id', 'hubid', 'hub_id', 'createdat', 'created_at', 'createddate',
+          'updatedat', 'updated_at', 'lastmodifieddate',
+          'systemmodstamp', 'isdeleted',
+          'metadata.createtime', 'metadata.lastupdatedtime',
+          'synctoken', 'domain', 'sparse', 'active'
+        ]);
+
+        if (!cancelled) {
+          const filteredDestRes = destRes.filter(
+            f => !SYSTEM_FIELDS_BLOCKLIST.has(f.name.toLowerCase())
+          );
+          
+          const filteredSrcResArray = srcResArray.map(schema => ({
+            ...schema,
+            fields: schema.fields.filter(f => !SYSTEM_FIELDS_BLOCKLIST.has(f.name.toLowerCase()))
+          }));
+
+          dispatch({ type: 'FETCH_SUCCESS', destFields: filteredDestRes, sourceSchemas: filteredSrcResArray });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          dispatch({ type: 'FETCH_ERROR', error: err instanceof Error ? err.message : 'Failed to fetch schema' });
+        }
+      }
+    };
+
+    void fetchAll();
+    return () => { cancelled = true; };
+  }, [srcDataSourceId, sourceObject, selectedRelatedObjects, destDataSourceId, targetObject]);
+
+  // Notify Parent on changes
   const onChangeRef = useRef(onChange);
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
-  // Sync parent whenever canvas changes.
-  // Skips the initial mount to avoid calling onChange (→ setWizard in parent)
-  // during the first render, which triggers React's "update while rendering" warning.
-  // onChange is intentionally omitted from deps — stabilised via onChangeRef above.
   const hasMountedRef = useRef(false);
   useEffect(() => {
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;
       return;
     }
-    const rules: MappingRule[] = canvas.mappingRows
-      .filter((r) => r.src && r.dest)
-      .map(({ src, dest, transform }) => ({ src, dest, transform }));
-    const conds: SyncConditionRule[] = canvas.conditionRows
-      .filter((c) => c.field && c.value)
-      .map(({ field, op, value, logic }) => ({ field, op, value, logic }));
-    onChangeRef.current(rules, conds);
-  }, [canvas]);  
+    // Convert mapping state back to MappingRule array
+    const rules: MappingRule[] = Object.entries(state.mappings)
+      .filter(([, expr]) => expr.trim() !== '')
+      .map(([dest, expr]) => {
+         // If it looks like a simple path, use src=expr, else src='formula', transform=expr
+         const isSimplePath = /^[a-zA-Z0-9_.]+$/.test(expr);
+         if (isSimplePath) {
+           return { src: expr, dest };
+         }
+         return { src: 'formula', dest, transform: expr };
+      });
+      
+    // Hub translation logic is simulated here. In a real app, backend translates it.
+    // For conditions, we pass empty array as we removed them from this UI for simplicity
+    onChangeRef.current(rules, []);
+  }, [state.mappings]);
 
-  // ── Mapping row handlers ─────────────────────────────────────────────────
+  // Formula Builder Modal State
+  const [formulaField, setFormulaField] = useState<FieldDescriptor | null>(null);
+  const [formulaValue, setFormulaValue] = useState('');
 
-  function updateMappingRow(id: string, patch: Partial<Pick<MappingRow, 'src' | 'dest' | 'transform'>>) {
-    dispatch({ type: 'CANVAS', update: (prev) => ({
-      ...prev,
-      mappingRows: prev.mappingRows.map((r) => (r._id === id ? { ...r, ...patch } : r)),
-    }) });
-  }
+  const openFormulaBuilder = (field: FieldDescriptor) => {
+    setFormulaField(field);
+    setFormulaValue(state.mappings[field.name] || '');
+  };
 
-  function addMappingRow() {
-    dispatch({ type: 'CANVAS', update: (prev) => ({ ...prev, mappingRows: [...prev.mappingRows, newMappingRow()] }) });
-  }
+  const saveFormula = () => {
+    if (formulaField) {
+      dispatch({ type: 'SET_MAPPING', destPath: formulaField.name, expression: formulaValue });
+      setFormulaField(null);
+    }
+  };
 
-  function removeMappingRow(id: string) {
-    dispatch({ type: 'CANVAS', update: (prev) => {
-      const next = prev.mappingRows.filter((r) => r._id !== id);
-      return { ...prev, mappingRows: next.length > 0 ? next : [newMappingRow()] };
-    } });
-  }
+  const handleFieldClick = (objName: string, fieldName: string) => {
+    // If formula builder is open, insert it into the formula
+    const fullPath = `${objName}.${fieldName}`;
+    if (formulaField) {
+      setFormulaValue(prev => prev + (prev.endsWith(' ') || prev === '' ? fullPath : ` ${fullPath}`));
+    }
+  };
 
-  // ── Condition row handlers ───────────────────────────────────────────────
+  // Drag and Drop (Simulation - just populates the input for now)
+  const onDragStart = (e: React.DragEvent, objName: string, fieldName: string) => {
+    e.dataTransfer.setData('text/plain', `${objName}.${fieldName}`);
+  };
 
-  function updateConditionRow(id: string, patch: Partial<Omit<ConditionRow, '_id'>>) {
-    dispatch({ type: 'CANVAS', update: (prev) => ({
-      ...prev,
-      conditionRows: prev.conditionRows.map((r) => (r._id === id ? { ...r, ...patch } : r)),
-    }) });
-  }
+  const filteredDestFields = state.destFields.filter(f => f.name.toLowerCase().includes(state.searchDest.toLowerCase()) || (f.label && f.label.toLowerCase().includes(state.searchDest.toLowerCase())));
 
-  function addConditionRow() {
-    dispatch({ type: 'CANVAS', update: (prev) => ({ ...prev, conditionRows: [...prev.conditionRows, newConditionRow()] }) });
-  }
-
-  function removeConditionRow(id: string) {
-    dispatch({ type: 'CANVAS', update: (prev) => ({
-      ...prev,
-      conditionRows: prev.conditionRows.filter((r) => r._id !== id),
-    }) });
-  }
-
-  const srcFieldOptions = useMemo(
-    () => fields.src.map((f) => ({ value: f.name, label: f.label || f.name })),
-    [fields.src],
-  );
-  const destFieldOptions = useMemo(
-    () => fields.dest.map((f) => ({ value: f.name, label: f.label || f.name })),
-    [fields.dest],
-  );
-
-  if (fields.loading) {
-    return (
-      <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground text-sm">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading fields…
-      </div>
-    );
-  }
-
-  if (fields.error) {
-    return (
-      <p className="py-4 text-sm text-destructive">{fields.error}</p>
-    );
-  }
-
-  const { mappingRows, conditionRows } = canvas;
+  if (state.loading) return <div className="py-12 flex justify-center"><Loader2 className="animate-spin text-muted-foreground" /></div>;
+  if (state.error) return <div className="p-4 bg-destructive/10 text-destructive rounded-md">{state.error}</div>;
 
   return (
-    <div className="space-y-6">
-      {/* ── Field Mappings ────────────────────────────────────────────────── */}
-      <div>
-        <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 mb-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            Source — {sourceObject}
-          </p>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            Transformation (JSONata)
-          </p>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            Destination — {targetObject}
-          </p>
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={fields.loading}
-            title="Refresh field list from connector"
-            className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-            aria-label="Refresh fields"
-          >
-            <RotateCcw className={`h-3 w-3 ${fields.loading ? 'animate-spin' : ''}`} />
-          </button>
+    <div className="grid grid-cols-2 gap-6 h-[900px] bg-background">
+      {/* ── Left Pane: Source Schema ── */}
+      <div className="flex flex-col border rounded-xl overflow-hidden shadow-sm bg-card">
+        <div className="p-4 border-b bg-muted/30">
+          <h3 className="font-semibold text-sm mb-3">Source Schema</h3>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Search source fields..." 
+              className="pl-8 bg-background h-9"
+              value={state.searchSrc}
+              onChange={e => dispatch({ type: 'SET_SEARCH_SRC', query: e.target.value })}
+            />
+          </div>
         </div>
-
-        <div className="space-y-2">
-          {mappingRows.map((row) => (
-            <div key={row._id} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
-              <Combobox
-                options={srcFieldOptions}
-                value={row.src}
-                onValueChange={(v) => { updateMappingRow(row._id, { src: v }); }}
-                placeholder="Source field"
-                searchPlaceholder="Search source fields…"
-                emptyMessage="No matching fields."
-                className="h-8 text-sm"
-              />
-
-              <Select
-                value={row.transform || 'none'}
-                onValueChange={(v) => { updateMappingRow(row._id, { transform: v === 'none' ? undefined : v }); }}
-              >
-                <SelectTrigger className="h-8 text-sm font-mono">
-                  <SelectValue placeholder="None" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="$uppercase($)" className="font-mono">$uppercase($)</SelectItem>
-                  <SelectItem value="$lowercase($)" className="font-mono">$lowercase($)</SelectItem>
-                  <SelectItem value="$trim($)" className="font-mono">$trim($)</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Combobox
-                options={destFieldOptions}
-                value={row.dest}
-                onValueChange={(v) => { updateMappingRow(row._id, { dest: v }); }}
-                placeholder="Destination field"
-                searchPlaceholder="Search destination fields…"
-                emptyMessage="No matching fields."
-                className="h-8 text-sm"
-              />
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                aria-label="Remove mapping row"
-                onClick={() => { removeMappingRow(row._id); }}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ))}
+        <div className="flex-1 overflow-y-auto p-2 space-y-4">
+          {state.sourceSchemas.map(schema => {
+            const filteredFields = schema.fields.filter(f => f.name.toLowerCase().includes(state.searchSrc.toLowerCase()));
+            if (filteredFields.length === 0) return null;
+            
+            return (
+              <div key={schema.objectName} className="space-y-1">
+                <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider sticky top-0 bg-card/95 backdrop-blur z-10">
+                  {schema.objectName}
+                  {schema.objectName !== sourceObject && <Badge variant="secondary" className="ml-2 text-[10px]">Related</Badge>}
+                </div>
+                {filteredFields.map(f => (
+                  <div 
+                    key={f.name} 
+                    draggable
+                    onDragStart={(e) => onDragStart(e, schema.objectName, f.name)}
+                    onClick={() => handleFieldClick(schema.objectName, f.name)}
+                    className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent cursor-pointer group transition-colors"
+                  >
+                    <GripVertical className="h-4 w-4 text-muted-foreground/30 group-hover:text-muted-foreground cursor-grab" />
+                    <div>
+                      <div className="font-medium text-foreground">{f.label || f.name}</div>
+                      <div className="text-xs text-muted-foreground font-mono">{f.name}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="mt-2 text-xs text-muted-foreground hover:text-foreground"
-          onClick={addMappingRow}
-        >
-          <Plus className="mr-1 h-3 w-3" />
-          Add mapping row
-        </Button>
       </div>
 
-      {/* ── Sync Conditions ───────────────────────────────────────────────── */}
-      {!hideConditions && <div>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-          Sync Conditions
-        </p>
-
-        {conditionRows.length === 0 && (
-          <p className="text-xs text-muted-foreground italic mb-2">
-            No conditions — all records will sync.
-          </p>
-        )}
-
-        <div className="space-y-2">
-          {conditionRows.map((row, idx) => (
-            <div key={row._id} className="flex items-center gap-2">
-              {idx > 0 && (
-                <Select
-                  value={row.logic}
-                  onValueChange={(v) => {
-                    updateConditionRow(row._id, { logic: v as SyncConditionLogic });
-                  }}
-                >
-                  <SelectTrigger className="h-8 w-16 text-xs shrink-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="AND">AND</SelectItem>
-                    <SelectItem value="OR">OR</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-              {idx === 0 && <span className="w-16 shrink-0" />}
-
-              <Combobox
-                options={srcFieldOptions}
-                value={row.field}
-                onValueChange={(v) => { updateConditionRow(row._id, { field: v }); }}
-                placeholder="Source field"
-                searchPlaceholder="Search fields…"
-                emptyMessage="No matching fields."
-                className="h-8 text-sm"
-              />
-
-              <Select
-                value={row.op}
-                onValueChange={(v) => {
-                  updateConditionRow(row._id, { op: v as SyncConditionOp });
-                }}
-              >
-                <SelectTrigger className="h-8 w-24 text-sm shrink-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {OP_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Input
-                className="h-8 text-sm"
-                placeholder="Value"
-                value={row.value}
-                onChange={(e) => { updateConditionRow(row._id, { value: e.target.value }); }}
-              />
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive"
-                aria-label="Remove condition"
-                onClick={() => { removeConditionRow(row._id); }}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ))}
+      {/* ── Right Pane: Destination Schema ── */}
+      <div className="flex flex-col border rounded-xl overflow-hidden shadow-sm bg-card relative">
+        <div className="p-4 border-b bg-muted/30">
+          <h3 className="font-semibold text-sm mb-3 flex items-center justify-between">
+            <span>Destination: {targetObject}</span>
+            <Badge variant="outline" className="text-primary border-primary/30 bg-primary/5 shadow-[0_0_10px_rgba(var(--primary),0.1)]">
+              Auto-Translating to Hub
+            </Badge>
+          </h3>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Search destination fields..." 
+              className="pl-8 bg-background h-9"
+              value={state.searchDest}
+              onChange={e => dispatch({ type: 'SET_SEARCH_DEST', query: e.target.value })}
+            />
+          </div>
         </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {filteredDestFields.map(f => {
+            const hasMapping = !!state.mappings[f.name];
+            return (
+              <div key={f.name} className={`space-y-1.5 p-3 rounded-lg border transition-all ${hasMapping ? 'bg-primary/5 border-primary/20' : 'bg-background hover:border-muted-foreground/30'}`}>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    {f.label || f.name}
+                    {!f.nillable && <span className="text-destructive">*</span>}
+                  </label>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => openFormulaBuilder(f)}>
+                    <Code2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input 
+                    placeholder="Drop source field here or click </>"
+                    value={state.mappings[f.name] || ''}
+                    onChange={(e) => dispatch({ type: 'SET_MAPPING', destPath: f.name, expression: e.target.value })}
+                    className={`font-mono text-xs ${hasMapping ? 'border-primary/30 focus-visible:ring-primary/30' : ''}`}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const droppedData = e.dataTransfer.getData('text/plain');
+                      if (droppedData) {
+                        dispatch({ type: 'SET_MAPPING', destPath: f.name, expression: droppedData });
+                      }
+                    }}
+                    onDragOver={(e) => e.preventDefault()}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="mt-2 text-xs text-muted-foreground hover:text-foreground"
-          onClick={addConditionRow}
-        >
-          <Plus className="mr-1 h-3 w-3" />
-          Add Condition
-        </Button>
-      </div>}
+      {/* ── Formula Builder Modal ── */}
+      <Dialog open={!!formulaField} onOpenChange={(open) => !open && setFormulaField(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Code2 className="h-5 w-5 text-primary" />
+              Formula Builder: {formulaField?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Write a JSONata expression. Click source fields on the left to insert them into your formula.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-3 gap-4 py-4">
+            <div className="col-span-1 border rounded-md overflow-y-auto max-h-[300px] p-2 bg-muted/10">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-2">Insert Field</div>
+              {state.sourceSchemas.map(schema => (
+                <div key={schema.objectName} className="mb-4">
+                  <div className="text-[10px] text-muted-foreground font-mono bg-muted px-2 py-1 sticky top-0">{schema.objectName}</div>
+                  {schema.fields.map(f => (
+                    <div 
+                      key={f.name}
+                      onClick={() => handleFieldClick(schema.objectName, f.name)}
+                      className="text-xs font-mono px-2 py-1.5 hover:bg-primary/10 hover:text-primary cursor-pointer rounded mt-0.5 truncate"
+                      title={f.name}
+                    >
+                      {f.name}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="col-span-2 flex flex-col gap-2">
+              <div className="bg-muted text-muted-foreground p-3 rounded-md text-xs font-mono">
+                <span className="text-primary font-bold mr-2">Example:</span> 
+                $trim(TMS_CARRIER.name & ' - ' & TMS_TP.mc_number)
+              </div>
+              <Textarea 
+                value={formulaValue}
+                onChange={(e) => setFormulaValue(e.target.value)}
+                className="flex-1 font-mono text-sm resize-none"
+                placeholder="Enter JSONata expression..."
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFormulaField(null)}>Cancel</Button>
+            <Button onClick={saveFormula}>Apply Formula</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

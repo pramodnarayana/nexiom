@@ -49,7 +49,7 @@ export function useTabPanel({
 
   const { toast } = useToast();
 
-  const getDataSourceId = useCallback(() => tabId === 'outbound' ? stitch.destDataSourceId : stitch.srcDataSourceId, [tabId, stitch.destDataSourceId, stitch.srcDataSourceId]);
+  const getDataSourceId = useCallback(() => tabId === 'outbound' ? stitch.destDataSourceId : stitch.sourceDataSourceId, [tabId, stitch.destDataSourceId, stitch.sourceDataSourceId]);
 
   useEffect(() => {
     let mounted = true;

@@ -15,4 +15,15 @@ export class StubSyncRunner extends SyncRunner {
     );
     return Promise.resolve({ connectionId, status: 'succeeded' });
   }
+
+  fetchRecords(
+    connectionId: string,
+    _objectType: string,
+    _recordIds: string[],
+  ): Promise<SyncResult> {
+    this.logger.debug(
+      `StubSyncRunner: fetchRecords connectionId=${connectionId} (no-op)`,
+    );
+    return Promise.resolve({ connectionId, status: 'succeeded' });
+  }
 }

@@ -13,25 +13,17 @@ import {
   DialogDescription,
 } from '@/shared/components/ui/dialog';
 import { useStitchesPage } from '../hooks/useStitchesPage';
-import type { StitchResponse, StitchStatus } from '../api/stitches.api';
+import type { StitchStatus } from '../api/stitches.api';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function statusVariant(status: StitchStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
   if (status === 'ACTIVE') return 'default';
-  if (status === 'PAUSED') return 'secondary';
+  if (status === 'INACTIVE') return 'secondary';
   return 'outline';
 }
 
-function nextSyncLabel(stitch: StitchResponse): string {
-  if (!stitch.scheduleEnabled) return 'Paused';
-  if (!stitch.lastScheduledAt) return 'Not yet run';
-  const next = new Date(stitch.lastScheduledAt).getTime() + stitch.syncIntervalMinutes * 60_000;
-  const diffMin = Math.round((next - Date.now()) / 60_000);
-  if (diffMin <= 0) return 'Due now';
-  if (diffMin < 60) return `~${diffMin} min`;
-  return `~${Math.round(diffMin / 60)} hr`;
-}
+
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -135,7 +127,7 @@ export function StitchesPage() {
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Every {stitch.syncIntervalMinutes} min · Next sync: {nextSyncLabel(stitch)}
+                  {stitch.canonicalObject} → {stitch.targetObject}
                 </p>
               </div>
               <div className="flex items-center gap-2 ml-4">

@@ -306,8 +306,6 @@ export function MultiObjectMappingEditor({
                 destDataSourceId={destDataSourceId}
                 targetObject={targetObject}
                 initialRules={entry.mappingRules}
-                initialConditions={isPrimary ? conditions : []}
-                hideConditions={!isPrimary}
                 onChange={handleCanvasChange(entry.sourceCanonical, isPrimary)}
               />
             </TabsContent>

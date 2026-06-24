@@ -29,7 +29,7 @@ describe('useTabPanel', () => {
 
   const stitch = {
     id: 's1',
-    srcDataSourceId: 'src1',
+    sourceDataSourceId: 'src1',
     destDataSourceId: 'dest1'
   } as any;
 

@@ -12,13 +12,11 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import { Combobox } from '@/shared/components/ui/combobox';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
+import { MultiCombobox } from '@/shared/components/ui/multi-combobox';
 import type { AvailableConnectionResponse } from '@/modules/workspaces/api/workspaces.api';
 import type { ObjectDescriptor } from '../api/metadata.api';
 import { useCreateStitchPage } from '../hooks/useCreateStitchPage';
 import { MappingCanvas } from '../components/MappingCanvas';
-import { DependencyList } from '../components/DependencyList';
-import { StitchConfigPanel } from '../components/StitchConfigPanel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -61,8 +59,11 @@ interface ObjectPickerBodyProps {
   objects: ObjectDescriptor[];
   objectsLoading: boolean;
   objectsError: string | null;
-  objectName: string;
-  onObjectChange: (name: string) => void;
+  objectName?: string;
+  onObjectChange?: (name: string) => void;
+  objectNames?: string[];
+  onObjectNamesChange?: (names: string[]) => void;
+  isMultiSelect?: boolean;
   onRefresh: () => void;
 }
 
@@ -72,6 +73,9 @@ function ObjectPickerBody({
   objectsError,
   objectName,
   onObjectChange,
+  objectNames,
+  onObjectNamesChange,
+  isMultiSelect,
   onRefresh,
 }: Readonly<ObjectPickerBodyProps>) {
   const options = useMemo(
@@ -92,15 +96,27 @@ function ObjectPickerBody({
   }
   return (
     <div className="flex items-center gap-2">
-      <Combobox
-        options={options}
-        value={objectName}
-        onValueChange={onObjectChange}
-        placeholder="Select an object"
-        searchPlaceholder="Search objects…"
-        emptyMessage="No matching objects."
-        className="flex-1"
-      />
+      {isMultiSelect && objectNames && onObjectNamesChange ? (
+        <MultiCombobox
+          options={options}
+          values={objectNames}
+          onValuesChange={onObjectNamesChange}
+          placeholder="Select objects"
+          searchPlaceholder="Search objects…"
+          emptyMessage="No matching objects."
+          className="flex-1"
+        />
+      ) : (
+        <Combobox
+          options={options}
+          value={objectName!}
+          onValueChange={onObjectChange!}
+          placeholder="Select an object"
+          searchPlaceholder="Search objects…"
+          emptyMessage="No matching objects."
+          className="flex-1"
+        />
+      )}
       <button
         type="button"
         onClick={onRefresh}
@@ -124,8 +140,11 @@ interface ConnectionObjectPickerProps {
   objects: ObjectDescriptor[];
   objectsLoading: boolean;
   objectsError: string | null;
-  objectName: string;
-  onObjectChange: (name: string) => void;
+  objectName?: string;
+  onObjectChange?: (name: string) => void;
+  objectNames?: string[];
+  onObjectNamesChange?: (names: string[]) => void;
+  isMultiSelect?: boolean;
   onRefreshObjects: () => void;
 }
 
@@ -139,6 +158,9 @@ function ConnectionObjectPicker({
   objectsError,
   objectName,
   onObjectChange,
+  objectNames,
+  onObjectNamesChange,
+  isMultiSelect,
   onRefreshObjects,
 }: Readonly<ConnectionObjectPickerProps>) {
   return (
@@ -173,6 +195,9 @@ function ConnectionObjectPicker({
             objectsError={objectsError}
             objectName={objectName}
             onObjectChange={onObjectChange}
+            objectNames={objectNames}
+            onObjectNamesChange={onObjectNamesChange}
+            isMultiSelect={isMultiSelect}
             onRefresh={onRefreshObjects}
           />
         </div>
@@ -219,7 +244,7 @@ export function CreateStitchPage() {
   }
 
   return (
-    <div className={`p-6 mx-auto space-y-6 ${step === 3 ? 'max-w-5xl' : 'max-w-2xl'}`}>
+    <div className={`p-6 space-y-6 ${step === 3 ? 'w-full' : 'max-w-2xl mx-auto'}`}>
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button
@@ -270,21 +295,12 @@ export function CreateStitchPage() {
                 objects={srcObjects}
                 objectsLoading={srcObjectsLoading}
                 objectsError={srcObjectsError}
-                objectName={wizard.sourceObject}
-                onObjectChange={(v) => { setWizard((prev) => ({ ...prev, sourceObject: v })); }}
-                onRefreshObjects={() => { loadSrcObjects(wizard.srcDataSourceId, true); }}
+                objectNames={wizard.sourceObjects}
+                onObjectNamesChange={(v) => { setWizard((prev) => ({ ...prev, sourceObjects: v })); }}
+                isMultiSelect={true}
+                onRefreshObjects={() => { loadSrcObjects(); }}
               />
 
-              {wizard.srcDataSourceId && wizard.sourceObject && (
-                  <div className="pt-2">
-                    <DependencyList 
-                        dataSourceId={wizard.srcDataSourceId} 
-                        objectName={wizard.sourceObject}
-                        selected={(wizard.config.selectedRelatedObjects as string[]) || []}
-                        onSelectionChange={(selected) => setWizard(prev => ({ ...prev, config: { ...prev.config, selectedRelatedObjects: selected } }))}
-                    />
-                  </div>
-              )}
 
               <div className="flex justify-between pt-2">
                 <Button variant="outline" onClick={() => { navigate(stitchesHref); }}>
@@ -327,28 +343,16 @@ export function CreateStitchPage() {
           {/* ── Step 3 ────────────────────────────────────────────────────── */}
           {step === 3 && (
             <>
-              <Tabs defaultValue="mapping" className="w-full">
-                <TabsList className="mb-4">
-                  <TabsTrigger value="mapping">Field Mappings</TabsTrigger>
-                  <TabsTrigger value="config">Advanced Configuration</TabsTrigger>
-                </TabsList>
-                <TabsContent value="mapping" className="outline-none">
-                    <MappingCanvas
-                        srcDataSourceId={wizard.srcDataSourceId}
-                        sourceObject={wizard.sourceObject}
-                        destDataSourceId={wizard.destDataSourceId}
-                        targetObject={wizard.targetObject}
-                        onChange={handleMappingChange}
-                    />
-                </TabsContent>
-                <TabsContent value="config" className="outline-none">
-                    <StitchConfigPanel
-                        dataSourceId={wizard.srcDataSourceId}
-                        value={wizard.config}
-                        onChange={(config) => setWizard((prev) => ({ ...prev, config }))}
-                    />
-                </TabsContent>
-              </Tabs>
+              <div className="w-full">
+                  <MappingCanvas
+                      srcDataSourceId={wizard.srcDataSourceId}
+                      sourceObject={wizard.sourceObjects[0]}
+                      selectedRelatedObjects={wizard.sourceObjects.slice(1)}
+                      destDataSourceId={wizard.destDataSourceId}
+                      targetObject={wizard.targetObject}
+                      onChange={handleMappingChange}
+                  />
+              </div>
 
               {submitError && (
                 <p className="text-sm text-destructive">{submitError}</p>
@@ -360,7 +364,7 @@ export function CreateStitchPage() {
                 </Button>
                 <Button disabled={submitting} onClick={() => { void handleCreate(); }}>
                   {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Create Stitch
+                  Save Stitch
                 </Button>
               </div>
             </>

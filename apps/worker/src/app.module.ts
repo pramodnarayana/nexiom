@@ -40,6 +40,7 @@ import { DrizzleGlobalPiecesRepositoryAdapter } from "./adapters/outbound/drizzl
 import { NestPieceRegistryAdapter } from "./adapters/outbound/nest-piece-registry.adapter.js";
 import { NodeFsGitRepositoryAdapter } from "./adapters/outbound/node-fs-git-repository.adapter.js";
 import { NestCacheInvalidatorAdapter } from "./adapters/outbound/nest-cache-invalidator.adapter.js";
+import { DomainProvisionerModule } from "./bootstrap/provision/domain-provisioner.module.js";
 
 import { AiEngineModule } from "@soopa/ai";
 
@@ -86,6 +87,7 @@ import { validateEnv } from "./config/env.validation.js";
       useFactory: createQueueModuleOptions,
     }),
     CacheModule,
+    DomainProvisionerModule,
     ProvisionModule,
     PipelineCoreModule,
 

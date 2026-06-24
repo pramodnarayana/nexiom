@@ -57,7 +57,7 @@ export class InboundOutboxPoller {
                 .where(
                   and(
                     eq(dataSources.tenantId, tenant.tenantId),
-                    inArray(dataSources.schemaPlan, ["STANDARD_ACTIVE"]),
+                    inArray(dataSources.schemaPlan, ["SCHEMA_ACTIVE"]),
                   ),
                 );
 

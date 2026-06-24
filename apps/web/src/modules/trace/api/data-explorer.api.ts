@@ -170,6 +170,12 @@ export async function syncConnectionObject(workspaceId: string, connectionId: st
   return res.data;
 }
 
+export async function syncConnectionRecord(workspaceId: string, connectionId: string, objectType: string, recordIds: string[]): Promise<unknown> {
+  const url = `/workspaces/${encodeURIComponent(workspaceId)}/connections/${encodeURIComponent(connectionId)}/sync/${encodeURIComponent(objectType)}/fetch`;
+  const res = await apiClient.post(url, { recordIds });
+  return res.data;
+}
+
 
 export interface TraceData {
   traceId: string;

@@ -44,6 +44,7 @@
     "@soopa/database": "workspace:*",
     "@soopa/dbmanager": "workspace:*",
     "@soopa/identity": "workspace:*",
+    "@soopa/migrator": "workspace:*",
     "@soopa/observability": "workspace:*",
     "@soopa/piece-framework": "workspace:*",
     "@soopa/piece-registry": "workspace:*",

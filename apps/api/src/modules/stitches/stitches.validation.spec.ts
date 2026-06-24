@@ -22,7 +22,7 @@ describe('CreateStitchSchema', () => {
     const result = CreateStitchSchema.safeParse({
       ...VALID_CREATE,
       syncCondition: [{ field: 'Region', op: 'eq', value: 'US' }],
-      status: 'PAUSED',
+      status: 'INACTIVE',
     });
     expect(result.success).toBe(true);
   });
@@ -71,13 +71,13 @@ describe('CreateStitchSchema', () => {
     }
   });
 
-  it('accepts ACTIVE and PAUSED status on create', () => {
+  it('accepts ACTIVE and INACTIVE status on create', () => {
     expect(
       CreateStitchSchema.safeParse({ ...VALID_CREATE, status: 'ACTIVE' })
         .success,
     ).toBe(true);
     expect(
-      CreateStitchSchema.safeParse({ ...VALID_CREATE, status: 'PAUSED' })
+      CreateStitchSchema.safeParse({ ...VALID_CREATE, status: 'INACTIVE' })
         .success,
     ).toBe(true);
   });

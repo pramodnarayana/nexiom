@@ -16,7 +16,7 @@ import { buildTenantSchema, assertValidSchemaName } from '@soopa/database';
 import { TokenManagerService } from '@soopa/credentials';
 import type { OAuthCredentialBlob } from '@soopa/credentials';
 import type { Piece } from '@soopa/piece-framework';
-import { DB_MANAGER, SchemaPlan, type DatabaseManager } from '@soopa/dbmanager';
+import { DB_MANAGER, type DatabaseManager } from '@soopa/dbmanager';
 import { REDIS_CLIENT, type Redis } from '@soopa/cache';
 import {
   StorageResolverService,
@@ -135,25 +135,6 @@ export class ConnectionSyncRunner {
     // Resolve the piece
     const piece = this.resolvePiece(conn.appName);
 
-    // Just-In-Time Provisioning (Approach 2)
-    // Provision the plugin-specific canonical entity tables for this app right before syncing.
-    // Standard tables were already created at connection time.
-    const schemaName =
-      await this.storageResolver.resolveSchemaName(connectionId);
-    const metadataAppProfile = (conn.metadata as Record<string, unknown>)
-      ?.appProfile;
-    const appProfile =
-      typeof metadataAppProfile === 'string' ? metadataAppProfile : 'standard';
-    await this.dbManager.applyPlan(
-      conn.orgId,
-      schemaName,
-      SchemaPlan.CANONICAL_ACTIVE,
-      {
-        appName: conn.appName,
-        appProfile,
-      },
-    );
-
     // Get ALL streams for the connection if objectType is not provided
     let streams: StreamDescriptor[] = [];
     if (objectType) {
@@ -196,6 +177,81 @@ export class ConnectionSyncRunner {
       connectionId,
       status: hasFailures ? 'failed' : 'succeeded',
       streamResults,
+    };
+  }
+
+  async fetchRecords(
+    connectionId: string,
+    objectType: string,
+    recordIds: string[],
+  ): Promise<SyncResult> {
+    const conn = await this.loadConnection(connectionId);
+    const credentials =
+      await this.tokenManager.getValidCredentials(connectionId);
+    const piece = this.resolvePiece(conn.appName);
+
+    if (typeof piece.executeFetch !== 'function') {
+      throw new BadRequestException(
+        `Piece "${conn.appName}" does not support executeFetch`,
+      );
+    }
+
+    const tenantDb = await this.dbManager.getTenantDb(conn.orgId);
+
+    const fetches = recordIds.map(async (recordId) => {
+      try {
+        const record = await piece.executeFetch!(
+          objectType,
+          recordId,
+          toCredentialsRecord(credentials),
+        );
+        return record ? { data: record, replicationKeyValue: recordId } : null;
+      } catch (err) {
+        this.logger.error(
+          `Failed to fetch record ${recordId} from ${objectType}: ${err}`,
+        );
+        return null;
+      }
+    });
+
+    const results = await Promise.all(fetches);
+    const validRecords = results.filter(
+      (
+        r,
+      ): r is { data: Record<string, unknown>; replicationKeyValue: string } =>
+        r !== null,
+    );
+
+    if (validRecords.length === 0) {
+      throw new NotFoundException(
+        `No records found for the provided IDs in ${objectType}`,
+      );
+    }
+
+    // Insert to inbound gateway using existing batching logic
+    const inserted = await this.insertGatewayBatch(
+      tenantDb,
+      connectionId,
+      objectType,
+      validRecords,
+    );
+
+    if (inserted < validRecords.length) {
+      this.logger.warn(
+        `Fetched ${validRecords.length} records but only ${inserted} were inserted into the gateway (some may already exist with identical hash).`,
+      );
+    }
+
+    return {
+      connectionId,
+      status: 'succeeded',
+      streamResults: [
+        {
+          streamName: objectType,
+          recordsIngested: inserted,
+          status: 'succeeded',
+        },
+      ],
     };
   }
 
